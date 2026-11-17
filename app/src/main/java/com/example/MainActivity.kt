@@ -105,6 +105,7 @@ fun MainAppScreen() {
   val viewModel: GroceryViewModel = viewModel()
   var currentScreen by remember { mutableStateOf(Screen.DASHBOARD) }
   var selectedCustomerId by remember { mutableStateOf<Long?>(null) }
+  var selectedInvoiceId by remember { mutableStateOf<Long?>(null) }
 
   BackHandler(enabled = currentScreen != Screen.DASHBOARD) {
     currentScreen = Screen.DASHBOARD
@@ -620,7 +621,7 @@ fun InventoryScreen(viewModel: GroceryViewModel) {
 }
 
 @Composable
-fun InvoicesScreen(viewModel: GroceryViewModel, onCreateInvoice: () -> Unit) {
+fun InvoicesScreen(viewModel: GroceryViewModel, onCreateInvoice: () -> Unit, onEditInvoice: (Long) -> Unit) {
   val invoices by viewModel.invoices.collectAsState()
 
   Scaffold(
@@ -658,7 +659,7 @@ fun InvoicesScreen(viewModel: GroceryViewModel, onCreateInvoice: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateInvoiceScreen(viewModel: GroceryViewModel, onBack: () -> Unit) {
+fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null, onBack: () -> Unit) {
   val context = LocalContext.current
   val customers by viewModel.customers.collectAsState()
   val inventory by viewModel.inventoryItems.collectAsState()
