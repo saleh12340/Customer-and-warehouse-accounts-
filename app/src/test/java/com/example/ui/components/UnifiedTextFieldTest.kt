@@ -18,4 +18,9 @@ class UnifiedTextFieldTest {
     fun decimalInputDropsNegativeSigns() {
         assertEquals("5.25", sanitizeNumericInput("-5.25", allowDecimal = true))
     }
+
+    @Test
+    fun emptyAndInvalidNumericInputCanBeCleared() {
+        assertEquals("", sanitizeNumericInput("-+abc", allowDecimal = true))
+    }
 }

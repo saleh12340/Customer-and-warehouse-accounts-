@@ -1,5 +1,11 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,12 +20,10 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
-/**
- * Shared, full-width input for Arabic Compose screens. Set [numeric] for numeric values and
- * [decimal] when one decimal separator is allowed. Numeric fields select their contents on focus.
- */
+/** Shared full-width input for Arabic Compose screens. Numeric inputs select their contents on focus. */
 @Composable
 fun UnifiedTextField(
     value: String,
@@ -47,9 +51,7 @@ fun UnifiedTextField(
                 fieldValue = fieldValue.copy(selection = TextRange(0, fieldValue.text.length))
             }
         }
-    } else {
-        modifier
-    }
+    } else modifier
 
     OutlinedTextField(
         value = fieldValue,
@@ -73,7 +75,33 @@ fun UnifiedTextField(
     )
 }
 
-/** Keeps digits and, for decimal fields, at most one decimal point; negative signs are discarded. */
+/** Arranges paired form controls side-by-side on wider displays and stacks them on narrow screens. */
+@Composable
+fun ResponsiveFieldRow(
+    modifier: Modifier = Modifier,
+    breakpoint: Dp = 520.dp,
+    content: @Composable (Modifier, Modifier) -> Unit,
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        if (maxWidth >= breakpoint) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                content(Modifier.weight(1f), Modifier.weight(1f))
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                content(Modifier.fillMaxWidth(), Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+/** Keeps digits and, for decimal fields, at most one decimal separator; negative signs are discarded. */
 internal fun sanitizeNumericInput(input: String, allowDecimal: Boolean): String {
     val result = StringBuilder(input.length)
     var hasDecimalPoint = false
