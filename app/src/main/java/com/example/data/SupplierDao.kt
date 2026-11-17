@@ -21,5 +21,5 @@ interface SupplierDao {
   suspend fun deleteSupplier(supplier: SupplierEntity)
 
   @Query("UPDATE suppliers SET balance = balance + :amount WHERE id = :supplierId")
-  suspend fun updateBalance(supplierId: Long, amount: Double)
+  suspend fun updateBalance(supplierId: Long, amount: Double): Int
 }
