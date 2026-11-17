@@ -757,12 +757,17 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
               onClick = {
                 if (cartItems.isNotEmpty() && !isSaving) {
                   isSaving = true
-                  val pId = selectedCustomer?.id ?: 0L
-                  val pName = selectedCustomer?.name ?: "عميل نقدي"
-                  viewModel.createInvoice(invoiceNumber, invoiceType, pId, pName, cartItems.toList(), paidAmount) { success, message ->
+                  val pId = if (invoiceType == "PURCHASE") selectedSupplier?.id ?: 0L else selectedCustomer?.id ?: 0L
+                  val pName = if (invoiceType == "PURCHASE") selectedSupplier?.name ?: "" else selectedCustomer?.name ?: "عميل نقدي"
+                  val result: (Boolean, String) -> Unit = { success, message ->
                     isSaving = false
                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                     if (success) onBack()
+                  }
+                  if (editInvoiceId != null) {
+                    viewModel.updateInvoice(editInvoiceId, invoiceNumber, invoiceType, pId, pName, cartItems.toList(), paidAmount, result)
+                  } else {
+                    viewModel.createInvoice(invoiceNumber, invoiceType, pId, pName, cartItems.toList(), paidAmount, result)
                   }
                 }
               },
