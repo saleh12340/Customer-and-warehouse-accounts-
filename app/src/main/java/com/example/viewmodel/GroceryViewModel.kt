@@ -234,6 +234,11 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
             ?: error("الفاتورة المطلوب تعديلها غير موجودة")
           val duplicate = invoiceDao.getInvoiceByNumber(invoiceNumber.trim())
           check(duplicate == null || duplicate.id == invoiceId) { "رقم الفاتورة مستخدم من قبل" }
+          if (normalizedType == "PURCHASE") {
+            check(supplierDao.getSupplierById(partyId) != null) { "المورد المحدد غير موجود" }
+          } else if (partyId > 0) {
+            check(customerDao.getCustomerById(partyId) != null) { "العميل المحدد غير موجود" }
+          }
 
           val oldInvoice = previous.invoice
           val oldStockSign = if (oldInvoice.type == "PURCHASE") -1 else 1
