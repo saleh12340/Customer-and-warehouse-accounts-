@@ -17,6 +17,9 @@ interface InvoiceDao {
   @Query("SELECT * FROM invoices ORDER BY date DESC")
   fun getAllInvoices(): Flow<List<InvoiceEntity>>
 
+  @Query("SELECT * FROM invoices WHERE invoiceNumber = :invoiceNumber LIMIT 1")
+  suspend fun getInvoiceByNumber(invoiceNumber: String): InvoiceEntity?
+
   @Transaction
   @Query("SELECT * FROM invoices WHERE id = :invoiceId")
   suspend fun getInvoiceWithItems(invoiceId: Long): InvoiceWithItems?
