@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -953,11 +955,82 @@ fun ReportRow(title: String, value: String, color: Color) {
 @Composable
 fun SettingsScreen(viewModel: GroceryViewModel) {
   val context = LocalContext.current
+  val scope = rememberCoroutineScope()
   val pairedDevices = remember { BluetoothPrinterManager.getPairedDevices() }
   var printerStatus by remember { mutableStateOf(if (BluetoothPrinterManager.isConnected()) "متصل بالطابعة" else "غير متصل") }
+  var backupBusy by remember { mutableStateOf(false) }
+  var backupMessage by remember { mutableStateOf("احفظ نسخة من جميع بيانات العملاء والموردين والمخزون والفواتير والحركات") }
+  var restoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+  val createBackupLauncher = rememberLauncherForActivityResult(
+    contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+  ) { uri ->
+    if (uri != null) {
+      scope.launch {
+        backupBusy = true
+        try {
+          backupMessage = BackupRestoreManager.exportToUri(context, uri)
+          Toast.makeText(context, backupMessage, Toast.LENGTH_LONG).show()
+        } catch (error: Exception) {
+          backupMessage = error.message ?: "تعذر إنشاء النسخة الاحتياطية"
+          Toast.makeText(context, backupMessage, Toast.LENGTH_LONG).show()
+        } finally {
+          backupBusy = false
+        }
+      }
+    }
+  }
+
+  val openBackupLauncher = rememberLauncherForActivityResult(
+    contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+  ) { uri ->
+    if (uri != null) restoreUri = uri
+  }
 
   LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    item { Text("إعدادات النظام والطابعة", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = DarkBlueHeader) }
+    item { Text("إعدادات النظام والطابعة والنسخ الاحتياطي", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = DarkBlueHeader) }
+
+    item {
+      Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Text("النسخ الاحتياطي والاستعادة", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = DarkBlueHeader)
+          Spacer(modifier = Modifier.height(6.dp))
+          Text(backupMessage, fontSize = 13.sp, color = TextSecondary)
+          Spacer(modifier = Modifier.height(10.dp))
+          Button(
+            onClick = {
+              val fileName = "Alaziy_Backup_" + SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date()) + ".json"
+              createBackupLauncher.launch(fileName)
+            },
+            enabled = !backupBusy,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+          ) {
+            Icon(Icons.Default.Backup, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(if (backupBusy) "جارٍ إنشاء النسخة..." else "إنشاء نسخة احتياطية")
+          }
+          OutlinedButton(
+            onClick = { openBackupLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) },
+            enabled = !backupBusy,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Icon(Icons.Default.Restore, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("استعادة نسخة احتياطية")
+          }
+          if (backupBusy) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+          }
+          Text(
+            "تنبيه: الاستعادة تستبدل البيانات الحالية ببيانات الملف المختار. تأكد من حفظ نسخة حديثة قبل الاستعادة.",
+            fontSize = 12.sp,
+            color = DangerRed
+          )
+        }
+      }
+    }
+
     item {
       Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -966,7 +1039,7 @@ fun SettingsScreen(viewModel: GroceryViewModel) {
           Text("الأجهزة المقترنة بالبلوتوث:", fontSize = 13.sp, color = TextSecondary)
           Spacer(modifier = Modifier.height(4.dp))
           if (pairedDevices.isEmpty()) {
-            Text("لا توجد أجهزة بلوتوث مقترنة. يجدر إقتران طابعة ESC/POS من إعدادات الجهاز.")
+            Text("لا توجد أجهزة بلوتوث مقترنة. يرجى إقران طابعة ESC/POS من إعدادات الجهاز.")
           } else {
             pairedDevices.forEach { device ->
               OutlinedButton(
@@ -997,11 +1070,8 @@ fun SettingsScreen(viewModel: GroceryViewModel) {
             details = listOf("صنف 1: 1 × 1000 = 1000", "صنف 2: 2 × 500 = 1000"),
             footer = "الإجمالي: 2000 ر.ي"
           )
-          if (success) {
-            Toast.makeText(context, "تمت الطباعة بنجاح", Toast.LENGTH_SHORT).show()
-          } else {
-            Toast.makeText(context, "فشل إرسال بيانات الطباعة", Toast.LENGTH_SHORT).show()
-          }
+          if (success) Toast.makeText(context, "تمت الطباعة بنجاح", Toast.LENGTH_SHORT).show()
+          else Toast.makeText(context, "فشل إرسال بيانات الطباعة", Toast.LENGTH_SHORT).show()
         },
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
@@ -1011,5 +1081,35 @@ fun SettingsScreen(viewModel: GroceryViewModel) {
         Text("طباعة إيصال تجريبي")
       }
     }
+  }
+
+  restoreUri?.let { selectedUri ->
+    AlertDialog(
+      onDismissRequest = { restoreUri = null },
+      title = { Text("تأكيد استعادة النسخة") },
+      text = { Text("سيتم استبدال بيانات التطبيق الحالية بالبيانات الموجودة في النسخة الاحتياطية. لا يمكن التراجع عن ذلك. هل أنشأت نسخة حديثة من بياناتك الحالية؟") },
+      confirmButton = {
+        Button(
+          enabled = !backupBusy,
+          onClick = {
+            restoreUri = null
+            scope.launch {
+              backupBusy = true
+              try {
+                backupMessage = BackupRestoreManager.restoreFromUri(context, selectedUri)
+                Toast.makeText(context, backupMessage, Toast.LENGTH_LONG).show()
+              } catch (error: Exception) {
+                backupMessage = error.message ?: "تعذرت استعادة النسخة الاحتياطية"
+                Toast.makeText(context, backupMessage, Toast.LENGTH_LONG).show()
+              } finally {
+                backupBusy = false
+              }
+            }
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+        ) { Text("استعادة واستبدال البيانات") }
+      },
+      dismissButton = { TextButton(onClick = { restoreUri = null }) { Text("إلغاء") } }
+    )
   }
 }
