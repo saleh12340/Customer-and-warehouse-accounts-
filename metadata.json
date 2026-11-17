@@ -1,0 +1,6 @@
+{
+  "name": "بقالة العزي للمواد الغذائية",
+  "description": "تطبيق إدارة البقالة والحسابات والفواتير - Al-Azzi Grocery Management App",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
