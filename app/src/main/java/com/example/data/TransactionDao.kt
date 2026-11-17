@@ -8,6 +8,15 @@ interface TransactionDao {
   @Query("SELECT * FROM transactions ORDER BY date DESC")
   fun getAllTransactions(): Flow<List<TransactionEntity>>
 
+  @Query("SELECT * FROM transactions")
+  suspend fun getTransactionsSnapshot(): List<TransactionEntity>
+
+  @Query("DELETE FROM transactions")
+  suspend fun clearTransactions()
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun restoreTransactions(items: List<TransactionEntity>)
+
   @Query("SELECT * FROM transactions WHERE partyType = :partyType AND partyId = :partyId ORDER BY date DESC")
   fun getTransactionsForParty(partyType: String, partyId: Long): Flow<List<TransactionEntity>>
 
