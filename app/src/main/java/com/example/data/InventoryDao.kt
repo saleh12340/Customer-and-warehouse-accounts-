@@ -20,6 +20,8 @@ interface InventoryDao {
   @Delete
   suspend fun deleteItem(item: InventoryItemEntity)
 
-  @Query("UPDATE inventory_items SET quantity = quantity + :delta WHERE id = :itemId")
-  suspend fun adjustQuantity(itemId: Long, delta: Int)
+  // Refuse an adjustment that would make stock negative. The affected-row count
+  // lets the invoice transaction abort safely if stock is insufficient.
+  @Query("UPDATE inventory_items SET quantity = quantity + :delta WHERE id = :itemId AND quantity + :delta >= 0")
+  suspend fun adjustQuantity(itemId: Long, delta: Int): Int
 }
