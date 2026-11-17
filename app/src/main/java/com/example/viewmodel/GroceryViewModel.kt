@@ -147,6 +147,39 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     viewModelScope.launch { supplierDao.deleteSupplier(supplier) }
   }
 
+  fun addSupplierTransaction(
+    supplierId: Long,
+    supplierName: String,
+    amount: Double,
+    isCredit: Boolean,
+    description: String,
+    onResult: (Boolean, String) -> Unit = { _, _ -> }
+  ) {
+    viewModelScope.launch {
+      try {
+        require(amount.isFinite() && amount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
+        database.withTransaction {
+          val delta = if (isCredit) amount else -amount
+          check(supplierDao.updateBalance(supplierId, delta) == 1) { "المورد غير موجود" }
+          transactionDao.insertTransaction(
+            TransactionEntity(
+              partyType = "SUPPLIER",
+              partyId = supplierId,
+              partyName = supplierName,
+              type = if (isCredit) "CREDIT (له)" else "DEBIT (عليه)",
+              amount = amount,
+              description = description.trim().ifBlank { "حركة حساب مورد" },
+              date = System.currentTimeMillis()
+            )
+          )
+        }
+        onResult(true, "تم تحديث حساب المورد")
+      } catch (error: Exception) {
+        onResult(false, error.message ?: "تعذر تسجيل حركة المورد")
+      }
+    }
+  }
+
   // Inventory actions
   fun addInventoryItem(name: String, category: String, quantity: Int, purchasePrice: Double, sellingPrice: Double, unit: String) {
     viewModelScope.launch {
@@ -161,6 +194,117 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
 
   fun deleteInventoryItem(item: InventoryItemEntity) {
     viewModelScope.launch { inventoryDao.deleteItem(item) }
+  }
+
+  fun loadInvoiceForEdit(invoiceId: Long, onLoaded: (InvoiceWithItems?) -> Unit) {
+    viewModelScope.launch {
+      onLoaded(invoiceDao.getInvoiceWithItems(invoiceId))
+    }
+  }
+
+  /**
+   * Replaces an existing invoice atomically. Previous stock and ledger effects
+   * are reversed before the new invoice effects are applied. If any reversal
+   * or new stock movement is invalid, Room rolls the entire edit back.
+   */
+  fun updateInvoice(
+    invoiceId: Long,
+    invoiceNumber: String,
+    type: String,
+    partyId: Long,
+    partyName: String,
+    items: List<InvoiceItemEntity>,
+    paidAmount: Double,
+    onResult: (Boolean, String) -> Unit = { _, _ -> }
+  ) {
+    viewModelScope.launch {
+      try {
+        val normalizedItems = items.map { it.copy(id = 0L, itemName = it.itemName.trim()) }
+        val validation = validateInvoiceInput(invoiceNumber, type, normalizedItems, paidAmount)
+        require(validation.isValid) { validation.message }
+        val normalizedType = validation.normalizedType
+        if (normalizedType == "PURCHASE") {
+          require(partyId > 0) { "حدد المورد قبل حفظ فاتورة الشراء" }
+        } else if (validation.remainingAmount > 0.000001) {
+          require(partyId > 0) { "حدد العميل لتسجيل المبلغ المتبقي كدين" }
+        }
+
+        database.withTransaction {
+          val previous = invoiceDao.getInvoiceWithItems(invoiceId)
+            ?: error("الفاتورة المطلوب تعديلها غير موجودة")
+          val duplicate = invoiceDao.getInvoiceByNumber(invoiceNumber.trim())
+          check(duplicate == null || duplicate.id == invoiceId) { "رقم الفاتورة مستخدم من قبل" }
+
+          val oldInvoice = previous.invoice
+          val oldStockSign = if (oldInvoice.type == "PURCHASE") -1 else 1
+          previous.items.forEach { oldItem ->
+            check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldItem.quantity) == 1) {
+              "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}. قد تكون الكمية قد استُهلكت"
+            }
+          }
+
+          if (oldInvoice.remainingAmount > 0.000001 && oldInvoice.partyId > 0) {
+            if (oldInvoice.type == "PURCHASE") {
+              check(supplierDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
+                "تعذر عكس رصيد المورد السابق"
+              }
+              transactionDao.deleteByDescription(
+                "SUPPLIER", oldInvoice.partyId, "فاتورة مشتريات رقم ${oldInvoice.invoiceNumber}"
+              )
+            } else {
+              check(customerDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
+                "تعذر عكس رصيد العميل السابق"
+              }
+              transactionDao.deleteByDescription(
+                "CUSTOMER", oldInvoice.partyId, "فاتورة مبيعات رقم ${oldInvoice.invoiceNumber}"
+              )
+            }
+          }
+
+          val now = System.currentTimeMillis()
+          val updated = oldInvoice.copy(
+            invoiceNumber = invoiceNumber.trim(),
+            type = normalizedType,
+            partyId = partyId,
+            partyName = partyName.trim(),
+            date = now,
+            totalAmount = validation.totalAmount,
+            paidAmount = paidAmount,
+            remainingAmount = validation.remainingAmount,
+            status = validation.status
+          )
+          invoiceDao.updateInvoice(updated)
+          invoiceDao.deleteItemsForInvoice(invoiceId)
+          invoiceDao.insertItems(normalizedItems.map { it.copy(invoiceId = invoiceId) })
+
+          val newStockSign = if (normalizedType == "PURCHASE") 1 else -1
+          normalizedItems.forEach { item ->
+            check(inventoryDao.adjustQuantity(item.itemId, newStockSign * item.quantity) == 1) {
+              "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+            }
+          }
+
+          if (validation.remainingAmount > 0.000001) {
+            if (normalizedType == "PURCHASE") {
+              check(supplierDao.updateBalance(partyId, validation.remainingAmount) == 1) { "المورد المحدد غير موجود" }
+              transactionDao.insertTransaction(
+                TransactionEntity("SUPPLIER", partyId, partyName.trim(), "CREDIT (له)",
+                  validation.remainingAmount, "فاتورة مشتريات رقم ${updated.invoiceNumber}", now)
+              )
+            } else {
+              check(customerDao.updateBalance(partyId, validation.remainingAmount) == 1) { "العميل المحدد غير موجود" }
+              transactionDao.insertTransaction(
+                TransactionEntity("CUSTOMER", partyId, partyName.trim(), "DEBIT (عليه)",
+                  validation.remainingAmount, "فاتورة مبيعات رقم ${updated.invoiceNumber}", now)
+              )
+            }
+          }
+        }
+        onResult(true, "تم تعديل الفاتورة وتحديث الحساب والمخزون")
+      } catch (error: Exception) {
+        onResult(false, error.message ?: "تعذر تعديل الفاتورة")
+      }
+    }
   }
 
   /**
