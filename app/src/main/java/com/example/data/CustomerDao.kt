@@ -21,5 +21,5 @@ interface CustomerDao {
   suspend fun deleteCustomer(customer: CustomerEntity)
 
   @Query("UPDATE customers SET balance = balance + :amount WHERE id = :customerId")
-  suspend fun updateBalance(customerId: Long, amount: Double)
+  suspend fun updateBalance(customerId: Long, amount: Double): Int
 }
