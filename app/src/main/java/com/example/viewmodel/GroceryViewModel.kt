@@ -7,6 +7,7 @@ import androidx.room.withTransaction
 import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 class GroceryViewModel(application: Application) : AndroidViewModel(application) {
   private val database = AppDatabase.getDatabase(application)
@@ -43,8 +44,7 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
         return InvoiceValidationResult(false, "نوع الفاتورة غير صحيح")
       }
 
-      val cleanInvoiceNumber = invoiceNumber.trim()
-      if (cleanInvoiceNumber.isBlank()) {
+      if (invoiceNumber.trim().isBlank()) {
         return InvoiceValidationResult(false, "رقم الفاتورة مطلوب")
       }
 
@@ -52,17 +52,21 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
         return InvoiceValidationResult(false, "أضف صنفاً واحداً على الأقل")
       }
 
-      val invalidItem = items.firstOrNull { item ->
+      val hasInvalidItem = items.any { item ->
+        val expectedTotal = item.quantity.toDouble() * item.unitPrice
+        val tolerance = 0.000001 * maxOf(1.0, abs(expectedTotal))
         item.itemName.trim().isBlank() ||
           item.itemId <= 0 ||
           item.quantity <= 0 ||
           !item.unitPrice.isFinite() ||
           item.unitPrice < 0 ||
           !item.totalPrice.isFinite() ||
-          item.totalPrice < 0
+          item.totalPrice < 0 ||
+          !expectedTotal.isFinite() ||
+          abs(item.totalPrice - expectedTotal) > tolerance
       }
-      if (invalidItem != null) {
-        return InvoiceValidationResult(false, "تحقق من الأصناف والكميات والأسعار")
+      if (hasInvalidItem) {
+        return InvoiceValidationResult(false, "تحقق من الأصناف والكميات والأسعار وإجمالي كل صنف")
       }
 
       val totalAmount = items.sumOf { it.totalPrice }
