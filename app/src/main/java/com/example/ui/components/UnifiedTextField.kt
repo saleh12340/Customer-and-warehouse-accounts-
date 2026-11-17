@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -23,7 +22,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Shared, full-width input for Arabic Compose screens. Numeric inputs select their contents on focus. */
 @Composable
 fun UnifiedTextField(
     value: String,
@@ -42,16 +40,12 @@ fun UnifiedTextField(
     var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
 
     LaunchedEffect(value) {
-        if (fieldValue.text != value) {
-            fieldValue = TextFieldValue(value, selection = TextRange(value.length))
-        }
+        if (fieldValue.text != value) fieldValue = TextFieldValue(value, selection = TextRange(value.length))
     }
 
     val inputModifier = if (numeric && !readOnly) {
         modifier.onFocusChanged { focusState ->
-            if (focusState.isFocused) {
-                fieldValue = fieldValue.copy(selection = TextRange(0, fieldValue.text.length))
-            }
+            if (focusState.isFocused) fieldValue = fieldValue.copy(selection = TextRange(0, fieldValue.text.length))
         }
     } else modifier
 
@@ -59,9 +53,9 @@ fun UnifiedTextField(
         value = fieldValue,
         onValueChange = { proposed ->
             val accepted = if (numeric && !readOnly) sanitizeNumericInput(proposed.text, decimal) else proposed.text
-            val selectionStart = proposed.selection.start.coerceIn(0, accepted.length)
-            val selectionEnd = proposed.selection.end.coerceIn(0, accepted.length)
-            fieldValue = TextFieldValue(accepted, selection = TextRange(selectionStart, selectionEnd))
+            val start = proposed.selection.start.coerceIn(0, accepted.length)
+            val end = proposed.selection.end.coerceIn(0, accepted.length)
+            fieldValue = TextFieldValue(accepted, selection = TextRange(start, end))
             onValueChange(accepted)
         },
         modifier = inputModifier.fillMaxWidth(),
@@ -80,51 +74,32 @@ fun UnifiedTextField(
     )
 }
 
-/** A decimal amount/price field, with a decimal keypad and strict single-separator input. */
 @Composable
-fun MoneyTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
+fun MoneyTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
     UnifiedTextField(value, onValueChange, label, modifier, numeric = true, decimal = true, enabled = enabled)
 }
 
-/** An integer quantity field; values below zero and non-digits are rejected. */
 @Composable
-fun QuantityTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
+fun QuantityTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
     UnifiedTextField(value, onValueChange, label, modifier, numeric = true, enabled = enabled)
 }
 
-/** Arranges paired form controls side-by-side on wider displays and stacks them on narrow screens. */
+/** Side-by-side controls on wide screens; vertically stacked on narrow screens. */
 @Composable
-fun ResponsiveFieldRow(
-    modifier: Modifier = Modifier,
-    breakpoint: Dp = 520.dp,
-    content: @Composable (Modifier, Modifier) -> Unit,
-) {
+fun ResponsiveFieldRow(modifier: Modifier = Modifier, breakpoint: Dp = 520.dp, content: @Composable (Modifier, Modifier) -> Unit) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         if (maxWidth >= breakpoint) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 content(Modifier.weight(1f), Modifier.weight(1f))
             }
         } else {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 content(Modifier.fillMaxWidth(), Modifier.fillMaxWidth())
             }
         }
     }
 }
 
-/** Keeps digits and, for decimal fields, at most one decimal point; negative signs are discarded. */
 internal fun sanitizeNumericInput(input: String, allowDecimal: Boolean): String {
     val result = StringBuilder(input.length)
     var hasDecimalPoint = false
