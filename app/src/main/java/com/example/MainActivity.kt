@@ -917,7 +917,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
             ExposedDropdownMenu(expanded = inventoryExpanded, onDismissRequest = { inventoryExpanded = false }) {
               inventory.forEach { inv ->
                 DropdownMenuItem(
-                  text = { Text("${inv.name} (متوفر: ${inv.quantity}) - ${inv.sellingPrice} ر.ي") },
+                  text = { Text("${inv.name} (متوفر: ${inv.quantity}) - ${if (invoiceType == "PURCHASE") inv.purchasePrice else inv.sellingPrice} ر.ي") },
                   onClick = {
                     selectedItem = inv
                     customPriceStr = (if (invoiceType == "PURCHASE") inv.purchasePrice else inv.sellingPrice).toString()
@@ -949,7 +949,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
             onClick = {
               selectedItem?.let { item ->
                 val q = qtyStr.toIntOrNull() ?: 1
-                val p = customPriceStr.toDoubleOrNull() ?: item.sellingPrice
+                val p = customPriceStr.toDoubleOrNull() ?: if (invoiceType == "PURCHASE") item.purchasePrice else item.sellingPrice
                 cartItems.add(
                   InvoiceItemEntity(
                     invoiceId = 0L,
