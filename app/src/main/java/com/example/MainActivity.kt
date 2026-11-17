@@ -499,7 +499,12 @@ fun CustomerDetailScreen(viewModel: GroceryViewModel, customerId: Long, onBack: 
 
 @Composable
 fun SuppliersScreen(viewModel: GroceryViewModel) {
+  val context = LocalContext.current
   val suppliers by viewModel.suppliers.collectAsState()
+  var transactionSupplier by remember { mutableStateOf<SupplierEntity?>(null) }
+  var transactionAmount by remember { mutableStateOf("") }
+  var transactionDescription by remember { mutableStateOf("") }
+  var transactionIsCredit by remember { mutableStateOf(true) }
   var showAdd by remember { mutableStateOf(false) }
   var name by remember { mutableStateOf("") }
   var phone by remember { mutableStateOf("") }
@@ -519,13 +524,18 @@ fun SuppliersScreen(viewModel: GroceryViewModel) {
       LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(suppliers) { supplier ->
           Card(modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-              Column {
-                Text(supplier.name, fontWeight = FontWeight.Bold)
-                Text(supplier.company, fontSize = 13.sp, color = TextSecondary)
-                Text(supplier.phone, fontSize = 12.sp, color = TextSecondary)
+            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                  Text(supplier.name, fontWeight = FontWeight.Bold)
+                  Text(supplier.company, fontSize = 13.sp, color = TextSecondary)
+                  Text(supplier.phone, fontSize = 12.sp, color = TextSecondary)
+                }
+                Text("${supplier.balance} ر.ي", fontWeight = FontWeight.Bold, color = PrimaryBlue)
               }
-              Text("${supplier.balance} ر.ي", fontWeight = FontWeight.Bold, color = PrimaryBlue)
+              TextButton(onClick = { transactionSupplier = supplier; transactionAmount = ""; transactionDescription = ""; transactionIsCredit = true }) {
+                Text("تسجيل حركة حساب")
+              }
             }
           }
         }
@@ -554,6 +564,50 @@ fun SuppliersScreen(viewModel: GroceryViewModel) {
         }) { Text("حفظ") }
       },
       dismissButton = { TextButton(onClick = { showAdd = false }) { Text("إلغاء") } }
+    )
+  }
+
+  transactionSupplier?.let { supplier ->
+    AlertDialog(
+      onDismissRequest = { transactionSupplier = null },
+      title = { Text("حركة حساب: ${supplier.name}") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedTextField(
+            value = transactionAmount,
+            onValueChange = { transactionAmount = it },
+            label = { Text("المبلغ") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+          )
+          OutlinedTextField(
+            value = transactionDescription,
+            onValueChange = { transactionDescription = it },
+            label = { Text("التفاصيل") }
+          )
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = { transactionIsCredit = true },
+              colors = ButtonDefaults.buttonColors(containerColor = if (transactionIsCredit) SuccessGreen else Color.LightGray)
+            ) { Text("له") }
+            Button(
+              onClick = { transactionIsCredit = false },
+              colors = ButtonDefaults.buttonColors(containerColor = if (!transactionIsCredit) DangerRed else Color.LightGray)
+            ) { Text("عليه") }
+          }
+        }
+      },
+      confirmButton = {
+        Button(onClick = {
+          viewModel.addSupplierTransaction(
+            supplier.id, supplier.name, transactionAmount.toDoubleOrNull() ?: 0.0,
+            transactionIsCredit, transactionDescription
+          ) { success, message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            if (success) transactionSupplier = null
+          }
+        }) { Text("حفظ الحركة") }
+      },
+      dismissButton = { TextButton(onClick = { transactionSupplier = null }) { Text("إلغاء") } }
     )
   }
 }
