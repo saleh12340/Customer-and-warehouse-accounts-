@@ -745,6 +745,12 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
   val paidAmount = paidAmountStr.toDoubleOrNull() ?: 0.0
   val remaining = subtotal - paidAmount
 
+  LaunchedEffect(invoiceType, selectedItem?.id) {
+    selectedItem?.let { item ->
+      customPriceStr = (if (invoiceType == "PURCHASE") item.purchasePrice else item.sellingPrice).toString()
+    }
+  }
+
   LaunchedEffect(editInvoiceId) {
     if (editInvoiceId != null) {
       viewModel.loadInvoiceForEdit(editInvoiceId) { loaded ->
@@ -831,7 +837,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
               modifier = Modifier.weight(2f),
               colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
             ) {
-              Text("حفظ التعديل", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+              Text(if (editInvoiceId == null) "حفظ الفاتورة" else "حفظ التعديل", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
           }
           Spacer(modifier = Modifier.height(4.dp))
