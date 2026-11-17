@@ -8,6 +8,15 @@ interface SupplierDao {
   @Query("SELECT * FROM suppliers ORDER BY name ASC")
   fun getAllSuppliers(): Flow<List<SupplierEntity>>
 
+  @Query("SELECT * FROM suppliers")
+  suspend fun getSuppliersSnapshot(): List<SupplierEntity>
+
+  @Query("DELETE FROM suppliers")
+  suspend fun clearSuppliers()
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun restoreSuppliers(items: List<SupplierEntity>)
+
   @Query("SELECT * FROM suppliers WHERE id = :id")
   suspend fun getSupplierById(id: Long): SupplierEntity?
 
