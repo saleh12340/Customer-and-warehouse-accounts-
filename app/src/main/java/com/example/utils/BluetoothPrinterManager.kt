@@ -26,8 +26,13 @@ object BluetoothPrinterManager {
 
   @SuppressLint("MissingPermission")
   fun getPairedDevices(): Set<BluetoothDevice> {
-    val adapter = BluetoothAdapter.getDefaultAdapter()
-    return adapter?.bondedDevices ?: emptySet()
+    return try {
+      val adapter = BluetoothAdapter.getDefaultAdapter()
+      adapter?.bondedDevices ?: emptySet()
+    } catch (_: SecurityException) {
+      // The user may deny Bluetooth permission; opening Settings must not crash.
+      emptySet()
+    }
   }
 
   @SuppressLint("MissingPermission")
