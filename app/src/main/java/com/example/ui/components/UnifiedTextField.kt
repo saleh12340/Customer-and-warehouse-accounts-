@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 fun UnifiedTextField(
     value: String,
     onValueChange: (String) -> Unit,
-    label: String,
+    label: String? = null,
     modifier: Modifier = Modifier,
     numeric: Boolean = false,
     decimal: Boolean = false,
@@ -63,7 +63,7 @@ fun UnifiedTextField(
             onValueChange(accepted)
         },
         modifier = inputModifier.fillMaxWidth(),
-        label = labelContent ?: { Text(label) },
+        label = labelContent ?: label?.let { text -> { Text(text) } },
         keyboardOptions = keyboardOptions ?: KeyboardOptions(
             keyboardType = when {
                 !numeric -> KeyboardType.Text
