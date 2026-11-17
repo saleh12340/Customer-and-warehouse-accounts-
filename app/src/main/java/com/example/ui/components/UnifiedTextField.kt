@@ -38,6 +38,7 @@ fun UnifiedTextField(
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
+
     LaunchedEffect(value) {
         if (fieldValue.text != value) fieldValue = TextFieldValue(value, selection = TextRange(value.length))
     }
@@ -83,7 +84,6 @@ fun QuantityTextField(value: String, onValueChange: (String) -> Unit, label: Str
     UnifiedTextField(value, onValueChange, label, modifier, numeric = true, enabled = enabled)
 }
 
-/** Side-by-side controls on wide screens; vertically stacked on narrow screens. */
 @Composable
 fun ResponsiveFieldRow(modifier: Modifier = Modifier, breakpoint: Dp = 520.dp, content: @Composable (Modifier, Modifier) -> Unit) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -100,9 +100,17 @@ fun ResponsiveFieldRow(modifier: Modifier = Modifier, breakpoint: Dp = 520.dp, c
 }
 
 internal fun sanitizeNumericInput(input: String, allowDecimal: Boolean): String {
-    val result = StringBuilder(input.length)
+    val normalizedDigits = input.map { character ->
+        when (character) {
+            in '\u0660'..'\u0669' -> ('0'.code + (character.code - '\u0660'.code)).toChar()
+            in '\u06F0'..'\u06F9' -> ('0'.code + (character.code - '\u06F0'.code)).toChar()
+            else -> character
+        }
+    }.joinToString(separator = "")
+
+    val result = StringBuilder(normalizedDigits.length)
     var hasDecimalPoint = false
-    input.forEach { character ->
+    normalizedDigits.forEach { character ->
         val digit = character.digitToIntOrNull()
         when {
             digit != null -> result.append(digit)
