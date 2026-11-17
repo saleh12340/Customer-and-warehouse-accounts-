@@ -1,6 +1,5 @@
 package com.example
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardOptions
@@ -26,7 +25,6 @@ fun OutlinedTextField(
     UnifiedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = "",
         modifier = modifier,
         numeric = numeric,
         decimal = keyboardOptions.keyboardType == KeyboardType.Decimal,
@@ -34,7 +32,7 @@ fun OutlinedTextField(
         enabled = enabled,
         readOnly = readOnly,
         singleLine = singleLine,
-        labelContent = label ?: { Text("") },
+        labelContent = label,
         trailingIcon = trailingIcon,
     )
 }
