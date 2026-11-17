@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
+import kotlin.math.abs
 
 /** Portable, versioned JSON backup. Restore is atomic and validates the entire file first. */
 object BackupRestoreManager {
@@ -84,9 +85,37 @@ object BackupRestoreManager {
         o.getString("type"), o.getDouble("amount").finite("مبلغ الحركة"), o.getString("description"), o.getLong("date"))
     }
 
+    require(customers.all { it.name.isNotBlank() } && suppliers.all { it.name.isNotBlank() } &&
+      inventory.all { it.name.isNotBlank() }) { "يوجد سجل باسم فارغ في النسخة الاحتياطية" }
+    require(invoices.all { invoice ->
+      invoice.invoiceNumber.isNotBlank() &&
+        invoice.type in setOf("SALE", "CASH", "CREDIT", "PURCHASE") &&
+        invoice.status in setOf("PAID", "UNPAID", "PARTIAL") &&
+        invoice.totalAmount > 0 && invoice.paidAmount >= 0 && invoice.remainingAmount >= 0 &&
+        invoice.paidAmount <= invoice.totalAmount + 0.000001 &&
+        abs(invoice.totalAmount - invoice.paidAmount - invoice.remainingAmount) <= 0.01
+    }) { "توجد بيانات مالية أو حالة فاتورة غير متطابقة" }
     require(invoices.map { it.id }.distinct().size == invoices.size) { "توجد معرفات فواتير مكررة" }
     require(invoices.map { it.invoiceNumber }.distinct().size == invoices.size) { "توجد أرقام فواتير مكررة" }
-    require(invoiceItems.all { item -> invoices.any { it.id == item.invoiceId } }) { "تفاصيل فاتورة غير مرتبطة بفاتورة موجودة" }
+    require(invoiceItems.all { item ->
+      item.invoiceId > 0 && item.itemId > 0 && item.unitPrice >= 0 && item.totalPrice >= 0 &&
+        invoices.any { it.id == item.invoiceId }
+    }) { "توجد تفاصيل فاتورة غير مرتبطة أو بأسعار غير صحيحة" }
+
+    val customerIds = customers.map { it.id }.toSet()
+    val supplierIds = suppliers.map { it.id }.toSet()
+    require(invoices.all { invoice ->
+      invoice.partyId == 0L || if (invoice.type == "PURCHASE") invoice.partyId in supplierIds else invoice.partyId in customerIds
+    }) { "توجد فاتورة مرتبطة بعميل أو مورد غير موجود" }
+    require(transactions.all { transaction ->
+      transaction.partyId > 0 && transaction.amount > 0 &&
+        transaction.type in setOf("DEBIT (عليه)", "CREDIT (له)") &&
+        when (transaction.partyType) {
+          "CUSTOMER" -> transaction.partyId in customerIds
+          "SUPPLIER" -> transaction.partyId in supplierIds
+          else -> false
+        }
+    }) { "توجد حركة مالية مرتبطة بطرف غير موجود أو ببيانات غير صحيحة" }
     require(listOf(customers.map { it.id }, suppliers.map { it.id }, inventory.map { it.id }, invoices.map { it.id },
       invoiceItems.map { it.id }, transactions.map { it.id }).all { ids -> ids.all { it > 0 } && ids.distinct().size == ids.size }) {
       "توجد معرفات سجلات غير صحيحة أو مكررة"
