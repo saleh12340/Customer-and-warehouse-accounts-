@@ -671,9 +671,11 @@ fun InvoicesScreen(viewModel: GroceryViewModel, onCreateInvoice: () -> Unit, onE
 fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null, onBack: () -> Unit) {
   val context = LocalContext.current
   val customers by viewModel.customers.collectAsState()
+  val suppliers by viewModel.suppliers.collectAsState()
   val inventory by viewModel.inventoryItems.collectAsState()
 
   var selectedCustomer by remember { mutableStateOf<CustomerEntity?>(null) }
+  var selectedSupplier by remember { mutableStateOf<SupplierEntity?>(null) }
   var customerExpanded by remember { mutableStateOf(false) }
   var invoiceType by remember { mutableStateOf("CASH") }
   val cartItems = remember { mutableStateListOf<InvoiceItemEntity>() }
