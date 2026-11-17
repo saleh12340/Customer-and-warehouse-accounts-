@@ -288,13 +288,13 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
             if (normalizedType == "PURCHASE") {
               check(supplierDao.updateBalance(partyId, validation.remainingAmount) == 1) { "المورد المحدد غير موجود" }
               transactionDao.insertTransaction(
-                TransactionEntity("SUPPLIER", partyId, partyName.trim(), "CREDIT (له)",
+                TransactionEntity(0L, "SUPPLIER", partyId, partyName.trim(), "CREDIT (له)",
                   validation.remainingAmount, "فاتورة مشتريات رقم ${updated.invoiceNumber}", now)
               )
             } else {
               check(customerDao.updateBalance(partyId, validation.remainingAmount) == 1) { "العميل المحدد غير موجود" }
               transactionDao.insertTransaction(
-                TransactionEntity("CUSTOMER", partyId, partyName.trim(), "DEBIT (عليه)",
+                TransactionEntity(0L, "CUSTOMER", partyId, partyName.trim(), "DEBIT (عليه)",
                   validation.remainingAmount, "فاتورة مبيعات رقم ${updated.invoiceNumber}", now)
               )
             }
@@ -333,6 +333,9 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
 
         database.withTransaction {
           check(invoiceDao.getInvoiceByNumber(invoiceNumber.trim()) == null) { "رقم الفاتورة مستخدم من قبل" }
+          if (normalizedType == "PURCHASE") {
+            check(partyId > 0 && supplierDao.getSupplierById(partyId) != null) { "حدد مورداً صحيحاً لفاتورة الشراء" }
+          }
 
           val invoice = InvoiceEntity(
             invoiceNumber = invoiceNumber.trim(),
