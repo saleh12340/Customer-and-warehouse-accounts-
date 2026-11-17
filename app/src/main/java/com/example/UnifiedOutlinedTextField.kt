@@ -21,7 +21,6 @@ fun OutlinedTextField(
 ) {
     val numeric = keyboardOptions.keyboardType == KeyboardType.Number ||
         keyboardOptions.keyboardType == KeyboardType.Decimal
-
     UnifiedTextField(
         value = value,
         onValueChange = onValueChange,

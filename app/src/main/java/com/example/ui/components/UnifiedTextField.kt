@@ -38,7 +38,6 @@ fun UnifiedTextField(
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
-
     LaunchedEffect(value) {
         if (fieldValue.text != value) fieldValue = TextFieldValue(value, selection = TextRange(value.length))
     }
