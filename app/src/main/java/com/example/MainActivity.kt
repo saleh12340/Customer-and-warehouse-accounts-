@@ -644,11 +644,11 @@ fun InvoicesScreen(viewModel: GroceryViewModel, onCreateInvoice: () -> Unit, onE
       Spacer(modifier = Modifier.height(12.dp))
       LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(invoices) { invoice ->
-          Card(modifier = Modifier.fillMaxWidth()) {
+          Card(modifier = Modifier.fillMaxWidth().clickable { onEditInvoice(invoice.id) }) {
             Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-              Column {
+              Column(modifier = Modifier.weight(1f)) {
                 Text("فاتورة رقم: ${invoice.invoiceNumber}", fontWeight = FontWeight.Bold)
-                Text("الطرف: ${invoice.partyName} | النوع: ${invoice.type}", fontSize = 12.sp, color = TextSecondary)
+                Text("الطرف: ${invoice.partyName} | النوع: ${if (invoice.type == "PURCHASE") "شراء" else "بيع"}", fontSize = 12.sp, color = TextSecondary)
                 val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
                 Text(dateFormat.format(Date(invoice.date)), fontSize = 11.sp, color = TextSecondary)
               }
@@ -656,6 +656,7 @@ fun InvoicesScreen(viewModel: GroceryViewModel, onCreateInvoice: () -> Unit, onE
                 Text("${invoice.totalAmount} ر.ي", fontWeight = FontWeight.Bold, color = DarkBlueHeader)
                 val statusColor = if (invoice.status == "PAID") SuccessGreen else DangerRed
                 Text(invoice.status, fontSize = 12.sp, color = statusColor, fontWeight = FontWeight.Bold)
+                Text("اضغط للتعديل", fontSize = 10.sp, color = PrimaryBlue)
               }
             }
           }
