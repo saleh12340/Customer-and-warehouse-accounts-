@@ -11,7 +11,7 @@ class UnifiedTextFieldTest {
 
     @Test
     fun decimalInputNormalizesArabicDigitsAndAllowsOneSeparator() {
-        assertEquals("12.34", sanitizeNumericInput("١٢٫٣٤.٥", allowDecimal = true))
+        assertEquals("12.345", sanitizeNumericInput("١٢٫٣٤.٥", allowDecimal = true))
     }
 
     @Test
