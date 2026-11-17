@@ -12,6 +12,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
+import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import java.io.IOException
 import java.io.OutputStream
@@ -63,36 +64,18 @@ object BluetoothPrinterManager {
   }
 
   fun printReceiptText(title: String, details: List<String>, footer: String): Boolean {
-    val out = outputStream ?: return false
-    try {
-      // ESC/POS commands
-      out.write(byteArrayOf(0x1B, 0x40)) // Initialize printer
-      out.write(byteArrayOf(0x1B, 0x61, 0x01)) // Center alignment
-      
-      // Store Header
-      out.write("================================\n".toByteArray(charset("CP1256")))
-      out.write("بقالة العزي للمواد الغذائية\n".toByteArray(charset("CP1256")))
-      out.write("$title\n".toByteArray(charset("CP1256")))
-      out.write("================================\n".toByteArray(charset("CP1256")))
-      
-      out.write(byteArrayOf(0x1B, 0x61, 0x00)) // Left alignment
-      for (line in details) {
-        out.write("$line\n".toByteArray(charset("CP1256")))
-      }
-      
-      out.write(byteArrayOf(0x1B, 0x61, 0x01)) // Center alignment
-      out.write("--------------------------------\n".toByteArray(charset("CP1256")))
-      out.write("$footer\n".toByteArray(charset("CP1256")))
-      out.write("شكراً لزيارتكم - ترقبوا خدماتنا\n\n\n".toByteArray(charset("CP1256")))
-      
-      // Cut paper command
-      out.write(byteArrayOf(0x1D, 0x56, 0x42, 0x00))
-      out.flush()
-      return true
-    } catch (e: Exception) {
-      e.printStackTrace()
-      return false
+    // Render as a bitmap so Arabic shaping and RTL order do not depend on the
+    // thermal printer's configured legacy character code page.
+    val receipt = buildString {
+      appendLine("بقالة العزي للمواد الغذائية")
+      appendLine(title)
+      appendLine("================================")
+      details.forEach { appendLine(it) }
+      appendLine("--------------------------------")
+      appendLine(footer)
+      appendLine("شكراً لزيارتكم")
     }
+    return printReceiptBitmap(receipt)
   }
 
   /**
@@ -113,6 +96,8 @@ object BluetoothPrinterManager {
         receiptText, 0, receiptText.length, textPaint, width
       )
         .setAlignment(Layout.Alignment.ALIGN_CENTER)
+        .setTextDirection(TextDirectionHeuristics.RTL)
+        .setIncludePad(false)
         .setLineSpacing(0f, 1.2f)
         .build()
 
