@@ -652,6 +652,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, onBack: () -> Unit) {
   val inventory by viewModel.inventoryItems.collectAsState()
 
   var selectedCustomer by remember { mutableStateOf<CustomerEntity?>(null) }
+  var customerExpanded by remember { mutableStateOf(false) }
   var invoiceType by remember { mutableStateOf("SALE") }
   val cartItems = remember { mutableStateListOf<InvoiceItemEntity>() }
   var paidAmountStr by remember { mutableStateOf("") }
@@ -759,6 +760,43 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, onBack: () -> Unit) {
         IconButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.White) }
         Text("تعديل الفاتورة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         IconButton(onClick = {}) { Icon(Icons.Default.Notifications, contentDescription = null, tint = Color.White) }
+      }
+      Spacer(modifier = Modifier.height(8.dp))
+
+      // Select the account before saving a credit invoice. Cash sales may remain anonymous.
+      ExposedDropdownMenuBox(
+        expanded = customerExpanded,
+        onExpandedChange = { customerExpanded = !customerExpanded }
+      ) {
+        OutlinedTextField(
+          value = selectedCustomer?.name ?: "عميل نقدي / اختر العميل",
+          onValueChange = {},
+          readOnly = true,
+          label = { Text("العميل") },
+          modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
+          trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerExpanded) }
+        )
+        ExposedDropdownMenu(
+          expanded = customerExpanded,
+          onDismissRequest = { customerExpanded = false }
+        ) {
+          DropdownMenuItem(
+            text = { Text("عميل نقدي بدون حساب") },
+            onClick = {
+              selectedCustomer = null
+              customerExpanded = false
+            }
+          )
+          customers.forEach { customer ->
+            DropdownMenuItem(
+              text = { Text("${customer.name} - الرصيد: ${customer.balance}") },
+              onClick = {
+                selectedCustomer = customer
+                customerExpanded = false
+              }
+            )
+          }
+        }
       }
       Spacer(modifier = Modifier.height(8.dp))
 
