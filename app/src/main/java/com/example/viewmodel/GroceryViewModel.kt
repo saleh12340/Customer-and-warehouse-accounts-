@@ -22,6 +22,75 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
   val invoices = invoiceDao.getAllInvoices().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
   val transactions = transactionDao.getAllTransactions().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+  data class InvoiceValidationResult(
+    val isValid: Boolean,
+    val message: String = "",
+    val normalizedType: String = "",
+    val totalAmount: Double = 0.0,
+    val remainingAmount: Double = 0.0,
+    val status: String = ""
+  )
+
+  companion object {
+    fun validateInvoiceInput(
+      invoiceNumber: String,
+      type: String,
+      items: List<InvoiceItemEntity>,
+      paidAmount: Double
+    ): InvoiceValidationResult {
+      val normalizedType = type.trim().uppercase()
+      if (normalizedType !in setOf("SALE", "CASH", "CREDIT", "PURCHASE")) {
+        return InvoiceValidationResult(false, "نوع الفاتورة غير صحيح")
+      }
+
+      val cleanInvoiceNumber = invoiceNumber.trim()
+      if (cleanInvoiceNumber.isBlank()) {
+        return InvoiceValidationResult(false, "رقم الفاتورة مطلوب")
+      }
+
+      if (items.isEmpty()) {
+        return InvoiceValidationResult(false, "أضف صنفاً واحداً على الأقل")
+      }
+
+      val invalidItem = items.firstOrNull { item ->
+        item.itemName.trim().isBlank() ||
+          item.itemId <= 0 ||
+          item.quantity <= 0 ||
+          !item.unitPrice.isFinite() ||
+          item.unitPrice < 0 ||
+          !item.totalPrice.isFinite() ||
+          item.totalPrice < 0
+      }
+      if (invalidItem != null) {
+        return InvoiceValidationResult(false, "تحقق من الأصناف والكميات والأسعار")
+      }
+
+      val totalAmount = items.sumOf { it.totalPrice }
+      if (!totalAmount.isFinite() || totalAmount <= 0) {
+        return InvoiceValidationResult(false, "إجمالي الفاتورة غير صحيح")
+      }
+
+      if (!paidAmount.isFinite() || paidAmount < 0 || paidAmount > totalAmount) {
+        return InvoiceValidationResult(false, "المبلغ المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة")
+      }
+
+      val remainingAmount = totalAmount - paidAmount
+      val status = when {
+        remainingAmount <= 0.000001 -> "PAID"
+        paidAmount > 0 -> "PARTIAL"
+        else -> "UNPAID"
+      }
+
+      return InvoiceValidationResult(
+        isValid = true,
+        normalizedType = normalizedType,
+        totalAmount = totalAmount,
+        remainingAmount = remainingAmount,
+        status = status
+      )
+    }
+  }
+
   // Customer actions
   fun addCustomer(name: String, phone: String, address: String, initialBalance: Double) {
     viewModelScope.launch {
@@ -105,25 +174,14 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
   ) {
     viewModelScope.launch {
       try {
-        val normalizedType = type.uppercase()
-        require(normalizedType in setOf("SALE", "CASH", "CREDIT", "PURCHASE")) { "نوع الفاتورة غير صحيح" }
-        require(invoiceNumber.isNotBlank()) { "رقم الفاتورة مطلوب" }
-        require(items.isNotEmpty()) { "أضف صنفاً واحداً على الأقل" }
-        require(items.all { it.itemId > 0 && it.quantity > 0 && it.totalPrice >= 0 && it.totalPrice.isFinite() }) {
-          "تحقق من الأصناف والكميات والأسعار"
-        }
+        val normalizedItems = items.map { it.copy(itemName = it.itemName.trim()) }
+        val validation = validateInvoiceInput(invoiceNumber, type, normalizedItems, paidAmount)
+        require(validation.isValid) { validation.message }
 
-        val totalAmount = items.sumOf { it.totalPrice }
-        require(totalAmount > 0 && totalAmount.isFinite()) { "إجمالي الفاتورة غير صحيح" }
-        require(paidAmount.isFinite() && paidAmount >= 0 && paidAmount <= totalAmount) {
-          "المبلغ المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة"
-        }
-        val remainingAmount = totalAmount - paidAmount
-        val status = when {
-          remainingAmount <= 0.000001 -> "PAID"
-          paidAmount > 0 -> "PARTIAL"
-          else -> "UNPAID"
-        }
+        val normalizedType = validation.normalizedType
+        val totalAmount = validation.totalAmount
+        val remainingAmount = validation.remainingAmount
+        val status = validation.status
 
         database.withTransaction {
           check(invoiceDao.getInvoiceByNumber(invoiceNumber.trim()) == null) { "رقم الفاتورة مستخدم من قبل" }
@@ -132,7 +190,7 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
             invoiceNumber = invoiceNumber.trim(),
             type = normalizedType,
             partyId = partyId,
-            partyName = partyName,
+            partyName = partyName.trim(),
             date = System.currentTimeMillis(),
             totalAmount = totalAmount,
             paidAmount = paidAmount,
@@ -141,11 +199,11 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
           )
 
           val invoiceId = invoiceDao.insertInvoice(invoice)
-          invoiceDao.insertItems(items.map { it.copy(invoiceId = invoiceId) })
+          invoiceDao.insertItems(normalizedItems.map { it.copy(invoiceId = invoiceId) })
 
           // Every non-purchase invoice leaves stock; purchases add stock.
           val stockDeltaSign = if (normalizedType == "PURCHASE") 1 else -1
-          for (item in items) {
+          for (item in normalizedItems) {
             val changedRows = inventoryDao.adjustQuantity(item.itemId, stockDeltaSign * item.quantity)
             check(changedRows == 1) {
               "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
@@ -161,7 +219,7 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
                   TransactionEntity(
                     partyType = "CUSTOMER",
                     partyId = partyId,
-                    partyName = partyName,
+                    partyName = partyName.trim(),
                     type = "DEBIT (عليه)",
                     amount = remainingAmount,
                     description = "فاتورة مبيعات رقم ${invoice.invoiceNumber}",
@@ -176,7 +234,7 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
                   TransactionEntity(
                     partyType = "SUPPLIER",
                     partyId = partyId,
-                    partyName = partyName,
+                    partyName = partyName.trim(),
                     type = "CREDIT (له)",
                     amount = remainingAmount,
                     description = "فاتورة مشتريات رقم ${invoice.invoiceNumber}",
