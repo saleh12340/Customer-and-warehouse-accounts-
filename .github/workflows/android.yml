@@ -27,18 +27,27 @@ jobs:
         with:
           gradle-version: "9.3.1"
 
-      # The Android Gradle Plugin is explicitly configured to use this local
-      # debug key. Generate the standard disposable debug key on the runner;
-      # never commit a keystore or production signing credentials.
-      - name: Create temporary debug keystore
+      # Reuse the same non-production debug signing key between CI runs so
+      # successive debug APKs remain installable as updates to one another.
+      - name: Restore stable debug keystore
+        uses: actions/cache@v4
+        with:
+          path: debug.keystore
+          key: customer-warehouse-debug-keystore-v1-${{ github.repository }}
+
+      - name: Create debug keystore when cache is empty
         run: |
-          keytool -genkeypair -v \
-            -keystore debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US" \
-            -keyalg RSA -keysize 2048 -validity 10000
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          else
+            echo "Using cached stable debug keystore"
+          fi
 
       - name: Run unit tests and build Debug APK
         run: gradle testDebugUnitTest assembleDebug --stacktrace
