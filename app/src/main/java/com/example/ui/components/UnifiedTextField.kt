@@ -36,6 +36,8 @@ fun UnifiedTextField(
     enabled: Boolean = true,
     readOnly: Boolean = false,
     singleLine: Boolean = true,
+    labelContent: (@Composable () -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
 
@@ -61,7 +63,7 @@ fun UnifiedTextField(
             onValueChange(accepted)
         },
         modifier = inputModifier.fillMaxWidth(),
-        label = { Text(label) },
+        label = labelContent ?: { Text(label) },
         keyboardOptions = keyboardOptions ?: KeyboardOptions(
             keyboardType = when {
                 !numeric -> KeyboardType.Text
@@ -72,6 +74,7 @@ fun UnifiedTextField(
         enabled = enabled,
         readOnly = readOnly,
         singleLine = singleLine,
+        trailingIcon = trailingIcon,
     )
 }
 
@@ -101,7 +104,7 @@ fun ResponsiveFieldRow(
     }
 }
 
-/** Keeps digits and, for decimal fields, at most one decimal separator; negative signs are discarded. */
+/** Keeps digits and, for decimal fields, at most one decimal point; negative signs are discarded. */
 internal fun sanitizeNumericInput(input: String, allowDecimal: Boolean): String {
     val result = StringBuilder(input.length)
     var hasDecimalPoint = false
