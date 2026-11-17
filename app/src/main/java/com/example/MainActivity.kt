@@ -656,6 +656,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, onBack: () -> Unit) {
   val cartItems = remember { mutableStateListOf<InvoiceItemEntity>() }
   var paidAmountStr by remember { mutableStateOf("") }
   var invoiceNumber by remember { mutableStateOf("AZ-${System.currentTimeMillis().toString().takeLast(6)}") }
+  var isSaving by remember { mutableStateOf(false) }
 
   var selectedItem by remember { mutableStateOf<InventoryItemEntity?>(null) }
   var qtyStr by remember { mutableStateOf("1") }
@@ -710,14 +711,18 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, onBack: () -> Unit) {
             }
             Button(
               onClick = {
-                if (cartItems.isNotEmpty()) {
+                if (cartItems.isNotEmpty() && !isSaving) {
+                  isSaving = true
                   val pId = selectedCustomer?.id ?: 0L
                   val pName = selectedCustomer?.name ?: "عميل نقدي"
-                  viewModel.createInvoice(invoiceNumber, invoiceType, pId, pName, cartItems, paidAmount)
-                  Toast.makeText(context, "تم حفظ الفاتورة بنجاح ✓", Toast.LENGTH_SHORT).show()
-                  onBack()
+                  viewModel.createInvoice(invoiceNumber, invoiceType, pId, pName, cartItems.toList(), paidAmount) { success, message ->
+                    isSaving = false
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    if (success) onBack()
+                  }
                 }
               },
+              enabled = !isSaving,
               modifier = Modifier.weight(2f),
               colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
             ) {
