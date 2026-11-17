@@ -3,6 +3,7 @@ package com.example.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -38,20 +39,23 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
 
   fun addCustomerTransaction(customerId: Long, customerName: String, amount: Double, isDebit: Boolean, description: String) {
     viewModelScope.launch {
-      val delta = if (isDebit) amount else -amount
-      customerDao.updateBalance(customerId, delta)
-      val txType = if (isDebit) "DEBIT (عليه)" else "CREDIT (له)"
-      transactionDao.insertTransaction(
-        TransactionEntity(
-          partyType = "CUSTOMER",
-          partyId = customerId,
-          partyName = customerName,
-          type = txType,
-          amount = amount,
-          description = description,
-          date = System.currentTimeMillis()
+      if (!amount.isFinite() || amount <= 0) return@launch
+      database.withTransaction {
+        val delta = if (isDebit) amount else -amount
+        check(customerDao.updateBalance(customerId, delta) == 1) { "العميل غير موجود" }
+        val txType = if (isDebit) "DEBIT (عليه)" else "CREDIT (له)"
+        transactionDao.insertTransaction(
+          TransactionEntity(
+            partyType = "CUSTOMER",
+            partyId = customerId,
+            partyName = customerName,
+            type = txType,
+            amount = amount,
+            description = description,
+            date = System.currentTimeMillis()
+          )
         )
-      )
+      }
     }
   }
 
@@ -73,7 +77,8 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
   // Inventory actions
   fun addInventoryItem(name: String, category: String, quantity: Int, purchasePrice: Double, sellingPrice: Double, unit: String) {
     viewModelScope.launch {
-      inventoryDao.insertItem(InventoryItemEntity(name = name, category = category, quantity = quantity, purchasePrice = purchasePrice, sellingPrice = sellingPrice, unit = unit))
+      if (name.isBlank() || quantity < 0 || !purchasePrice.isFinite() || !sellingPrice.isFinite() || purchasePrice < 0 || sellingPrice < 0) return@launch
+      inventoryDao.insertItem(InventoryItemEntity(name = name.trim(), category = category, quantity = quantity, purchasePrice = purchasePrice, sellingPrice = sellingPrice, unit = unit))
     }
   }
 
@@ -85,61 +90,106 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
     viewModelScope.launch { inventoryDao.deleteItem(item) }
   }
 
-  // Invoice creation with item tracking & balance updates
+  /**
+   * Saves invoice, its lines, stock movements, party balance and ledger entry
+   * as one Room transaction. Any validation or stock error rolls everything back.
+   */
   fun createInvoice(
     invoiceNumber: String,
-    type: String, // SALE, PURCHASE, CASH, CREDIT
+    type: String,
     partyId: Long,
     partyName: String,
     items: List<InvoiceItemEntity>,
-    paidAmount: Double
+    paidAmount: Double,
+    onResult: (Boolean, String) -> Unit = { _, _ -> }
   ) {
     viewModelScope.launch {
-      val totalAmount = items.sumOf { it.totalPrice }
-      val remainingAmount = totalAmount - paidAmount
-      val status = if (remainingAmount <= 0) "PAID" else if (paidAmount > 0) "PARTIAL" else "UNPAID"
+      try {
+        val normalizedType = type.uppercase()
+        require(normalizedType in setOf("SALE", "CASH", "CREDIT", "PURCHASE")) { "نوع الفاتورة غير صحيح" }
+        require(invoiceNumber.isNotBlank()) { "رقم الفاتورة مطلوب" }
+        require(items.isNotEmpty()) { "أضف صنفاً واحداً على الأقل" }
+        require(items.all { it.itemId > 0 && it.quantity > 0 && it.totalPrice >= 0 && it.totalPrice.isFinite() }) {
+          "تحقق من الأصناف والكميات والأسعار"
+        }
 
-      val invoice = InvoiceEntity(
-        invoiceNumber = invoiceNumber,
-        type = type,
-        partyId = partyId,
-        partyName = partyName,
-        date = System.currentTimeMillis(),
-        totalAmount = totalAmount,
-        paidAmount = paidAmount,
-        remainingAmount = remainingAmount,
-        status = status
-      )
+        val totalAmount = items.sumOf { it.totalPrice }
+        require(totalAmount > 0 && totalAmount.isFinite()) { "إجمالي الفاتورة غير صحيح" }
+        require(paidAmount.isFinite() && paidAmount >= 0 && paidAmount <= totalAmount) {
+          "المبلغ المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة"
+        }
+        val remainingAmount = totalAmount - paidAmount
+        val status = when {
+          remainingAmount <= 0.000001 -> "PAID"
+          paidAmount > 0 -> "PARTIAL"
+          else -> "UNPAID"
+        }
 
-      val invoiceId = invoiceDao.insertInvoice(invoice)
-      val itemsWithId = items.map { it.copy(invoiceId = invoiceId) }
-      invoiceDao.insertItems(itemsWithId)
+        database.withTransaction {
+          check(invoiceDao.getInvoiceByNumber(invoiceNumber.trim()) == null) { "رقم الفاتورة مستخدم من قبل" }
 
-      // Adjust inventory quantities and customer/supplier balances
-      for (item in items) {
-        val delta = if (type == "SALE" || type == "CASH") -item.quantity else item.quantity
-        inventoryDao.adjustQuantity(item.itemId, delta)
-      }
-
-      if (type == "SALE" || type == "CREDIT") {
-        if (partyId > 0 && remainingAmount > 0) {
-          customerDao.updateBalance(partyId, remainingAmount)
-          transactionDao.insertTransaction(
-            TransactionEntity(
-              partyType = "CUSTOMER",
-              partyId = partyId,
-              partyName = partyName,
-              type = "DEBIT (عليه)",
-              amount = remainingAmount,
-              description = "فاتورة مبيعات رقم $invoiceNumber",
-              date = System.currentTimeMillis()
-            )
+          val invoice = InvoiceEntity(
+            invoiceNumber = invoiceNumber.trim(),
+            type = normalizedType,
+            partyId = partyId,
+            partyName = partyName,
+            date = System.currentTimeMillis(),
+            totalAmount = totalAmount,
+            paidAmount = paidAmount,
+            remainingAmount = remainingAmount,
+            status = status
           )
+
+          val invoiceId = invoiceDao.insertInvoice(invoice)
+          invoiceDao.insertItems(items.map { it.copy(invoiceId = invoiceId) })
+
+          // Every non-purchase invoice leaves stock; purchases add stock.
+          val stockDeltaSign = if (normalizedType == "PURCHASE") 1 else -1
+          for (item in items) {
+            val changedRows = inventoryDao.adjustQuantity(item.itemId, stockDeltaSign * item.quantity)
+            check(changedRows == 1) {
+              "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+            }
+          }
+
+          if (remainingAmount > 0.000001) {
+            when (normalizedType) {
+              "SALE", "CASH", "CREDIT" -> {
+                check(partyId > 0) { "حدد العميل لتسجيل المبلغ المتبقي كدين" }
+                check(customerDao.updateBalance(partyId, remainingAmount) == 1) { "العميل المحدد غير موجود" }
+                transactionDao.insertTransaction(
+                  TransactionEntity(
+                    partyType = "CUSTOMER",
+                    partyId = partyId,
+                    partyName = partyName,
+                    type = "DEBIT (عليه)",
+                    amount = remainingAmount,
+                    description = "فاتورة مبيعات رقم ${invoice.invoiceNumber}",
+                    date = invoice.date
+                  )
+                )
+              }
+              "PURCHASE" -> {
+                check(partyId > 0) { "حدد المورد لتسجيل المبلغ المتبقي" }
+                check(supplierDao.updateBalance(partyId, remainingAmount) == 1) { "المورد المحدد غير موجود" }
+                transactionDao.insertTransaction(
+                  TransactionEntity(
+                    partyType = "SUPPLIER",
+                    partyId = partyId,
+                    partyName = partyName,
+                    type = "CREDIT (له)",
+                    amount = remainingAmount,
+                    description = "فاتورة مشتريات رقم ${invoice.invoiceNumber}",
+                    date = invoice.date
+                  )
+                )
+              }
+            }
+          }
         }
-      } else if (type == "PURCHASE") {
-        if (partyId > 0 && remainingAmount > 0) {
-          supplierDao.updateBalance(partyId, remainingAmount)
-        }
+        onResult(true, "تم حفظ الفاتورة وتحديث الحساب والمخزون")
+      } catch (error: Exception) {
+        onResult(false, error.message ?: "تعذر حفظ الفاتورة")
       }
     }
   }
