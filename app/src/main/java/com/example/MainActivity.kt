@@ -780,20 +780,9 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
           }
           Spacer(modifier = Modifier.height(4.dp))
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Button(
-              onClick = { invoiceType = "CASH" },
-              modifier = Modifier.weight(1f),
-              colors = ButtonDefaults.buttonColors(containerColor = if (invoiceType == "CASH") SuccessGreen else Color.LightGray)
-            ) {
-              Text("نقدي", fontSize = 12.sp)
-            }
-            Button(
-              onClick = { invoiceType = "CREDIT" },
-              modifier = Modifier.weight(1f),
-              colors = ButtonDefaults.buttonColors(containerColor = if (invoiceType == "CREDIT") DangerRed else Color.LightGray)
-            ) {
-              Text("أجل", fontSize = 12.sp)
-            }
+            Button(onClick = { invoiceType = "CASH" }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (invoiceType == "CASH") SuccessGreen else Color.LightGray)) { Text("بيع نقدي", fontSize = 11.sp) }
+            Button(onClick = { invoiceType = "CREDIT" }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (invoiceType == "CREDIT") DangerRed else Color.LightGray)) { Text("بيع آجل", fontSize = 11.sp) }
+            Button(onClick = { invoiceType = "PURCHASE" }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (invoiceType == "PURCHASE") PrimaryBlue else Color.LightGray)) { Text("شراء", fontSize = 11.sp) }
           }
         }
       }
@@ -806,7 +795,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
         verticalAlignment = Alignment.CenterVertically
       ) {
         IconButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.White) }
-        Text("تعديل الفاتورة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(if (editInvoiceId == null) "فاتورة جديدة" else "تعديل الفاتورة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         IconButton(onClick = {}) { Icon(Icons.Default.Notifications, contentDescription = null, tint = Color.White) }
       }
       Spacer(modifier = Modifier.height(8.dp))
@@ -869,7 +858,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
                   text = { Text("${inv.name} (متوفر: ${inv.quantity}) - ${inv.sellingPrice} ر.ي") },
                   onClick = {
                     selectedItem = inv
-                    customPriceStr = inv.sellingPrice.toString()
+                    customPriceStr = (if (invoiceType == "PURCHASE") inv.purchasePrice else inv.sellingPrice).toString()
                     inventoryExpanded = false
                   }
                 )
