@@ -23,7 +23,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Shared full-width input for Arabic Compose screens. Numeric inputs select their contents on focus. */
+/** Shared, full-width input for Arabic Compose screens. Numeric inputs select their contents on focus. */
 @Composable
 fun UnifiedTextField(
     value: String,
@@ -47,7 +47,7 @@ fun UnifiedTextField(
         }
     }
 
-    val inputModifier = if (numeric) {
+    val inputModifier = if (numeric && !readOnly) {
         modifier.onFocusChanged { focusState ->
             if (focusState.isFocused) {
                 fieldValue = fieldValue.copy(selection = TextRange(0, fieldValue.text.length))
@@ -58,7 +58,7 @@ fun UnifiedTextField(
     OutlinedTextField(
         value = fieldValue,
         onValueChange = { proposed ->
-            val accepted = if (numeric) sanitizeNumericInput(proposed.text, decimal) else proposed.text
+            val accepted = if (numeric && !readOnly) sanitizeNumericInput(proposed.text, decimal) else proposed.text
             fieldValue = TextFieldValue(accepted, selection = TextRange(accepted.length))
             onValueChange(accepted)
         },
@@ -75,6 +75,46 @@ fun UnifiedTextField(
         readOnly = readOnly,
         singleLine = singleLine,
         trailingIcon = trailingIcon,
+    )
+}
+
+/** A decimal amount/price field, with a decimal keypad and strict single-separator input. */
+@Composable
+fun MoneyTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    UnifiedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = label,
+        modifier = modifier,
+        numeric = true,
+        decimal = true,
+        enabled = enabled,
+    )
+}
+
+/** An integer quantity field; values below zero and non-digits are rejected. */
+@Composable
+fun QuantityTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    UnifiedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = label,
+        modifier = modifier,
+        numeric = true,
+        decimal = false,
+        enabled = enabled,
     )
 }
 

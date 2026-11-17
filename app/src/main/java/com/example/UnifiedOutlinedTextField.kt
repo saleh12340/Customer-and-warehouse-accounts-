@@ -7,10 +7,7 @@ import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.example.ui.components.UnifiedTextField
 
-/**
- * Keeps the existing screen declarations concise while routing their editable fields through the
- * shared RTL input design. Read-only dropdown anchors retain Material styling and semantics.
- */
+/** Routes screen fields to the unified full-width Material 3 input while retaining existing call sites. */
 @Composable
 fun OutlinedTextField(
     value: String,
@@ -25,15 +22,14 @@ fun OutlinedTextField(
 ) {
     val numeric = keyboardOptions.keyboardType == KeyboardType.Number ||
         keyboardOptions.keyboardType == KeyboardType.Decimal
-    val decimal = keyboardOptions.keyboardType == KeyboardType.Decimal
 
     UnifiedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = label?.let { labelContent -> "" },
+        label = "",
         modifier = modifier,
-        numeric = numeric && !readOnly,
-        decimal = decimal,
+        numeric = numeric,
+        decimal = keyboardOptions.keyboardType == KeyboardType.Decimal,
         keyboardOptions = keyboardOptions,
         enabled = enabled,
         readOnly = readOnly,
