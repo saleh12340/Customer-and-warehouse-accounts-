@@ -700,8 +700,10 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
           paidAmountStr = loaded.invoice.paidAmount.toString()
           if (loaded.invoice.type == "PURCHASE") {
             selectedSupplier = suppliers.firstOrNull { it.id == loaded.invoice.partyId }
+              ?: SupplierEntity(id = loaded.invoice.partyId, name = loaded.invoice.partyName, phone = "", company = "")
           } else {
             selectedCustomer = customers.firstOrNull { it.id == loaded.invoice.partyId }
+              ?: CustomerEntity(id = loaded.invoice.partyId, name = loaded.invoice.partyName, phone = "", address = "")
           }
           cartItems.clear()
           cartItems.addAll(loaded.items.map { it.copy(id = 0L) })
@@ -733,8 +735,8 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
                   val inv = InvoiceEntity(
                     invoiceNumber = invoiceNumber,
                     type = invoiceType,
-                    partyId = selectedCustomer?.id ?: 0L,
-                    partyName = selectedCustomer?.name ?: "عميل نقدي",
+                    partyId = if (invoiceType == "PURCHASE") selectedSupplier?.id ?: 0L else selectedCustomer?.id ?: 0L,
+                    partyName = if (invoiceType == "PURCHASE") selectedSupplier?.name ?: "" else selectedCustomer?.name ?: "عميل نقدي",
                     date = System.currentTimeMillis(),
                     totalAmount = subtotal,
                     paidAmount = paidAmount,
