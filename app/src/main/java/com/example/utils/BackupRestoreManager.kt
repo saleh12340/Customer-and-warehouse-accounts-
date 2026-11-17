@@ -17,7 +17,7 @@ object BackupRestoreManager {
 
   suspend fun exportToUri(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
     val db = AppDatabase.getDatabase(context)
-    val payload = JSONObject().apply {
+    val payload = db.withTransaction { JSONObject().apply {
       put("customers", JSONArray().apply { db.customerDao().getCustomersSnapshot().forEach { c ->
         put(JSONObject().apply { put("id", c.id); put("name", c.name); put("phone", c.phone); put("address", c.address); put("balance", c.balance) })
       } })
@@ -36,7 +36,7 @@ object BackupRestoreManager {
       put("transactions", JSONArray().apply { db.transactionDao().getTransactionsSnapshot().forEach { t ->
         put(JSONObject().apply { put("id", t.id); put("partyType", t.partyType); put("partyId", t.partyId); put("partyName", t.partyName); put("type", t.type); put("amount", t.amount); put("description", t.description); put("date", t.date) })
       } })
-    }
+    } }
     val envelope = JSONObject().apply {
       put("format", FORMAT); put("version", BACKUP_VERSION); put("createdAt", System.currentTimeMillis())
       put("payload", payload); put("sha256", sha256(payload.toString()))
