@@ -811,16 +811,16 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
       }
       Spacer(modifier = Modifier.height(8.dp))
 
-      // Select the account before saving a credit invoice. Cash sales may remain anonymous.
+      // Select the customer for sales or supplier for purchases.
       ExposedDropdownMenuBox(
         expanded = customerExpanded,
         onExpandedChange = { customerExpanded = !customerExpanded }
       ) {
         OutlinedTextField(
-          value = selectedCustomer?.name ?: "عميل نقدي / اختر العميل",
+          value = if (invoiceType == "PURCHASE") selectedSupplier?.name ?: "اختر المورد" else selectedCustomer?.name ?: "عميل نقدي / اختر العميل",
           onValueChange = {},
           readOnly = true,
-          label = { Text("العميل") },
+          label = { Text(if (invoiceType == "PURCHASE") "المورد" else "العميل") },
           modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable, true),
           trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = customerExpanded) }
         )
@@ -828,21 +828,24 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
           expanded = customerExpanded,
           onDismissRequest = { customerExpanded = false }
         ) {
-          DropdownMenuItem(
-            text = { Text("عميل نقدي بدون حساب") },
-            onClick = {
-              selectedCustomer = null
-              customerExpanded = false
+          if (invoiceType == "PURCHASE") {
+            suppliers.forEach { supplier ->
+              DropdownMenuItem(
+                text = { Text("${supplier.name} - الرصيد: ${supplier.balance}") },
+                onClick = { selectedSupplier = supplier; customerExpanded = false }
+              )
             }
-          )
-          customers.forEach { customer ->
+          } else {
             DropdownMenuItem(
-              text = { Text("${customer.name} - الرصيد: ${customer.balance}") },
-              onClick = {
-                selectedCustomer = customer
-                customerExpanded = false
-              }
+              text = { Text("عميل نقدي بدون حساب") },
+              onClick = { selectedCustomer = null; customerExpanded = false }
             )
+            customers.forEach { customer ->
+              DropdownMenuItem(
+                text = { Text("${customer.name} - الرصيد: ${customer.balance}") },
+                onClick = { selectedCustomer = customer; customerExpanded = false }
+              )
+            }
           }
         }
       }
