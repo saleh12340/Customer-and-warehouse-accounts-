@@ -691,6 +691,25 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, editInvoiceId: Long? = null
   val paidAmount = paidAmountStr.toDoubleOrNull() ?: 0.0
   val remaining = subtotal - paidAmount
 
+  LaunchedEffect(editInvoiceId) {
+    if (editInvoiceId != null) {
+      viewModel.loadInvoiceForEdit(editInvoiceId) { loaded ->
+        if (loaded != null) {
+          invoiceNumber = loaded.invoice.invoiceNumber
+          invoiceType = loaded.invoice.type
+          paidAmountStr = loaded.invoice.paidAmount.toString()
+          if (loaded.invoice.type == "PURCHASE") {
+            selectedSupplier = suppliers.firstOrNull { it.id == loaded.invoice.partyId }
+          } else {
+            selectedCustomer = customers.firstOrNull { it.id == loaded.invoice.partyId }
+          }
+          cartItems.clear()
+          cartItems.addAll(loaded.items.map { it.copy(id = 0L) })
+        }
+      }
+    }
+  }
+
   Scaffold(
     bottomBar = {
       Surface(color = SurfaceLight, tonalElevation = 8.dp) {
