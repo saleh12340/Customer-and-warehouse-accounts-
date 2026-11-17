@@ -23,4 +23,9 @@ class UnifiedTextFieldTest {
     fun emptyAndInvalidNumericInputCanBeCleared() {
         assertEquals("", sanitizeNumericInput("-+abc", allowDecimal = true))
     }
+
+    @Test
+    fun decimalSeparatorIsNotDuplicated() {
+        assertEquals("1.234", sanitizeNumericInput("1..2.3.4", allowDecimal = true))
+    }
 }

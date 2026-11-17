@@ -59,7 +59,9 @@ fun UnifiedTextField(
         value = fieldValue,
         onValueChange = { proposed ->
             val accepted = if (numeric && !readOnly) sanitizeNumericInput(proposed.text, decimal) else proposed.text
-            fieldValue = TextFieldValue(accepted, selection = TextRange(accepted.length))
+            val selectionStart = proposed.selection.start.coerceIn(0, accepted.length)
+            val selectionEnd = proposed.selection.end.coerceIn(0, accepted.length)
+            fieldValue = TextFieldValue(accepted, selection = TextRange(selectionStart, selectionEnd))
             onValueChange(accepted)
         },
         modifier = inputModifier.fillMaxWidth(),
@@ -87,15 +89,7 @@ fun MoneyTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    UnifiedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = label,
-        modifier = modifier,
-        numeric = true,
-        decimal = true,
-        enabled = enabled,
-    )
+    UnifiedTextField(value, onValueChange, label, modifier, numeric = true, decimal = true, enabled = enabled)
 }
 
 /** An integer quantity field; values below zero and non-digits are rejected. */
@@ -107,15 +101,7 @@ fun QuantityTextField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    UnifiedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = label,
-        modifier = modifier,
-        numeric = true,
-        decimal = false,
-        enabled = enabled,
-    )
+    UnifiedTextField(value, onValueChange, label, modifier, numeric = true, enabled = enabled)
 }
 
 /** Arranges paired form controls side-by-side on wider displays and stacks them on narrow screens. */
@@ -127,17 +113,11 @@ fun ResponsiveFieldRow(
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         if (maxWidth >= breakpoint) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 content(Modifier.weight(1f), Modifier.weight(1f))
             }
         } else {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 content(Modifier.fillMaxWidth(), Modifier.fillMaxWidth())
             }
         }
