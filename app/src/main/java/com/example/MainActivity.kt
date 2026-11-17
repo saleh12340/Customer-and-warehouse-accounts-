@@ -653,7 +653,7 @@ fun CreateInvoiceScreen(viewModel: GroceryViewModel, onBack: () -> Unit) {
 
   var selectedCustomer by remember { mutableStateOf<CustomerEntity?>(null) }
   var customerExpanded by remember { mutableStateOf(false) }
-  var invoiceType by remember { mutableStateOf("SALE") }
+  var invoiceType by remember { mutableStateOf("CASH") }
   val cartItems = remember { mutableStateListOf<InvoiceItemEntity>() }
   var paidAmountStr by remember { mutableStateOf("") }
   var invoiceNumber by remember { mutableStateOf("AZ-${System.currentTimeMillis().toString().takeLast(6)}") }
