@@ -187,8 +187,16 @@ fun MainAppScreen() {
         }
         Screen.SUPPLIERS -> SuppliersScreen(viewModel = viewModel)
         Screen.INVENTORY -> InventoryScreen(viewModel = viewModel)
-        Screen.INVOICES -> InvoicesScreen(viewModel = viewModel, onCreateInvoice = { currentScreen = Screen.CREATE_INVOICE })
-        Screen.CREATE_INVOICE -> CreateInvoiceScreen(viewModel = viewModel, onBack = { currentScreen = Screen.INVOICES })
+        Screen.INVOICES -> InvoicesScreen(
+          viewModel = viewModel,
+          onCreateInvoice = { selectedInvoiceId = null; currentScreen = Screen.CREATE_INVOICE },
+          onEditInvoice = { invoiceId -> selectedInvoiceId = invoiceId; currentScreen = Screen.CREATE_INVOICE }
+        )
+        Screen.CREATE_INVOICE -> CreateInvoiceScreen(
+          viewModel = viewModel,
+          editInvoiceId = selectedInvoiceId,
+          onBack = { selectedInvoiceId = null; currentScreen = Screen.INVOICES }
+        )
         Screen.REPORTS -> ReportsScreen(viewModel = viewModel)
         Screen.SETTINGS -> SettingsScreen(viewModel = viewModel)
       }
