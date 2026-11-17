@@ -200,10 +200,20 @@ fun DashboardScreen(onNavigate: (Screen) -> Unit, viewModel: GroceryViewModel) {
   val inventory by viewModel.inventoryItems.collectAsState()
   val invoices by viewModel.invoices.collectAsState()
 
-  val totalReceivables = customers.sumOf { it.balance }
-  val totalPayables = suppliers.sumOf { it.balance }
+  val totalReceivables = customers.sumOf { maxOf(it.balance, 0.0) }
+  val totalPayables = suppliers.sumOf { maxOf(it.balance, 0.0) }
   val totalInventoryValue = inventory.sumOf { it.quantity * it.purchasePrice }
-  val todaySales = invoices.filter { it.type == "SALE" || it.type == "CASH" }.sumOf { it.totalAmount }
+  val startOfToday = remember {
+    Calendar.getInstance().apply {
+      set(Calendar.HOUR_OF_DAY, 0)
+      set(Calendar.MINUTE, 0)
+      set(Calendar.SECOND, 0)
+      set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+  }
+  val todaySales = invoices
+    .filter { it.date >= startOfToday && it.type in setOf("SALE", "CASH", "CREDIT") }
+    .sumOf { it.totalAmount }
 
   LazyColumn(
     modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -914,10 +924,10 @@ fun ReportsScreen(viewModel: GroceryViewModel) {
   val suppliers by viewModel.suppliers.collectAsState()
   val inventory by viewModel.inventoryItems.collectAsState()
 
-  val totalSales = invoices.filter { it.type == "SALE" || it.type == "CASH" }.sumOf { it.totalAmount }
+  val totalSales = invoices.filter { it.type in setOf("SALE", "CASH", "CREDIT") }.sumOf { it.totalAmount }
   val totalPurchases = invoices.filter { it.type == "PURCHASE" }.sumOf { it.totalAmount }
-  val customerDebts = customers.sumOf { it.balance }
-  val supplierDues = suppliers.sumOf { it.balance }
+  val customerDebts = customers.sumOf { maxOf(it.balance, 0.0) }
+  val supplierDues = suppliers.sumOf { maxOf(it.balance, 0.0) }
   val stockVal = inventory.sumOf { it.quantity * it.purchasePrice }
 
   LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
