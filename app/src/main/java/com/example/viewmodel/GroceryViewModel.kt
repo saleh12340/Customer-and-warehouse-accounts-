@@ -33,6 +33,15 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
   )
 
   companion object {
+    const val MAX_MONETARY_AMOUNT = 1_000_000_000_000.0
+
+    fun roundMoney(value: Double): Double {
+      require(value.isFinite() && abs(value) <= MAX_MONETARY_AMOUNT) { "القيمة المالية خارج النطاق المسموح" }
+      return java.math.BigDecimal.valueOf(value)
+        .setScale(2, java.math.RoundingMode.HALF_UP)
+        .toDouble()
+    }
+
     fun validateInvoiceInput(
       invoiceNumber: String,
       type: String,
@@ -54,34 +63,37 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
 
       val hasInvalidItem = items.any { item ->
         val expectedTotal = item.quantity.toDouble() * item.unitPrice
-        val tolerance = 0.000001 * maxOf(1.0, abs(expectedTotal))
+        val tolerance = maxOf(0.02, 0.00001 * maxOf(1.0, abs(expectedTotal)))
         item.itemName.trim().isBlank() ||
           item.itemId < 0 ||
           item.quantity <= 0 ||
           !item.unitPrice.isFinite() ||
           item.unitPrice < 0 ||
+          item.unitPrice > MAX_MONETARY_AMOUNT ||
           !item.totalPrice.isFinite() ||
           item.totalPrice < 0 ||
           !expectedTotal.isFinite() ||
+          expectedTotal > MAX_MONETARY_AMOUNT ||
           abs(item.totalPrice - expectedTotal) > tolerance
       }
       if (hasInvalidItem) {
         return InvoiceValidationResult(false, "تحقق من الأصناف والكميات والأسعار وإجمالي كل صنف")
       }
 
-      val totalAmount = items.sumOf { it.totalPrice }
-      if (!totalAmount.isFinite() || totalAmount <= 0) {
+      val rawTotal = items.sumOf { it.totalPrice }
+      if (!rawTotal.isFinite() || rawTotal <= 0 || rawTotal > MAX_MONETARY_AMOUNT) {
         return InvoiceValidationResult(false, "إجمالي الفاتورة غير صحيح")
       }
+      val totalAmount = roundMoney(rawTotal)
 
-      if (!paidAmount.isFinite() || paidAmount < 0 || paidAmount > totalAmount) {
+      if (!paidAmount.isFinite() || paidAmount < 0 || paidAmount > totalAmount + 0.01) {
         return InvoiceValidationResult(false, "المبلغ المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة")
       }
-
-      val remainingAmount = totalAmount - paidAmount
+      val normalizedPaid = roundMoney(minOf(paidAmount, totalAmount))
+      val remainingAmount = maxOf(0.0, roundMoney(totalAmount - normalizedPaid))
       val status = when {
-        remainingAmount <= 0.000001 -> "PAID"
-        paidAmount > 0 -> "PARTIAL"
+        remainingAmount <= 0.005 -> "PAID"
+        normalizedPaid > 0.0 -> "PARTIAL"
         else -> "UNPAID"
       }
 

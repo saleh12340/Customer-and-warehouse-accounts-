@@ -164,7 +164,7 @@
 
     <!-- 3. Customer Detail & Account Ledger -->
     <section id="view-customer-detail" class="view">
-      <div class="sticky-top-panel">
+      <div class="natural-top-panel">
         <div class="card compact-card" id="customer-info-card"></div>
 
         <div id="customer-delete-confirm" class="inline-confirm hidden">
@@ -192,6 +192,11 @@
             <button type="button" class="btn btn-success btn-compact" onclick="submitCustomerTx(false)">له (+ سداد)</button>
             <button type="button" class="btn btn-whatsapp btn-compact" onclick="shareCustomerWhatsApp()">واتساب</button>
             <button type="button" class="btn btn-primary btn-compact" onclick="openCreateInvoiceForParty('CREDIT', activeCustomerId)">+ فاتورة</button>
+          </div>
+          <div class="statement-bar-grid">
+            <button type="button" class="chip-action" onclick="previewStatementThermal('CUSTOMER', activeCustomerId)">طباعة الكشف</button>
+            <button type="button" class="chip-action" onclick="exportStatementPdf('CUSTOMER', activeCustomerId)">كشف PDF</button>
+            <button type="button" class="chip-action chip-wa" onclick="shareStatementWhatsAppPdf('CUSTOMER', activeCustomerId)">واتساب PDF</button>
           </div>
           <div id="cust-tx-form-title" class="muted-text hidden" style="margin-top:4px; font-size:11px;"></div>
           <button type="button" id="cust-tx-cancel-edit" class="btn btn-outline btn-sm hidden" style="margin-top:6px;" onclick="cancelEditCustomerTx()">إلغاء تعديل الحركة</button>
@@ -279,7 +284,7 @@
 
     <!-- 4c. Supplier Detail & Ledger -->
     <section id="view-supplier-detail" class="view">
-      <div class="sticky-top-panel">
+      <div class="natural-top-panel">
         <div class="card compact-card" id="supplier-info-card"></div>
 
         <div id="supplier-delete-confirm" class="inline-confirm hidden">
@@ -306,6 +311,11 @@
             <button type="button" class="btn btn-success btn-compact" onclick="submitSupplierTx(false)">عليه (- سداد)</button>
             <button type="button" class="btn btn-whatsapp btn-compact" onclick="shareSupplierWhatsApp()">واتساب</button>
             <button type="button" class="btn btn-primary btn-compact" onclick="openCreateInvoiceForParty('PURCHASE', activeSupplierId)">+ شراء</button>
+          </div>
+          <div class="statement-bar-grid">
+            <button type="button" class="chip-action" onclick="previewStatementThermal('SUPPLIER', activeSupplierId)">طباعة الكشف</button>
+            <button type="button" class="chip-action" onclick="exportStatementPdf('SUPPLIER', activeSupplierId)">كشف PDF</button>
+            <button type="button" class="chip-action chip-wa" onclick="shareStatementWhatsAppPdf('SUPPLIER', activeSupplierId)">واتساب PDF</button>
           </div>
           <div id="supp-tx-form-title" class="muted-text hidden" style="margin-top:4px; font-size:11px;"></div>
           <button type="button" id="supp-tx-cancel-edit" class="btn btn-outline btn-sm hidden" style="margin-top:6px;" onclick="cancelEditSupplierTx()">إلغاء تعديل الحركة</button>
@@ -340,7 +350,10 @@
       <div class="sticky-top-panel">
         <div class="section-head">
           <h2>إدارة المخزن</h2>
-          <button type="button" class="btn btn-primary btn-sm" onclick="openInventoryForm(0)">+ صنف جديد</button>
+          <div class="btn-row-compact">
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="exportInventoryPdf()">جرد PDF</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openInventoryForm(0)">+ صنف جديد</button>
+          </div>
         </div>
         <div class="ruled-input-row ruled-search-row">
           <input type="text" id="inventory-search" class="ruled-cell" placeholder="بحث عن صنف أو فئة..." oninput="filterInventory()">
@@ -352,6 +365,7 @@
         </div>
         <div id="inventory-summary-strip" class="summary-strip"></div>
       </div>
+      <div id="inventory-history-card" class="card compact-card entry-dock-card hidden"></div>
       <div id="inventory-list"></div>
     </section>
 
@@ -419,8 +433,8 @@
 
     <!-- 7. Create / Edit Invoice Screen -->
     <section id="view-create-invoice" class="view">
-      <!-- Sticky Top Ruled Multi-Row Input Bar (Right-to-Left: الإجمالي | الكمية | التفاصيل | سعر الواحدة آلي) -->
-      <div class="sticky-top-panel invoice-top-sticky">
+      <!-- Natural Scroll Top Ruled Multi-Row Input Bar (Right-to-Left: الإجمالي | الكمية | التفاصيل | سعر الواحدة آلي) -->
+      <div class="natural-top-panel">
         <div class="section-head" style="margin-bottom:4px;">
           <h2 id="invoice-screen-title">إصدار فاتورة جديدة</h2>
           <div class="btn-row-compact">
@@ -558,20 +572,21 @@
         </div>
       </div>
 
-      <!-- Sticky Bottom Invoice Actions -->
+      <!-- Simplified Clean Invoice Actions Dock -->
       <div class="invoice-dock">
         <div class="dock-row-primary">
           <button type="button" id="btn-save-invoice" class="btn btn-success btn-compact" onclick="saveInvoiceAction('NONE')">حفظ الفاتورة</button>
           <button type="button" class="btn btn-primary btn-compact" onclick="saveInvoiceAction('THERMAL_PREVIEW')">معاينة وطباعة</button>
-          <button type="button" class="btn btn-outline btn-compact" onclick="clearCart()">مسح</button>
         </div>
         <div class="dock-row-secondary">
-          <button type="button" class="chip-action chip-cash" id="btn-mode-cash" onclick="setPaymentMode('CASH')">نقدي</button>
-          <button type="button" class="chip-action chip-credit" id="btn-mode-credit" onclick="setPaymentMode('CREDIT')">آجل</button>
+          <button type="button" class="chip-action chip-wa" onclick="toggleInvoiceWaMenu()">واتساب ▾</button>
           <button type="button" class="chip-action" onclick="saveInvoiceAction('PDF')">PDF</button>
-          <button type="button" class="chip-action chip-wa" onclick="saveInvoiceAction('WA_IMAGE')">صورة واتساب</button>
-          <button type="button" class="chip-action chip-wa" onclick="saveInvoiceAction('WA_PDF')">PDF واتساب</button>
-          <button type="button" class="chip-action" onclick="toggleExchangeCalc()">حاسبة الصرف</button>
+          <button type="button" class="chip-action" onclick="toggleExchangeCalc()">الصرف</button>
+          <button type="button" class="chip-action" onclick="clearCart()">مسح</button>
+        </div>
+        <div id="invoice-wa-menu" class="dock-popover-row hidden">
+          <button type="button" class="chip-action chip-wa" onclick="toggleInvoiceWaMenu(false); saveInvoiceAction('WA_IMAGE')">صورة واتساب</button>
+          <button type="button" class="chip-action chip-wa" onclick="toggleInvoiceWaMenu(false); saveInvoiceAction('WA_PDF')">PDF واتساب</button>
         </div>
       </div>
     </section>
@@ -596,14 +611,14 @@
         </div>
         <div class="btn-row" style="margin-top: 8px;">
           <button type="button" id="btn-thermal-print-now" class="btn btn-success btn-compact" onclick="printActivePreviewInvoice()" disabled>طباعة حرارية الآن</button>
-          <button type="button" class="btn btn-whatsapp btn-compact" onclick="shareActivePreviewImage()">مشاركة صورة واتساب</button>
+          <button type="button" id="btn-preview-wa-share" class="btn btn-whatsapp btn-compact" onclick="shareActivePreviewImage()">مشاركة صورة واتساب</button>
         </div>
         <div class="btn-row">
           <button type="button" class="btn btn-primary btn-compact" onclick="saveActiveThermalImageToFolder()">حفظ الصورة في بقاله العزي</button>
-          <button type="button" class="btn btn-outline-primary btn-compact" onclick="openActivePreviewPdf()">فتح كملف PDF</button>
+          <button type="button" id="btn-preview-open-pdf" class="btn btn-outline-primary btn-compact" onclick="openActivePreviewPdf()">فتح كملف PDF</button>
         </div>
         <div class="btn-row">
-          <button type="button" class="btn btn-outline btn-compact" onclick="switchView('create-invoice')">رجوع للفاتورة</button>
+          <button type="button" id="btn-preview-back" class="btn btn-outline btn-compact" onclick="returnFromThermalPreview()">رجوع</button>
         </div>
       </div>
     </section>
@@ -613,7 +628,11 @@
       <div class="sticky-top-panel">
         <div class="section-head">
           <h2>التقارير المالية والمحاسبية</h2>
-          <button type="button" class="btn btn-primary btn-sm" onclick="exportCurrentReportPdf()">حفظ التقرير PDF</button>
+          <div class="btn-row-compact">
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="previewReportThermal()">طباعة</button>
+            <button type="button" class="btn btn-whatsapp btn-sm" onclick="shareCurrentReportWhatsApp()">واتساب</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="exportCurrentReportPdf()">PDF</button>
+          </div>
         </div>
         <div class="pill-tabs" id="report-range-tabs">
           <button type="button" class="pill active" onclick="setReportRange('ALL', this)">الكل</button>

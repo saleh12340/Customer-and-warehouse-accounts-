@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
   entities = [
@@ -14,7 +16,7 @@ import androidx.room.RoomDatabase
     InvoiceItemEntity::class,
     TransactionEntity::class
   ],
-  version = 1,
+  version = 2,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,6 +29,24 @@ abstract class AppDatabase : RoomDatabase() {
   companion object {
     @Volatile private var INSTANCE: AppDatabase? = null
 
+    val MIGRATION_1_2 = object : Migration(1, 2) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        // Preserve any legacy rows non-destructively before adding unique index on invoiceNumber.
+        db.execSQL(
+          """
+          UPDATE invoices
+          SET invoiceNumber = invoiceNumber || '-DUP-' || id
+          WHERE id NOT IN (
+            SELECT MIN(id) FROM invoices GROUP BY invoiceNumber
+          )
+          """.trimIndent()
+        )
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_invoices_invoiceNumber` ON `invoices` (`invoiceNumber`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_invoice_items_invoiceId` ON `invoice_items` (`invoiceId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_partyType_partyId_date` ON `transactions` (`partyType`, `partyId`, `date`)")
+      }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
       return INSTANCE ?: synchronized(this) {
         INSTANCE ?: Room.databaseBuilder(
@@ -34,8 +54,7 @@ abstract class AppDatabase : RoomDatabase() {
           AppDatabase::class.java,
           "alaziy_grocery.db"
         )
-          // Keep existing user databases intact. New installations start empty;
-          // sample customers, suppliers and stock must never be booked as real data.
+          .addMigrations(MIGRATION_1_2)
           .build()
           .also { INSTANCE = it }
       }

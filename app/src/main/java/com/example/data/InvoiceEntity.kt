@@ -1,9 +1,13 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "invoices")
+@Entity(
+  tableName = "invoices",
+  indices = [Index(value = ["invoiceNumber"], unique = true)]
+)
 data class InvoiceEntity(
   @PrimaryKey(autoGenerate = true) val id: Long = 0L,
   val invoiceNumber: String,

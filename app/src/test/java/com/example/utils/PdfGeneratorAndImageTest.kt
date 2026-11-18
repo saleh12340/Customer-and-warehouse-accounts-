@@ -129,4 +129,157 @@ class PdfGeneratorAndImageTest {
     val decoded = Base64.decode(preview80, Base64.DEFAULT)
     assertTrue(decoded.size > 200)
   }
+
+  @Test
+  fun scalesInvoicePaginationAndImageGenerationAcross1To100Items() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val counts = listOf(1, 5, 20, 50, 100)
+    var previousImageHeight = 0
+    for (count in counts) {
+      val items = sampleItems(count)
+      val measured = PdfGenerator.measureItemsForTest(items, context)
+      val pages = PdfGenerator.planPages(measured)
+      assertEquals(count, pages.flatten().size)
+      if (count >= 50) {
+        assertTrue("Expected multi-page pagination for $count items", pages.size >= 3)
+      }
+
+      val totalSum = items.sumOf { it.totalPrice }
+      val invoice = sampleInvoice().copy(totalAmount = totalSum, paidAmount = 5000.0, remainingAmount = totalSum - 5000.0)
+      val img = InvoiceImageGenerator.generateInvoiceImage(context, invoice, items, totalSum)
+      assertNotNull(img)
+      assertTrue(img!!.exists() && img.length() > 100)
+      val bmp = BitmapFactory.decodeFile(img.absolutePath)
+      assertNotNull(bmp)
+      assertEquals(900, bmp.width)
+      assertTrue("Image height should grow monotonically with $count items", bmp.height > previousImageHeight)
+      previousImageHeight = bmp.height
+      bmp.recycle()
+    }
+  }
+
+  @Test
+  fun plansMultiPageStatementsAndInventoryPdfs() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val entries = (1..45).map { idx ->
+      com.example.data.LedgerEntryWithBalance(
+        transaction = com.example.data.TransactionEntity(
+          id = idx.toLong(),
+          partyType = "CUSTOMER",
+          partyId = 3L,
+          partyName = "فايز العزي",
+          type = if (idx % 2 == 0) "CREDIT (له)" else "DEBIT (عليه)",
+          amount = 1500.0 * idx,
+          description = "حركة حساب تفصيلية رقم $idx بضاعة متنوعة",
+          date = 1763312400000L + idx * 60000L
+        ),
+        runningBalance = 50000.0 + idx * 500.0
+      )
+    }
+
+    val singleStmt = PdfGenerator.planStatementPages(entries.take(1), context)
+    assertEquals(1, singleStmt.size)
+
+    val multiStmt = PdfGenerator.planStatementPages(entries, context)
+    assertTrue("Expected 45 ledger entries to span >= 2 pages", multiStmt.size >= 2)
+    assertEquals(45, multiStmt.flatten().size)
+
+    val invItems = (1..50).map { idx ->
+      com.example.data.InventoryItemEntity(
+        id = idx.toLong(),
+        name = "صنف مخزني رقم $idx كرتون",
+        category = "مواد غذائية",
+        quantity = idx * 3,
+        purchasePrice = 2000.0,
+        sellingPrice = 2500.0,
+        unit = "كرتون"
+      )
+    }
+    assertEquals(1, PdfGenerator.planInventoryPages(invItems.take(1), context).size)
+    val multiInv = PdfGenerator.planInventoryPages(invItems, context)
+    assertTrue("Expected 50 inventory items to span >= 2 pages", multiInv.size >= 2)
+    assertEquals(50, multiInv.flatten().size)
+
+    // Ensure high-level PDF generators do not crash under Robolectric JVM
+    PdfGenerator.generateStatementPdf(context, "CUSTOMER", "فايز العزي", "777437514", "صنعاء", 72500.0, entries)?.let { (f, _) ->
+      assertTrue(f.exists())
+    }
+    PdfGenerator.generateInventoryPdf(context, invItems)?.let { (f, _) ->
+      assertTrue(f.exists())
+    }
+  }
+
+  @Test
+  fun rendersThermal58And80BitmapsForTransactionStatementAndReport() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val txSnapshot = com.example.data.TransactionReceiptSnapshot(
+      transaction = com.example.data.TransactionEntity(
+        id = 12L,
+        partyType = "CUSTOMER",
+        partyId = 3L,
+        partyName = "فايز مثنى العزي",
+        type = "CREDIT (له)",
+        amount = 10000.0,
+        description = "سداد نقدي دفعة",
+        date = 1763312400000L
+      ),
+      partyPhone = "777437514",
+      currentBalance = 12500.0,
+      previousBalance = 22500.0
+    )
+
+    val ledger = listOf(
+      com.example.data.LedgerEntryWithBalance(txSnapshot.transaction, 12500.0)
+    )
+
+    val report = com.example.data.FinancialReportSnapshot(
+      todaySales = 45000.0,
+      todayPurchases = 20000.0,
+      periodSales = 125000.0,
+      periodPurchases = 60000.0,
+      cashSales = 75000.0,
+      creditSales = 50000.0,
+      cogs = 90000.0,
+      grossProfit = 35000.0,
+      totalDebts = 150000.0,
+      totalPayables = 40000.0,
+      inventoryCostValue = 320000.0,
+      inventoryRetailValue = 410000.0,
+      lowStockCount = 3,
+      invoiceCount = 8,
+      topItems = listOf(com.example.data.TopSoldItemReport("سكر 10ك", 20, 90000.0)),
+      topDebtors = listOf(com.example.data.CustomerEntity(1L, "أحمد العزي", "771234567", "صنعاء", 56440.0)),
+      topPurchases = emptyList()
+    )
+
+    for ((widthMm, expectedPx) in listOf(58 to 384, 80 to 576)) {
+      val txBmp = BluetoothPrinterManager.buildTransactionReceiptBitmap(context, txSnapshot, widthMm)
+      assertEquals(expectedPx, txBmp.width)
+      assertTrue(txBmp.height in 140..900)
+      assertTrue(BluetoothPrinterManager.convertBitmapToEscPos(txBmp).size > 200)
+      assertTrue(BluetoothPrinterManager.renderBitmapToBase64(txBmp).length > 100)
+
+      val stmtBmp = BluetoothPrinterManager.buildStatementReceiptBitmap(context, "CUSTOMER", "فايز العزي", "777437514", 12500.0, ledger, widthMm)
+      assertEquals(expectedPx, stmtBmp.width)
+      assertTrue(stmtBmp.height in 140..1200)
+      assertTrue(BluetoothPrinterManager.renderBitmapToBase64(stmtBmp).length > 100)
+
+      val repBmp = BluetoothPrinterManager.buildReportReceiptBitmap(context, report, "هذا الشهر", widthMm)
+      assertEquals(expectedPx, repBmp.width)
+      assertTrue(repBmp.height in 140..1400)
+      assertTrue(BluetoothPrinterManager.renderBitmapToBase64(repBmp).length > 100)
+    }
+  }
+
+  @Test
+  fun normalizesYemeniAndArabicIndicPhoneNumbersForWhatsApp() {
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("771234567"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("0771234567"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("+967771234567"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("00967771234567"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("٧٧١٢٣٤٥٦٧"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("٠٧٧١٢٣٤٥٦٧"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("  +967 771-234-567 "))
+    assertEquals("", WhatsAppHelper.normalizeYemeniPhone("   "))
+  }
 }

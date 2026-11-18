@@ -48,6 +48,31 @@ data class FinancialReportSnapshot(
   val topPurchases: List<InvoiceEntity>
 )
 
+data class StockMovementEntry(
+  val invoiceId: Long,
+  val invoiceNumber: String,
+  val invoiceType: String,
+  val partyName: String,
+  val deltaQty: Int,
+  val unitPrice: Double,
+  val totalPrice: Double,
+  val date: Long
+)
+
+data class InventoryMovementSnapshot(
+  val item: InventoryItemEntity,
+  val totalPurchased: Int,
+  val totalSold: Int,
+  val movements: List<StockMovementEntry>
+)
+
+data class TransactionReceiptSnapshot(
+  val transaction: TransactionEntity,
+  val partyPhone: String,
+  val currentBalance: Double,
+  val previousBalance: Double
+)
+
 class GroceryAccountingEngine(private val database: AppDatabase) {
 
   private val customerDao = database.customerDao()
@@ -55,6 +80,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   private val inventoryDao = database.inventoryDao()
   private val invoiceDao = database.invoiceDao()
   private val transactionDao = database.transactionDao()
+
+  private fun sanitizeMoney(value: Double, label: String): Double {
+    require(value.isFinite() && abs(value) <= GroceryViewModel.MAX_MONETARY_AMOUNT) { "$label خارج النطاق المسموح" }
+    return GroceryViewModel.roundMoney(value)
+  }
 
   // ---------------- Customers ----------------
 
@@ -67,7 +97,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   ): Long {
     val cleanName = name.trim()
     require(cleanName.isNotEmpty()) { "اسم العميل مطلوب" }
-    require(initialBalance.isFinite()) { "الرصيد غير صالح" }
+    val safeBalance = sanitizeMoney(initialBalance, "الرصيد")
 
     return database.withTransaction {
       val existingByName = customerDao.getCustomerByName(cleanName)
@@ -75,13 +105,13 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
 
       if (id > 0) {
         val current = customerDao.getCustomerById(id) ?: error("العميل غير موجود")
-        val diff = initialBalance - current.balance
+        val diff = GroceryViewModel.roundMoney(safeBalance - current.balance)
         customerDao.updateCustomer(
           current.copy(
             name = cleanName,
             phone = phone.trim(),
             address = address.trim(),
-            balance = initialBalance
+            balance = safeBalance
           )
         )
         if (abs(diff) > 0.001) {
@@ -107,7 +137,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
             name = cleanName,
             phone = phone.trim(),
             address = address.trim(),
-            balance = initialBalance
+            balance = safeBalance
           )
         )
       }
@@ -133,10 +163,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     description: String,
     dateMillis: Long = System.currentTimeMillis()
   ): Long {
-    require(amount.isFinite() && amount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
+    val safeAmount = sanitizeMoney(amount, "المبلغ")
+    require(safeAmount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
     return database.withTransaction {
       val customer = customerDao.getCustomerById(customerId) ?: error("العميل غير موجود")
-      val delta = if (isDebit) amount else -amount
+      val delta = if (isDebit) safeAmount else -safeAmount
       check(customerDao.updateBalance(customerId, delta) == 1) { "تعذر تحديث رصيد العميل" }
       transactionDao.insertTransaction(
         TransactionEntity(
@@ -144,7 +175,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
           partyId = customerId,
           partyName = customer.name,
           type = if (isDebit) "DEBIT (عليه)" else "CREDIT (له)",
-          amount = amount,
+          amount = safeAmount,
           description = description.trim().ifBlank { if (isDebit) "دين جديد" else "سداد دفعة" },
           date = dateMillis
         )
@@ -159,17 +190,18 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     description: String,
     dateMillis: Long? = null
   ) {
-    require(amount.isFinite() && amount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
+    val safeAmount = sanitizeMoney(amount, "المبلغ")
+    require(safeAmount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
     database.withTransaction {
       val oldTx = transactionDao.getTransactionById(txId) ?: error("الحركة غير موجودة")
       require(oldTx.partyType == "CUSTOMER") { "نوع الحركة غير متطابق" }
       val oldDelta = if (oldTx.type.startsWith("DEBIT")) oldTx.amount else -oldTx.amount
-      val newDelta = if (isDebit) amount else -amount
-      check(customerDao.updateBalance(oldTx.partyId, newDelta - oldDelta) == 1) { "تعذر تعديل رصيد العميل" }
+      val newDelta = if (isDebit) safeAmount else -safeAmount
+      check(customerDao.updateBalance(oldTx.partyId, GroceryViewModel.roundMoney(newDelta - oldDelta)) == 1) { "تعذر تعديل رصيد العميل" }
       transactionDao.updateTransaction(
         oldTx.copy(
           type = if (isDebit) "DEBIT (عليه)" else "CREDIT (له)",
-          amount = amount,
+          amount = safeAmount,
           description = description.trim().ifBlank { oldTx.description },
           date = dateMillis?.takeIf { it > 0L } ?: oldTx.date
         )
@@ -206,7 +238,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   ): Long {
     val cleanName = name.trim()
     require(cleanName.isNotEmpty()) { "اسم المورد مطلوب" }
-    require(initialBalance.isFinite()) { "الرصيد غير صالح" }
+    val safeBalance = sanitizeMoney(initialBalance, "الرصيد")
 
     return database.withTransaction {
       val existingByName = supplierDao.getSupplierByName(cleanName)
@@ -214,13 +246,13 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
 
       if (id > 0) {
         val current = supplierDao.getSupplierById(id) ?: error("المورد غير موجود")
-        val diff = initialBalance - current.balance
+        val diff = GroceryViewModel.roundMoney(safeBalance - current.balance)
         supplierDao.updateSupplier(
           current.copy(
             name = cleanName,
             phone = phone.trim(),
             company = company.trim(),
-            balance = initialBalance
+            balance = safeBalance
           )
         )
         if (abs(diff) > 0.001) {
@@ -246,7 +278,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
             name = cleanName,
             phone = phone.trim(),
             company = company.trim(),
-            balance = initialBalance
+            balance = safeBalance
           )
         )
       }
@@ -272,11 +304,12 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     description: String,
     dateMillis: Long = System.currentTimeMillis()
   ): Long {
-    require(amount.isFinite() && amount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
+    val safeAmount = sanitizeMoney(amount, "المبلغ")
+    require(safeAmount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
     return database.withTransaction {
       val supplier = supplierDao.getSupplierById(supplierId) ?: error("المورد غير موجود")
       // For suppliers, balance > 0 means the store owes the supplier (CREDIT له).
-      val delta = if (isCredit) amount else -amount
+      val delta = if (isCredit) safeAmount else -safeAmount
       check(supplierDao.updateBalance(supplierId, delta) == 1) { "تعذر تحديث رصيد المورد" }
       transactionDao.insertTransaction(
         TransactionEntity(
@@ -284,7 +317,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
           partyId = supplierId,
           partyName = supplier.name,
           type = if (isCredit) "CREDIT (له)" else "DEBIT (عليه)",
-          amount = amount,
+          amount = safeAmount,
           description = description.trim().ifBlank { if (isCredit) "مستحقات للمورد" else "دفعة سداد للمورد" },
           date = dateMillis
         )
@@ -299,17 +332,18 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     description: String,
     dateMillis: Long? = null
   ) {
-    require(amount.isFinite() && amount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
+    val safeAmount = sanitizeMoney(amount, "المبلغ")
+    require(safeAmount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
     database.withTransaction {
       val oldTx = transactionDao.getTransactionById(txId) ?: error("الحركة غير موجودة")
       require(oldTx.partyType == "SUPPLIER") { "نوع الحركة غير متطابق" }
       val oldDelta = if (oldTx.type.startsWith("CREDIT")) oldTx.amount else -oldTx.amount
-      val newDelta = if (isCredit) amount else -amount
-      check(supplierDao.updateBalance(oldTx.partyId, newDelta - oldDelta) == 1) { "تعذر تعديل رصيد المورد" }
+      val newDelta = if (isCredit) safeAmount else -safeAmount
+      check(supplierDao.updateBalance(oldTx.partyId, GroceryViewModel.roundMoney(newDelta - oldDelta)) == 1) { "تعذر تعديل رصيد المورد" }
       transactionDao.updateTransaction(
         oldTx.copy(
           type = if (isCredit) "CREDIT (له)" else "DEBIT (عليه)",
-          amount = amount,
+          amount = safeAmount,
           description = description.trim().ifBlank { oldTx.description },
           date = dateMillis?.takeIf { it > 0L } ?: oldTx.date
         )
@@ -384,6 +418,49 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     }
   }
 
+  suspend fun getInventoryMovementHistory(itemId: Long): InventoryMovementSnapshot? {
+    val item = inventoryDao.getItemById(itemId) ?: return null
+    val invoiceMap = invoiceDao.getInvoicesSnapshot().associateBy { it.id }
+    val matchingLines = invoiceDao.getInvoiceItemsSnapshot().filter { it.itemId == itemId }
+    var totalPurchased = 0
+    var totalSold = 0
+    val movements = matchingLines.mapNotNull { line ->
+      val inv = invoiceMap[line.invoiceId] ?: return@mapNotNull null
+      val isPurchase = inv.type == "PURCHASE"
+      if (isPurchase) totalPurchased += line.quantity else totalSold += line.quantity
+      StockMovementEntry(
+        invoiceId = inv.id,
+        invoiceNumber = inv.invoiceNumber,
+        invoiceType = inv.type,
+        partyName = inv.partyName,
+        deltaQty = if (isPurchase) line.quantity else -line.quantity,
+        unitPrice = line.unitPrice,
+        totalPrice = line.totalPrice,
+        date = inv.date
+      )
+    }.sortedByDescending { it.date }
+    return InventoryMovementSnapshot(item, totalPurchased, totalSold, movements)
+  }
+
+  suspend fun getTransactionReceiptSnapshot(txId: Long): TransactionReceiptSnapshot? {
+    val tx = transactionDao.getTransactionById(txId) ?: return null
+    val isCustomer = tx.partyType == "CUSTOMER"
+    val balance: Double
+    val phone: String
+    if (isCustomer) {
+      val c = customerDao.getCustomerById(tx.partyId) ?: return null
+      balance = c.balance
+      phone = c.phone
+    } else {
+      val s = supplierDao.getSupplierById(tx.partyId) ?: return null
+      balance = s.balance
+      phone = s.phone
+    }
+    val delta = txDelta(tx, debitIncreasesBalance = isCustomer)
+    val prevBalance = GroceryViewModel.roundMoney(balance - delta)
+    return TransactionReceiptSnapshot(tx, phone, balance, prevBalance)
+  }
+
   // ---------------- Invoices ----------------
 
   suspend fun saveInvoice(
@@ -396,15 +473,18 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     paidAmount: Double,
     invoiceDateMillis: Long? = null
   ): Long {
+    val safePaidInput = sanitizeMoney(paidAmount, "المبلغ المدفوع")
     val normalizedItems = rawItems.map {
-      val computedTotal = it.quantity.toDouble() * it.unitPrice
-      it.copy(id = 0L, itemName = it.itemName.trim(), totalPrice = computedTotal)
+      val safeUnit = sanitizeMoney(it.unitPrice, "سعر الوحدة")
+      val computedTotal = GroceryViewModel.roundMoney(it.quantity.toDouble() * safeUnit)
+      it.copy(id = 0L, itemName = it.itemName.trim(), unitPrice = safeUnit, totalPrice = computedTotal)
     }
-    val validation = GroceryViewModel.validateInvoiceInput(invoiceNumber, type, normalizedItems, paidAmount)
+    val validation = GroceryViewModel.validateInvoiceInput(invoiceNumber, type, normalizedItems, safePaidInput)
     require(validation.isValid) { validation.message }
 
     val cleanNumber = invoiceNumber.trim()
     val normalizedType = validation.normalizedType
+    val normalizedPaid = minOf(safePaidInput, validation.totalAmount)
     val cleanPartyName = partyName.trim().ifBlank { if (normalizedType == "PURCHASE") "مورد" else "عميل نقدي" }
 
     if (normalizedType == "PURCHASE") {
@@ -438,7 +518,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
           partyName = cleanPartyName,
           date = effectiveDate,
           totalAmount = validation.totalAmount,
-          paidAmount = paidAmount,
+          paidAmount = normalizedPaid,
           remainingAmount = validation.remainingAmount,
           status = validation.status
         )
@@ -454,7 +534,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
           partyName = cleanPartyName,
           date = effectiveDate,
           totalAmount = validation.totalAmount,
-          paidAmount = paidAmount,
+          paidAmount = normalizedPaid,
           remainingAmount = validation.remainingAmount,
           status = validation.status
         )

@@ -262,4 +262,301 @@ class GroceryAccountingIntegrationTest {
     assertEquals(newTxDate, db.transactionDao().getTransactionById(stxId)!!.date)
     assertEquals(3700.0, db.supplierDao().getSupplierById(suppId)!!.balance, 0.01)
   }
+
+  @Test
+  fun roomMigration1To2PreservesAllDataAndDeduplicatesInvoiceNumbers() = runBlocking {
+    val dbName = "migration_test_1_2.db"
+    val dbFile = context.getDatabasePath(dbName)
+    dbFile.parentFile?.mkdirs()
+    if (dbFile.exists()) dbFile.delete()
+    File(dbFile.absolutePath + "-wal").delete()
+    File(dbFile.absolutePath + "-shm").delete()
+
+    // Create a genuine v1 SQLite schema matching pre-migration tables without v2 indexes
+    val legacySqlite = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(dbFile, null)
+    try {
+      legacySqlite.execSQL("CREATE TABLE IF NOT EXISTS `customers` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `address` TEXT NOT NULL, `balance` REAL NOT NULL)")
+      legacySqlite.execSQL("CREATE TABLE IF NOT EXISTS `suppliers` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `company` TEXT NOT NULL, `balance` REAL NOT NULL)")
+      legacySqlite.execSQL("CREATE TABLE IF NOT EXISTS `inventory_items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `quantity` INTEGER NOT NULL, `purchasePrice` REAL NOT NULL, `sellingPrice` REAL NOT NULL, `unit` TEXT NOT NULL)")
+      legacySqlite.execSQL("CREATE TABLE IF NOT EXISTS `invoices` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `invoiceNumber` TEXT NOT NULL, `type` TEXT NOT NULL, `partyId` INTEGER NOT NULL, `partyName` TEXT NOT NULL, `date` INTEGER NOT NULL, `totalAmount` REAL NOT NULL, `paidAmount` REAL NOT NULL, `remainingAmount` REAL NOT NULL, `status` TEXT NOT NULL)")
+      legacySqlite.execSQL("CREATE TABLE IF NOT EXISTS `invoice_items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `invoiceId` INTEGER NOT NULL, `itemId` INTEGER NOT NULL, `itemName` TEXT NOT NULL, `quantity` INTEGER NOT NULL, `unitPrice` REAL NOT NULL, `totalPrice` REAL NOT NULL)")
+      legacySqlite.execSQL("CREATE TABLE IF NOT EXISTS `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `partyType` TEXT NOT NULL, `partyId` INTEGER NOT NULL, `partyName` TEXT NOT NULL, `type` TEXT NOT NULL, `amount` REAL NOT NULL, `description` TEXT NOT NULL, `date` INTEGER NOT NULL)")
+
+      legacySqlite.execSQL("INSERT INTO customers (id, name, phone, address, balance) VALUES (1, 'فايز العزي', '777437514', 'صنعاء', 19000.0)")
+      legacySqlite.execSQL("INSERT INTO suppliers (id, name, phone, company, balance) VALUES (1, 'مؤسسة النور', '771112223', 'النور', 50000.0)")
+      legacySqlite.execSQL("INSERT INTO inventory_items (id, name, category, quantity, purchasePrice, sellingPrice, unit) VALUES (1, 'سكر 10ك', 'غذائية', 25, 4000.0, 4500.0, 'قطمة')")
+      legacySqlite.execSQL("INSERT INTO invoices (id, invoiceNumber, type, partyId, partyName, date, totalAmount, paidAmount, remainingAmount, status) VALUES (1, 'DUP-101', 'CREDIT', 1, 'فايز العزي', 1763312400000, 9000.0, 0.0, 9000.0, 'UNPAID')")
+      legacySqlite.execSQL("INSERT INTO invoices (id, invoiceNumber, type, partyId, partyName, date, totalAmount, paidAmount, remainingAmount, status) VALUES (2, 'DUP-101', 'CREDIT', 1, 'فايز العزي', 1763312500000, 10000.0, 0.0, 10000.0, 'UNPAID')")
+      legacySqlite.execSQL("INSERT INTO invoice_items (id, invoiceId, itemId, itemName, quantity, unitPrice, totalPrice) VALUES (1, 1, 1, 'سكر 10ك', 2, 4500.0, 9000.0)")
+      legacySqlite.execSQL("INSERT INTO invoice_items (id, invoiceId, itemId, itemName, quantity, unitPrice, totalPrice) VALUES (2, 2, 1, 'صنف خاص', 2, 5000.0, 10000.0)")
+      legacySqlite.execSQL("INSERT INTO transactions (id, partyType, partyId, partyName, type, amount, description, date) VALUES (1, 'CUSTOMER', 1, 'فايز العزي', 'DEBIT (عليه)', 19000.0, 'رصيد مرحل', 1763312400000)")
+      legacySqlite.execSQL("PRAGMA user_version = 1")
+    } finally {
+      legacySqlite.close()
+    }
+
+    val migratedDb = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
+      .addMigrations(AppDatabase.MIGRATION_1_2)
+      .allowMainThreadQueries()
+      .build()
+    try {
+      val customers = migratedDb.customerDao().getCustomersSnapshot()
+      val suppliers = migratedDb.supplierDao().getSuppliersSnapshot()
+      val inventory = migratedDb.inventoryDao().getItemsSnapshot()
+      val invoices = migratedDb.invoiceDao().getInvoicesSnapshot()
+      val invoiceItems = migratedDb.invoiceDao().getInvoiceItemsSnapshot()
+      val txs = migratedDb.transactionDao().getTransactionsSnapshot()
+
+      assertEquals(1, customers.size)
+      assertEquals(19000.0, customers[0].balance, 0.01)
+      assertEquals(1, suppliers.size)
+      assertEquals(1, inventory.size)
+      assertEquals(2, invoices.size)
+      assertEquals(2, invoiceItems.size)
+      assertEquals(1, txs.size)
+
+      // Duplicate invoiceNumber row id=2 must be deduplicated cleanly to DUP-101-DUP-2
+      val numbers = invoices.map { it.invoiceNumber }.toSet()
+      assertEquals(setOf("DUP-101", "DUP-101-DUP-2"), numbers)
+
+      // Unique index now rejects subsequent duplicate invoiceNumbers while allowing distinct ones
+      val newInvId = migratedDb.invoiceDao().insertInvoice(
+        InvoiceEntity(0L, "POST-MIG-200", "CASH", 1L, "فايز العزي", 1763312600000L, 4500.0, 4500.0, 0.0, "PAID")
+      )
+      assertTrue(newInvId > 0L)
+    } finally {
+      migratedDb.close()
+      dbFile.delete()
+      File(dbFile.absolutePath + "-wal").delete()
+      File(dbFile.absolutePath + "-shm").delete()
+    }
+  }
+
+  @Test
+  fun largeMonetaryAmountsRoundingAndOverflowRejectionWorkCorrectly() = runBlocking {
+    // Decimal rounding checks (HALF_UP at 2 decimals)
+    assertEquals(123.46, com.example.viewmodel.GroceryViewModel.roundMoney(123.455), 0.0001)
+    assertEquals(4766079.55, com.example.viewmodel.GroceryViewModel.roundMoney(4766079.554), 0.0001)
+
+    val custId = engine.saveCustomer(0L, "عميل الجملة الكبير", "771000200", "صنعاء", 4766079.55)
+    val itemId = engine.saveInventoryItem(0L, "بضاعة جملة", "مواد", 100, 100000.0, 125000.0, "طرد")
+
+    val invId = engine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "BIG-1",
+      type = "CREDIT",
+      partyId = custId,
+      partyName = "عميل الجملة الكبير",
+      rawItems = listOf(InvoiceItemEntity(0L, 0L, itemId, "بضاعة جملة", 10, 125000.0, 1250000.0)),
+      paidAmount = 250000.0
+    )
+    assertTrue(invId > 0)
+    assertEquals(5766079.55, db.customerDao().getCustomerById(custId)!!.balance, 0.01)
+
+    // Overflow beyond MAX_MONETARY_AMOUNT must be rejected
+    val tooBig = com.example.viewmodel.GroceryViewModel.MAX_MONETARY_AMOUNT * 2.0
+    try {
+      engine.saveCustomer(0L, "تجاوز الحد", "", "", tooBig)
+      fail("Expected monetary overflow rejection")
+    } catch (_: IllegalArgumentException) {
+    }
+
+    val invalidRes = com.example.viewmodel.GroceryViewModel.validateInvoiceInput(
+      invoiceNumber = "OVERFLOW-1",
+      type = "CASH",
+      items = listOf(InvoiceItemEntity(0L, 0L, 0L, "صنف", 1, tooBig, tooBig)),
+      paidAmount = 0.0
+    )
+    assertTrue(!invalidRes.isValid)
+  }
+
+  @Test
+  fun inventoryMovementHistoryAndTransactionSnapshotTrackBalancesAndStock() = runBlocking {
+    val custId = engine.saveCustomer(0L, "أمين المخازن", "771234999", "تعز", 1000.0)
+    val suppId = engine.saveSupplier(0L, "مورد الأرز", "770999888", "الخير", 0.0)
+    val itemId = engine.saveInventoryItem(0L, "أرز بسمتي 5ك", "حبوب", 10, 5000.0, 6000.0, "كيس")
+
+    engine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "PUR-501",
+      type = "PURCHASE",
+      partyId = suppId,
+      partyName = "مورد الأرز",
+      rawItems = listOf(InvoiceItemEntity(0L, 0L, itemId, "أرز بسمتي 5ك", 12, 5000.0, 60000.0)),
+      paidAmount = 20000.0,
+      invoiceDateMillis = 1000000L
+    )
+    engine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "SAL-502",
+      type = "CREDIT",
+      partyId = custId,
+      partyName = "أمين المخازن",
+      rawItems = listOf(InvoiceItemEntity(0L, 0L, itemId, "أرز بسمتي 5ك", 4, 6000.0, 24000.0)),
+      paidAmount = 4000.0,
+      invoiceDateMillis = 2000000L
+    )
+
+    val history = engine.getInventoryMovementHistory(itemId)!!
+    assertEquals(18, history.item.quantity)
+    assertEquals(12, history.totalPurchased)
+    assertEquals(4, history.totalSold)
+    assertEquals(2, history.movements.size)
+    // Latest first: SAL-502 (-4), then PUR-501 (+12)
+    assertEquals(-4, history.movements[0].deltaQty)
+    assertEquals(12, history.movements[1].deltaQty)
+
+    // Customer balance was 1000 + 20000 = 21000; add payment of 5000 => 16000
+    val txId = engine.addCustomerTransaction(custId, 5000.0, isDebit = false, description = "دفعة على الحساب", dateMillis = 3000000L)
+    val snap = engine.getTransactionReceiptSnapshot(txId)!!
+    assertEquals(21000.0, snap.previousBalance, 0.01)
+    assertEquals(16000.0, snap.currentBalance, 0.01)
+    assertEquals("771234999", snap.partyPhone)
+  }
+
+  @Test
+  fun comprehensiveBackupRestoreValidatesAllEdgeCasesAndCreatesSafetyBackup() = runBlocking {
+    val appDb = AppDatabase.getDatabase(context)
+    val appEngine = GroceryAccountingEngine(appDb)
+    appEngine.resetAllDatabase()
+
+    com.example.utils.StorePreferences.saveStoreInfo(context, "بقالة العزي اختبار", "777437514", "صنعاء", "ر.ي")
+    com.example.utils.StorePreferences.savePrinterWidth(context, 80)
+
+    val custId = appEngine.saveCustomer(0L, "عميل النسخ", "771234567", "صنعاء", 2000.0)
+    val itemId = appEngine.saveInventoryItem(0L, "شاي كبوس", "مشروبات", 30, 800.0, 1000.0, "علبة")
+    appEngine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "BKP-1",
+      type = "CREDIT",
+      partyId = custId,
+      partyName = "عميل النسخ",
+      rawItems = listOf(InvoiceItemEntity(0L, 0L, itemId, "شاي كبوس", 2, 1000.0, 2000.0)),
+      paidAmount = 500.0
+    )
+
+    // 1. Valid backup including settings
+    val validJson = BackupRestoreManager.buildBackupEnvelope(context).toString(2)
+
+    // Change store data & settings, then restore validJson -> safety backup must capture pre-restore state
+    appEngine.resetAllDatabase()
+    val preRestoreCust = appEngine.saveCustomer(0L, "عميل قبل الاستعادة", "770000001", "", 999.0)
+    assertTrue(preRestoreCust > 0)
+    com.example.utils.StorePreferences.saveStoreInfo(context, "متجر مؤقت", "", "", "دولار")
+    com.example.utils.StorePreferences.savePrinterWidth(context, 58)
+
+    val safetyFile = BackupRestoreManager.getSafetyBackupFile(context)
+    if (safetyFile.exists()) safetyFile.delete()
+
+    val restoreMsg = BackupRestoreManager.restoreFromJson(context, validJson, createSafetyBackup = true)
+    assertTrue(restoreMsg.contains("1 عميل"))
+    assertEquals("بقالة العزي اختبار", com.example.utils.StorePreferences.getSettings(context).storeName)
+    assertEquals(80, com.example.utils.StorePreferences.getSettings(context).printerWidthMm)
+
+    // 10. Safety backup created automatically and recoverable
+    assertTrue(safetyFile.exists() && safetyFile.length() > 50L)
+    val safetyMsg = BackupRestoreManager.restoreFromSafetyBackup(context)
+    assertTrue(safetyMsg.contains("1 عميل"))
+    assertEquals("عميل قبل الاستعادة", appDb.customerDao().getCustomersSnapshot()[0].name)
+
+    // 2. Backward-compatible legacy backup without "settings" field
+    val noSettingsEnv = org.json.JSONObject(validJson).apply {
+      val payload = getJSONObject("payload").apply { remove("settings") }
+      put("sha256", sha256Hex(payload.toString()))
+    }.toString()
+    val noSettingsMsg = BackupRestoreManager.restoreFromJson(context, noSettingsEnv, createSafetyBackup = false)
+    assertTrue(noSettingsMsg.contains("1 فاتورة"))
+
+    // 3. Empty file rejected
+    try {
+      BackupRestoreManager.restoreFromJson(context, "   ")
+      fail("Empty JSON should be rejected")
+    } catch (e: IllegalArgumentException) {
+      assertTrue(e.message!!.contains("فارغ"))
+    }
+
+    // 4. Corrupted JSON syntax throws Arabic error (not raw JSONException)
+    try {
+      BackupRestoreManager.restoreFromJson(context, "{invalid-json::")
+      fail("Corrupted JSON should be rejected")
+    } catch (e: IllegalArgumentException) {
+      assertTrue(e.message!!.contains("JSON"))
+    }
+
+    // 5. Invalid checksum rejected
+    val badHash = org.json.JSONObject(validJson).put("sha256", "0000deadbeef").toString()
+    try {
+      BackupRestoreManager.restoreFromJson(context, badHash)
+      fail("Bad sha256 should be rejected")
+    } catch (e: IllegalArgumentException) {
+      assertTrue(e.message!!.contains("سلامة الملف"))
+    }
+
+    // 6. Missing table rejected
+    val missingTable = org.json.JSONObject(validJson).let { env ->
+      val p = env.getJSONObject("payload").apply { remove("inventoryItems") }
+      env.put("sha256", sha256Hex(p.toString()))
+      env.toString()
+    }
+    try {
+      BackupRestoreManager.restoreFromJson(context, missingTable)
+      fail("Missing table should be rejected")
+    } catch (e: IllegalArgumentException) {
+      assertTrue(e.message!!.contains("inventoryItems"))
+    }
+
+    // 7. Duplicate invoice numbers rejected
+    val dupInvoiceNumber = org.json.JSONObject(validJson).let { env ->
+      val p = env.getJSONObject("payload")
+      val invArr = p.getJSONArray("invoices")
+      val cloneInv = org.json.JSONObject(invArr.getJSONObject(0).toString()).put("id", 999L)
+      invArr.put(cloneInv)
+      val itemArr = p.getJSONArray("invoiceItems")
+      val cloneLine = org.json.JSONObject(itemArr.getJSONObject(0).toString()).put("id", 999L).put("invoiceId", 999L)
+      itemArr.put(cloneLine)
+      env.put("sha256", sha256Hex(p.toString()))
+      env.toString()
+    }
+    try {
+      BackupRestoreManager.restoreFromJson(context, dupInvoiceNumber)
+      fail("Duplicate invoice number should be rejected")
+    } catch (e: IllegalArgumentException) {
+      assertTrue(e.message!!.contains("مكررة"))
+    }
+
+    // 8. Invalid financial math rejected (item.totalPrice != quantity * unitPrice)
+    val badMath = org.json.JSONObject(validJson).let { env ->
+      val p = env.getJSONObject("payload")
+      p.getJSONArray("invoiceItems").getJSONObject(0).put("totalPrice", 99999.0)
+      env.put("sha256", sha256Hex(p.toString()))
+      env.toString()
+    }
+    try {
+      BackupRestoreManager.restoreFromJson(context, badMath)
+      fail("Mismatched line total should be rejected")
+    } catch (e: IllegalArgumentException) {
+      assertTrue(e.message!!.contains("غير متطابقة"))
+    }
+
+    // 9. Broken itemId FK rejected
+    val brokenFk = org.json.JSONObject(validJson).let { env ->
+      val p = env.getJSONObject("payload")
+      p.getJSONArray("invoiceItems").getJSONObject(0).put("itemId", 888888L)
+      env.put("sha256", sha256Hex(p.toString()))
+      env.toString()
+    }
+    try {
+      BackupRestoreManager.restoreFromJson(context, brokenFk)
+      fail("Broken itemId FK should be rejected")
+    } catch (e: IllegalArgumentException) {
+      assertTrue(e.message!!.contains("غير مرتبطة"))
+    }
+
+    appEngine.resetAllDatabase()
+  }
+
+  private fun sha256Hex(value: String): String =
+    java.security.MessageDigest.getInstance("SHA-256")
+      .digest(value.toByteArray(Charsets.UTF_8))
+      .joinToString("") { "%02x".format(it) }
 }

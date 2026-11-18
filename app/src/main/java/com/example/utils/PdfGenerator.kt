@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.text.Layout
@@ -13,8 +12,10 @@ import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import androidx.core.content.FileProvider
 import com.example.data.FinancialReportSnapshot
+import com.example.data.InventoryItemEntity
 import com.example.data.InvoiceEntity
 import com.example.data.InvoiceItemEntity
+import com.example.data.LedgerEntryWithBalance
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -57,7 +58,6 @@ object PdfGenerator {
       val headerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(15, 76, 156) }
       val summaryFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 252) }
 
-      // RTL column widths summing to CONTENT_WIDTH (523f)
       val totalW = 110f
       val priceW = 95f
       val qtyW = 65f
@@ -102,7 +102,6 @@ object PdfGenerator {
           y += drawRtl(canvas, "${settings.storeName} - تابع فاتورة ${invoice.invoiceNumber}", MARGIN, y, CONTENT_WIDTH, totalPaint, Layout.Alignment.ALIGN_NORMAL) + 12f
         }
 
-        // Table Header
         val tableTop = y
         canvas.drawRoundRect(MARGIN, tableTop, PAGE_WIDTH - MARGIN, tableTop + 28f, 4f, 4f, headerFill)
         drawRtl(canvas, "الصنف", colNameX + 6f, tableTop + 7f, nameW - 12f, headerPaint, Layout.Alignment.ALIGN_NORMAL)
@@ -174,10 +173,7 @@ object PdfGenerator {
       error.printStackTrace()
       null
     } finally {
-      try {
-        document.close()
-      } catch (_: Exception) {
-      }
+      try { document.close() } catch (_: Exception) {}
     }
   }
 
@@ -209,6 +205,328 @@ object PdfGenerator {
       val layout = buildRtlLayout(item.itemName, bodyPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 4)
       val rowH = maxOf(28f, layout.height + 14f)
       MeasuredItem(item, layout, rowH)
+    }
+  }
+
+  internal data class MeasuredStatementRow(
+    val entry: LedgerEntryWithBalance,
+    val descLayout: StaticLayout,
+    val rowH: Float
+  )
+
+  internal fun planStatementPages(
+    entries: List<LedgerEntryWithBalance>,
+    context: Context? = null
+  ): List<List<MeasuredStatementRow>> {
+    val bodyPaint = textPaint(context, 10.5f, Color.BLACK)
+    val descW = CONTENT_WIDTH - 92f - 86f - 68f - 84f
+    val measured = entries.map { entry ->
+      val text = entry.transaction.description.ifBlank { "-" }
+      val layout = buildRtlLayout(text, bodyPaint, (descW - 10f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 3)
+      val rowH = maxOf(26f, layout.height + 12f)
+      MeasuredStatementRow(entry, layout, rowH)
+    }
+    val pages = mutableListOf<List<MeasuredStatementRow>>()
+    var current = mutableListOf<MeasuredStatementRow>()
+    var curY = 178f + 32f
+    for (row in measured) {
+      if (current.isNotEmpty() && curY + row.rowH > BOTTOM_LIMIT - 60f) {
+        pages.add(current)
+        current = mutableListOf()
+        curY = 92f + 32f
+      }
+      current.add(row)
+      curY += row.rowH
+    }
+    if (current.isNotEmpty() || pages.isEmpty()) pages.add(current)
+    return pages
+  }
+
+  /**
+   * Generates a multi-page A4 account statement PDF for a customer or supplier.
+   */
+  fun generateStatementPdf(
+    context: Context,
+    partyType: String,
+    partyName: String,
+    partyPhone: String,
+    extraSubtitle: String,
+    currentBalance: Double,
+    entries: List<LedgerEntryWithBalance>
+  ): Pair<File, SavedDownloadResult>? {
+    val document = PdfDocument()
+    return try {
+      val settings = StorePreferences.getSettings(context)
+      val currency = settings.currency
+      val isCustomer = partyType.equals("CUSTOMER", true)
+      val reportDir = File(context.filesDir, "reports").apply { mkdirs() }
+      val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+      val output = File(reportDir, "statement_${partyType.lowercase(Locale.US)}_$stamp.pdf")
+      val nowStr = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date())
+
+      val titlePaint = textPaint(context, 18f, Color.rgb(15, 76, 156), true)
+      val subPaint = textPaint(context, 10f, Color.rgb(90, 98, 106))
+      val bodyPaint = textPaint(context, 10.5f, Color.BLACK)
+      val boldPaint = textPaint(context, 11f, Color.BLACK, true)
+      val headerPaint = textPaint(context, 10f, Color.WHITE, true)
+      val smallPaint = textPaint(context, 9f, Color.DKGRAY)
+      val headerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(15, 76, 156) }
+      val boxFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 252) }
+      val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(218, 222, 226); strokeWidth = 0.8f }
+
+      // RTL columns: البيان | التاريخ | النوع | المبلغ | الرصيد
+      val balW = 84f
+      val amtW = 86f
+      val typeW = 68f
+      val dateW = 92f
+      val descW = CONTENT_WIDTH - balW - amtW - typeW - dateW
+
+      val colBalX = MARGIN
+      val colAmtX = colBalX + balW
+      val colTypeX = colAmtX + amtW
+      val colDateX = colTypeX + typeW
+      val colDescX = colDateX + dateW
+
+      val pages = planStatementPages(entries, context)
+      val totalPages = pages.size
+      val rowDf = SimpleDateFormat("yy/MM/dd HH:mm", Locale.US)
+
+      pages.forEachIndexed { idx, rows ->
+        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, idx + 1).create()
+        val page = document.startPage(pageInfo)
+        val canvas = page.canvas
+        var y = MARGIN
+
+        if (idx == 0) {
+          val kindLabel = if (isCustomer) "كشف حساب عميل" else "كشف حساب مورد"
+          y += drawRtl(canvas, "${settings.storeName} - $kindLabel", MARGIN, y, CONTENT_WIDTH, titlePaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+          y += drawRtl(canvas, "${if (isCustomer) "العميل" else "المورد"}: $partyName   ${partyPhone.takeIf { it.isNotBlank() }?.let { "| جوال: $it" } ?: ""}", MARGIN, y, CONTENT_WIDTH, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+          if (extraSubtitle.isNotBlank()) {
+            y += drawRtl(canvas, extraSubtitle, MARGIN, y, CONTENT_WIDTH, subPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+          }
+          y += drawRtl(canvas, "تاريخ الكشف: $nowStr   |   عدد الحركات: ${entries.size}", MARGIN, y, CONTENT_WIDTH, subPaint, Layout.Alignment.ALIGN_NORMAL) + 10f
+        } else {
+          y += drawRtl(canvas, "${settings.storeName} - تابع كشف حساب: $partyName", MARGIN, y, CONTENT_WIDTH, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 10f
+        }
+
+        val tTop = y
+        canvas.drawRoundRect(MARGIN, tTop, PAGE_WIDTH - MARGIN, tTop + 26f, 4f, 4f, headerFill)
+        drawRtl(canvas, "البيان", colDescX + 4f, tTop + 6f, descW - 8f, headerPaint, Layout.Alignment.ALIGN_NORMAL)
+        drawRtl(canvas, "التاريخ", colDateX + 3f, tTop + 6f, dateW - 6f, headerPaint, Layout.Alignment.ALIGN_CENTER)
+        drawRtl(canvas, "النوع", colTypeX + 3f, tTop + 6f, typeW - 6f, headerPaint, Layout.Alignment.ALIGN_CENTER)
+        drawRtl(canvas, "المبلغ", colAmtX + 3f, tTop + 6f, amtW - 6f, headerPaint, Layout.Alignment.ALIGN_CENTER)
+        drawRtl(canvas, "الرصيد", colBalX + 4f, tTop + 6f, balW - 8f, headerPaint, Layout.Alignment.ALIGN_OPPOSITE)
+        y = tTop + 32f
+
+        if (rows.isEmpty()) {
+          y += drawRtl(canvas, "لا توجد حركات مسجلة في كشف الحساب", MARGIN, y + 8f, CONTENT_WIDTH, subPaint, Layout.Alignment.ALIGN_CENTER) + 14f
+        } else {
+          rows.forEach { (entry, descLayout, rowH) ->
+            val tx = entry.transaction
+            canvas.save()
+            canvas.translate(colDescX + 4f, y)
+            descLayout.draw(canvas)
+            canvas.restore()
+
+            val typeShort = if (isCustomer) {
+              if (tx.type.startsWith("DEBIT")) "عليه" else "له"
+            } else {
+              if (tx.type.startsWith("CREDIT")) "له" else "عليه"
+            }
+            drawRtl(canvas, rowDf.format(Date(tx.date)), colDateX + 3f, y, dateW - 6f, smallPaint, Layout.Alignment.ALIGN_CENTER)
+            drawRtl(canvas, typeShort, colTypeX + 3f, y, typeW - 6f, boldPaint, Layout.Alignment.ALIGN_CENTER)
+            drawRtl(canvas, formatMoney(tx.amount), colAmtX + 3f, y, amtW - 6f, boldPaint, Layout.Alignment.ALIGN_CENTER)
+            drawRtl(canvas, formatMoney(entry.runningBalance), colBalX + 4f, y, balW - 8f, bodyPaint, Layout.Alignment.ALIGN_OPPOSITE)
+
+            y += rowH - 5f
+            canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, linePaint)
+            y += 5f
+          }
+        }
+
+        if (idx == pages.lastIndex) {
+          y += 10f
+          val balText = when {
+            currentBalance > 0.01 -> (if (isCustomer) "الرصيد الحالي عليه: " else "المستحق الحالي له: ") + "${formatMoney(currentBalance)} $currency"
+            currentBalance < -0.01 -> (if (isCustomer) "الرصيد الحالي له: " else "رصيد لنا عند المورد: ") + "${formatMoney(-currentBalance)} $currency"
+            else -> "الحساب مسدد بالكامل (0 $currency)"
+          }
+          canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 46f, 6f, 6f, boxFill)
+          drawRtl(canvas, balText, MARGIN + 12f, y + 14f, CONTENT_WIDTH - 24f, titlePaint, Layout.Alignment.ALIGN_CENTER)
+        }
+
+        drawRtl(canvas, "صفحة ${idx + 1} / $totalPages", MARGIN, PAGE_HEIGHT - 28f, CONTENT_WIDTH, smallPaint, Layout.Alignment.ALIGN_CENTER)
+        document.finishPage(page)
+      }
+
+      FileOutputStream(output).use { document.writeTo(it) }
+      val saved = AppDownloadsFolderManager.saveFile(
+        context = context,
+        subfolder = AppDownloadsFolderManager.SUB_REPORTS,
+        sourceFile = output,
+        displayName = output.name,
+        mimeType = "application/pdf",
+        overwriteExisting = false
+      ) ?: SavedDownloadResult(getUriForFile(context, output), output.absolutePath, output.name, false)
+      output to saved
+    } catch (e: Exception) {
+      e.printStackTrace()
+      null
+    } finally {
+      try { document.close() } catch (_: Exception) {}
+    }
+  }
+
+  internal data class MeasuredInventoryRow(
+    val item: InventoryItemEntity,
+    val nameLayout: StaticLayout,
+    val rowH: Float
+  )
+
+  internal fun planInventoryPages(
+    items: List<InventoryItemEntity>,
+    context: Context? = null
+  ): List<List<MeasuredInventoryRow>> {
+    val bodyPaint = textPaint(context, 10.5f, Color.BLACK)
+    val nameW = CONTENT_WIDTH - 100f - 85f - 85f - 62f
+    val measured = items.map { item ->
+      val label = "${item.name}${if (item.category.isNotBlank()) " (${item.category})" else ""}"
+      val layout = buildRtlLayout(label, bodyPaint, (nameW - 10f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 3)
+      val rowH = maxOf(26f, layout.height + 12f)
+      MeasuredInventoryRow(item, layout, rowH)
+    }
+    val pages = mutableListOf<List<MeasuredInventoryRow>>()
+    var current = mutableListOf<MeasuredInventoryRow>()
+    var curY = 148f + 32f
+    for (row in measured) {
+      if (current.isNotEmpty() && curY + row.rowH > BOTTOM_LIMIT - 60f) {
+        pages.add(current)
+        current = mutableListOf()
+        curY = 92f + 32f
+      }
+      current.add(row)
+      curY += row.rowH
+    }
+    if (current.isNotEmpty() || pages.isEmpty()) pages.add(current)
+    return pages
+  }
+
+  /**
+   * Generates a multi-page A4 inventory valuation & stock status PDF.
+   */
+  fun generateInventoryPdf(
+    context: Context,
+    items: List<InventoryItemEntity>
+  ): Pair<File, SavedDownloadResult>? {
+    val document = PdfDocument()
+    return try {
+      val settings = StorePreferences.getSettings(context)
+      val currency = settings.currency
+      val reportDir = File(context.filesDir, "reports").apply { mkdirs() }
+      val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+      val output = File(reportDir, "inventory_$stamp.pdf")
+      val nowStr = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date())
+
+      val titlePaint = textPaint(context, 18f, Color.rgb(15, 76, 156), true)
+      val subPaint = textPaint(context, 10f, Color.rgb(90, 98, 106))
+      val bodyPaint = textPaint(context, 10.5f, Color.BLACK)
+      val boldPaint = textPaint(context, 11f, Color.BLACK, true)
+      val headerPaint = textPaint(context, 10f, Color.WHITE, true)
+      val smallPaint = textPaint(context, 9f, Color.DKGRAY)
+      val headerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(15, 76, 156) }
+      val boxFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 252) }
+      val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(218, 222, 226); strokeWidth = 0.8f }
+
+      val valW = 100f
+      val sellW = 85f
+      val buyW = 85f
+      val qtyW = 62f
+      val nameW = CONTENT_WIDTH - valW - sellW - buyW - qtyW
+
+      val colValX = MARGIN
+      val colSellX = colValX + valW
+      val colBuyX = colSellX + sellW
+      val colQtyX = colBuyX + buyW
+      val colNameX = colQtyX + qtyW
+
+      val pages = planInventoryPages(items, context)
+      val totalPages = pages.size
+
+      pages.forEachIndexed { idx, rows ->
+        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, idx + 1).create()
+        val page = document.startPage(pageInfo)
+        val canvas = page.canvas
+        var y = MARGIN
+
+        if (idx == 0) {
+          y += drawRtl(canvas, "${settings.storeName} - جرد المخزون والتسعير", MARGIN, y, CONTENT_WIDTH, titlePaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+          y += drawRtl(canvas, "تاريخ الجرد: $nowStr   |   عدد الأصناف: ${items.size}", MARGIN, y, CONTENT_WIDTH, subPaint, Layout.Alignment.ALIGN_NORMAL) + 10f
+        } else {
+          y += drawRtl(canvas, "${settings.storeName} - تابع جرد المخزون", MARGIN, y, CONTENT_WIDTH, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 10f
+        }
+
+        val tTop = y
+        canvas.drawRoundRect(MARGIN, tTop, PAGE_WIDTH - MARGIN, tTop + 26f, 4f, 4f, headerFill)
+        drawRtl(canvas, "الصنف والفئة", colNameX + 4f, tTop + 6f, nameW - 8f, headerPaint, Layout.Alignment.ALIGN_NORMAL)
+        drawRtl(canvas, "الكمية", colQtyX + 3f, tTop + 6f, qtyW - 6f, headerPaint, Layout.Alignment.ALIGN_CENTER)
+        drawRtl(canvas, "الشراء", colBuyX + 3f, tTop + 6f, buyW - 6f, headerPaint, Layout.Alignment.ALIGN_CENTER)
+        drawRtl(canvas, "البيع", colSellX + 3f, tTop + 6f, sellW - 6f, headerPaint, Layout.Alignment.ALIGN_CENTER)
+        drawRtl(canvas, "قيمة التكلفة", colValX + 4f, tTop + 6f, valW - 8f, headerPaint, Layout.Alignment.ALIGN_OPPOSITE)
+        y = tTop + 32f
+
+        if (rows.isEmpty()) {
+          y += drawRtl(canvas, "لا توجد أصناف في المخزن", MARGIN, y + 8f, CONTENT_WIDTH, subPaint, Layout.Alignment.ALIGN_CENTER) + 14f
+        } else {
+          rows.forEach { (item, nameLayout, rowH) ->
+            canvas.save()
+            canvas.translate(colNameX + 4f, y)
+            nameLayout.draw(canvas)
+            canvas.restore()
+
+            val qtyText = if (item.quantity <= 0) "0 (نافذ)" else item.quantity.toString()
+            val costVal = item.quantity.toDouble() * item.purchasePrice
+            drawRtl(canvas, qtyText, colQtyX + 3f, y, qtyW - 6f, boldPaint, Layout.Alignment.ALIGN_CENTER)
+            drawRtl(canvas, formatMoney(item.purchasePrice), colBuyX + 3f, y, buyW - 6f, bodyPaint, Layout.Alignment.ALIGN_CENTER)
+            drawRtl(canvas, formatMoney(item.sellingPrice), colSellX + 3f, y, sellW - 6f, bodyPaint, Layout.Alignment.ALIGN_CENTER)
+            drawRtl(canvas, formatMoney(costVal), colValX + 4f, y, valW - 8f, boldPaint, Layout.Alignment.ALIGN_OPPOSITE)
+
+            y += rowH - 5f
+            canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, linePaint)
+            y += 5f
+          }
+        }
+
+        if (idx == pages.lastIndex) {
+          val totalQty = items.sumOf { it.quantity }
+          val totalCost = items.sumOf { it.quantity.toDouble() * it.purchasePrice }
+          val totalRetail = items.sumOf { it.quantity.toDouble() * it.sellingPrice }
+          val lowCount = items.count { it.quantity <= 10 }
+          y += 10f
+          canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 66f, 6f, 6f, boxFill)
+          var sy = y + 10f
+          sy += drawRtl(canvas, "إجمالي الكمية: $totalQty وحدة   |   أصناف منخفضة/نافذة: $lowCount", MARGIN + 12f, sy, CONTENT_WIDTH - 24f, bodyPaint, Layout.Alignment.ALIGN_NORMAL) + 6f
+          drawRtl(canvas, "إجمالي قيمة المخزون بالتكلفة: ${formatMoney(totalCost)} $currency   |   بسعر البيع: ${formatMoney(totalRetail)} $currency", MARGIN + 12f, sy, CONTENT_WIDTH - 24f, titlePaint, Layout.Alignment.ALIGN_NORMAL)
+        }
+
+        drawRtl(canvas, "صفحة ${idx + 1} / $totalPages", MARGIN, PAGE_HEIGHT - 28f, CONTENT_WIDTH, smallPaint, Layout.Alignment.ALIGN_CENTER)
+        document.finishPage(page)
+      }
+
+      FileOutputStream(output).use { document.writeTo(it) }
+      val saved = AppDownloadsFolderManager.saveFile(
+        context = context,
+        subfolder = AppDownloadsFolderManager.SUB_REPORTS,
+        sourceFile = output,
+        displayName = output.name,
+        mimeType = "application/pdf",
+        overwriteExisting = false
+      ) ?: SavedDownloadResult(getUriForFile(context, output), output.absolutePath, output.name, false)
+      output to saved
+    } catch (e: Exception) {
+      e.printStackTrace()
+      null
+    } finally {
+      try { document.close() } catch (_: Exception) {}
     }
   }
 
@@ -311,10 +629,7 @@ object PdfGenerator {
       error.printStackTrace()
       null
     } finally {
-      try {
-        document.close()
-      } catch (_: Exception) {
-      }
+      try { document.close() } catch (_: Exception) {}
     }
   }
 

@@ -34,6 +34,7 @@
 html, body {
   height: 100%;
   width: 100%;
+  max-width: 100%;
   overflow: hidden;
   background-color: var(--bg-light);
   color: var(--text-primary);
@@ -216,36 +217,47 @@ header.app-header h1 {
 main.content-container {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 8px 10px 8px;
+  padding: 4px 8px 14px 8px;
   -webkit-overflow-scrolling: touch;
 }
 
 .view {
   display: none;
+  width: 100%;
   max-width: 780px;
   margin: 0 auto;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
+  overflow-x: hidden;
 }
 
 .view.active {
   display: block;
 }
 
-/* Sticky Elevated Top Panel for Inputs & Filters */
+/* Sticky Top Panel for compact list filters only */
 .sticky-top-panel {
   position: sticky;
   top: 0;
   z-index: 30;
   background-color: var(--bg-light);
-  padding: 6px 0 4px 0;
+  padding: 4px 0 4px 0;
+}
+
+.natural-top-panel {
+  position: static;
+  background-color: var(--bg-light);
+  padding: 4px 0 4px 0;
 }
 
 .entry-dock-card {
   border: 1.5px solid #B9CBE4;
   box-shadow: 0 2px 8px rgba(15, 76, 156, 0.08);
-  margin-bottom: 4px !important;
+  margin-bottom: 6px !important;
+  max-width: 100%;
 }
 
 /* Section Headers */
@@ -299,11 +311,12 @@ main.content-container {
 .ruled-cell {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   height: 38px;
   border: none;
   border-inline-end: 1px solid var(--rule-border);
   border-radius: 0;
-  padding: 4px 8px;
+  padding: 4px 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
@@ -311,6 +324,13 @@ main.content-container {
   text-align: right;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.ruled-cell[type="datetime-local"] {
+  font-size: 11px;
+  padding: 2px 3px;
+  min-width: 0 !important;
+  max-width: 100%;
 }
 
 .ruled-cell:last-child {
@@ -341,63 +361,63 @@ select.ruled-cell,
   background-color: #FFFFFF;
   font-weight: 700;
   padding-inline-start: 6px;
-  padding-inline-end: 20px;
+  padding-inline-end: 18px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230F4C9C' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: left 6px center;
+  background-position: left 5px center;
 }
 
-/* Exact Grid Layouts (Right-to-Left order) */
+/* Exact Grid Layouts (Right-to-Left order, strict minmax(0, ...) for overflow safety) */
 .grid-invoice-entry {
-  grid-template-columns: 1.05fr 0.65fr 1.65fr 0.95fr;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.65fr) minmax(0, 1.65fr) minmax(0, 0.95fr);
 }
 
 .grid-invoice-batch-row {
-  grid-template-columns: 1.02fr 0.62fr 1.68fr 0.92fr 30px;
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.58fr) minmax(0, 1.68fr) minmax(0, 0.92fr) 28px;
 }
 
 .grid-inv-meta {
-  grid-template-columns: 1.45fr 0.95fr 0.9fr;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.95fr) minmax(0, 0.9fr);
 }
 
 .grid-inv-meta-4 {
-  grid-template-columns: 1.35fr 0.85fr 0.9fr 1.15fr;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.85fr) minmax(0, 0.95fr) minmax(0, 1.15fr);
 }
 
 .grid-tx-entry {
-  grid-template-columns: 0.9fr 1.45fr 1.15fr;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.42fr) minmax(0, 1.18fr);
 }
 
 .grid-cust-name-first {
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
 }
 
 .grid-cust-2 {
-  grid-template-columns: 1fr 1.35fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
 }
 
 .grid-inv-4 {
-  grid-template-columns: 1fr 0.72fr 1.6fr 0.98fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr) minmax(0, 1.6fr) minmax(0, 0.98fr);
 }
 
 .grid-quick-stock {
-  grid-template-columns: 1.55fr 0.7fr 0.9fr 0.9fr;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
 }
 
 .grid-inv-3 {
-  grid-template-columns: 1fr 0.9fr 1.2fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
 }
 
 .grid-set-store-first {
-  grid-template-columns: 2fr 0.75fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 0.75fr);
 }
 
 .grid-set-name {
-  grid-template-columns: 0.7fr 2fr;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 2fr);
 }
 
 .grid-filter-2 {
-  grid-template-columns: 1.55fr 1fr;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
 }
 
 .batch-rows-stack {
@@ -430,7 +450,7 @@ select.ruled-cell,
 
 .multi-stock-item {
   display: grid;
-  grid-template-columns: 24px 1.6fr 64px 74px;
+  grid-template-columns: 24px minmax(0, 1.6fr) 58px 68px;
   align-items: center;
   gap: 5px;
   background: #FFFFFF;
@@ -448,7 +468,7 @@ select.ruled-cell,
 
 .inline-name-input {
   width: 100%;
-  min-width: 72px;
+  min-width: 68px;
   height: 30px;
   padding: 2px 6px;
   border: 1px solid var(--rule-border);
@@ -505,6 +525,7 @@ nav.bottom-nav button.active {
   border: 1px solid var(--border-color);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   text-align: right;
+  max-width: 100%;
 }
 
 .compact-card {
@@ -531,7 +552,7 @@ nav.bottom-nav button.active {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 7px;
   margin-bottom: 8px;
 }
@@ -544,6 +565,7 @@ nav.bottom-nav button.active {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   cursor: pointer;
   text-align: right;
+  min-width: 0;
 }
 
 .metric-card .title {
@@ -556,11 +578,13 @@ nav.bottom-nav button.active {
   font-size: 15px;
   font-weight: 800;
   margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
 }
 
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
 }
 
@@ -572,7 +596,7 @@ nav.bottom-nav button.active {
 
 .tx-action-grid {
   display: grid;
-  grid-template-columns: 1.1fr 1.1fr 0.85fr 0.85fr;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 0.85fr) minmax(0, 0.85fr);
   gap: 5px;
   margin-top: 6px;
 }
@@ -581,6 +605,13 @@ nav.bottom-nav button.active {
   margin-top: 0;
   padding: 6px 4px;
   font-size: 12px;
+}
+
+.statement-bar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 6px;
 }
 
 .text-success { color: var(--success-green); }
@@ -618,6 +649,7 @@ nav.bottom-nav button.active {
   flex-wrap: wrap;
   gap: 4px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .inline-confirm {
@@ -768,9 +800,10 @@ nav.bottom-nav button.active {
   flex-wrap: wrap;
 }
 
-/* Ruled Data Tables (Wrapper handles smooth corner curvature) */
+/* Ruled Data Tables */
 .table-wrap {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   border: 1.5px solid var(--rule-border);
   border-radius: 12px;
@@ -784,11 +817,16 @@ table.data-table {
 }
 
 table.data-table th, table.data-table td {
-  padding: 7px 6px;
+  padding: 6px 4px;
   text-align: right;
-  font-size: 12px;
+  font-size: 11.5px;
   border-bottom: 1px solid #CBD5E1;
   vertical-align: middle;
+}
+
+table.data-table td.num-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 table.data-table tbody tr:last-child td {
@@ -807,7 +845,7 @@ table.data-table th {
   background-color: var(--dark-header);
   color: #FFFFFF;
   font-weight: 700;
-  font-size: 11.5px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -816,7 +854,7 @@ table.data-table th {
   background: #FFFFFF;
   color: var(--text-primary);
   border-radius: 7px;
-  padding: 3px 7px;
+  padding: 3px 6px;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -828,9 +866,10 @@ table.data-table th {
 }
 
 .qty-inline-input {
-  width: 48px;
+  width: 44px;
+  max-width: 100%;
   height: 30px;
-  padding: 2px 5px;
+  padding: 2px 4px;
   border: 1px solid var(--rule-border);
   border-radius: 8px;
   text-align: right;
@@ -840,7 +879,7 @@ table.data-table th {
   unicode-bidi: isolate;
 }
 
-/* Invoice Totals & Dock */
+/* Invoice Totals & Simplified Dock */
 .invoice-totals-box {
   background-color: var(--surface-alt);
   border: 1px solid var(--rule-border);
@@ -855,12 +894,14 @@ table.data-table th {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .total-highlight {
   font-size: 15px;
   font-weight: 800;
   color: var(--success-green);
+  font-variant-numeric: tabular-nums;
 }
 
 .paid-input-wrap {
@@ -870,7 +911,7 @@ table.data-table th {
 }
 
 .paid-box {
-  width: 110px !important;
+  width: 106px !important;
   height: 34px !important;
   border: 1.5px solid var(--rule-border) !important;
   border-radius: 9px !important;
@@ -882,6 +923,7 @@ table.data-table th {
   justify-content: space-between;
   font-size: 13px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .invoice-dock {
@@ -894,15 +936,24 @@ table.data-table th {
 
 .dock-row-primary {
   display: grid;
-  grid-template-columns: 1.4fr 1.4fr 0.7fr;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
 }
 
 .dock-row-secondary {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
   margin-top: 6px;
+}
+
+.dock-popover-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-color);
 }
 
 .chip-action {
@@ -915,18 +966,6 @@ table.data-table th {
   font-weight: 700;
   cursor: pointer;
   padding: 4px;
-}
-
-.chip-action.active-cash {
-  background-color: var(--success-green);
-  color: #FFFFFF;
-  border-color: var(--success-green);
-}
-
-.chip-action.active-credit {
-  background-color: var(--danger-red);
-  color: #FFFFFF;
-  border-color: var(--danger-red);
 }
 
 .chip-action.chip-wa {

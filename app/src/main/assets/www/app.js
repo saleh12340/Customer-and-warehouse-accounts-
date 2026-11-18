@@ -47,6 +47,14 @@ let invoiceDirty = false;
 let pendingDeleteInvoiceId = 0;
 let activePreviewInvoiceId = 0;
 let verifiedPreviewSignature = '';
+let activePreviewState = {
+  kind: 'INVOICE',
+  targetId: 0,
+  extraStr: '',
+  startMillis: 0,
+  endMillis: 0
+};
+let thermalReturnView = 'create-invoice';
 let batchEntryRows = [];
 
 let reqSeq = 1;
@@ -211,6 +219,10 @@ function switchView(viewName) {
 }
 
 function handleBackAction() {
+  if (currentView === 'thermal-preview') {
+    returnFromThermalPreview();
+    return;
+  }
   const parent = SUB_VIEW_PARENTS[currentView];
   if (parent) {
     switchView(parent);
@@ -223,6 +235,10 @@ window.handleAndroidBack = function () {
   const menu = document.getElementById('side-menu');
   if (menu && !menu.classList.contains('hidden')) {
     toggleMenu(false);
+    return 'HANDLED';
+  }
+  if (currentView === 'thermal-preview') {
+    returnFromThermalPreview();
     return 'HANDLED';
   }
   const parent = SUB_VIEW_PARENTS[currentView];
@@ -531,14 +547,15 @@ function renderCustomerTransactions() {
     const actionHtml = isConfirming
       ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteCustomerTx(${t.id})">تأكيد</button>
          <button type="button" class="tbl-action-btn" onclick="askDeleteCustomerTx(0)">لا</button>`
-      : `<button type="button" class="tbl-action-btn" onclick="startEditCustomerTx(${t.id})">تعديل</button>
+      : `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
+         <button type="button" class="tbl-action-btn" onclick="startEditCustomerTx(${t.id})">تعديل</button>
          <button type="button" class="tbl-action-btn del" onclick="askDeleteCustomerTx(${t.id})">حذف</button>`;
     return `
       <tr>
-        <td class="${cls}" style="font-weight:800; white-space:nowrap;">${signLabel} ${fmtMoney(t.amount)}</td>
+        <td class="num-cell ${cls}" style="font-weight:800;">${signLabel} ${fmtMoney(t.amount)}</td>
         <td style="text-align:right;">${escapeHtml(t.description)}</td>
-        <td style="font-weight:700; white-space:nowrap;">${fmtMoney(t.runningBalance)}</td>
-        <td style="font-size:10.5px; white-space:nowrap;">${fmtShortDate(t.date)}</td>
+        <td class="num-cell" style="font-weight:700;">${fmtMoney(t.runningBalance)}</td>
+        <td class="num-cell" style="font-size:10.5px;">${fmtShortDate(t.date)}</td>
         <td style="white-space:nowrap;">${actionHtml}</td>
       </tr>
     `;
@@ -637,6 +654,34 @@ function submitCustomerTx(isDebit) {
 function shareCustomerWhatsApp() {
   if (!window.Android || !activeCustomerId) return;
   window.Android.shareCustomerWhatsApp(activeCustomerId, nextReqId());
+}
+
+function previewTransactionThermal(txId) {
+  if (!window.Android || !txId) return;
+  thermalReturnView = currentView;
+  verifiedPreviewSignature = '';
+  const btn = document.getElementById('btn-thermal-print-now');
+  if (btn) btn.disabled = true;
+  window.Android.previewGenericThermal('TX', txId, '', 0, 0, nextReqId());
+}
+
+function previewStatementThermal(partyType, partyId) {
+  if (!window.Android || !partyId) return;
+  thermalReturnView = currentView;
+  verifiedPreviewSignature = '';
+  const btn = document.getElementById('btn-thermal-print-now');
+  if (btn) btn.disabled = true;
+  window.Android.previewGenericThermal('STATEMENT', partyId, partyType, 0, 0, nextReqId());
+}
+
+function exportStatementPdf(partyType, partyId) {
+  if (!window.Android || !partyId) return;
+  window.Android.exportStatementPdf(partyType, partyId, nextReqId());
+}
+
+function shareStatementWhatsAppPdf(partyType, partyId) {
+  if (!window.Android || !partyId) return;
+  window.Android.shareStatementWhatsAppPdf(partyType, partyId, nextReqId());
 }
 
 // ---------------- Suppliers ----------------
@@ -827,14 +872,15 @@ function renderSupplierTransactions() {
     const actionHtml = isConfirming
       ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteSupplierTx(${t.id})">تأكيد</button>
          <button type="button" class="tbl-action-btn" onclick="askDeleteSupplierTx(0)">لا</button>`
-      : `<button type="button" class="tbl-action-btn" onclick="startEditSupplierTx(${t.id})">تعديل</button>
+      : `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
+         <button type="button" class="tbl-action-btn" onclick="startEditSupplierTx(${t.id})">تعديل</button>
          <button type="button" class="tbl-action-btn del" onclick="askDeleteSupplierTx(${t.id})">حذف</button>`;
     return `
       <tr>
-        <td class="${cls}" style="font-weight:800; white-space:nowrap;">${label} ${fmtMoney(t.amount)}</td>
+        <td class="num-cell ${cls}" style="font-weight:800;">${label} ${fmtMoney(t.amount)}</td>
         <td style="text-align:right;">${escapeHtml(t.description)}</td>
-        <td style="font-weight:700; white-space:nowrap;">${fmtMoney(t.runningBalance)}</td>
-        <td style="font-size:10.5px; white-space:nowrap;">${fmtShortDate(t.date)}</td>
+        <td class="num-cell" style="font-weight:700;">${fmtMoney(t.runningBalance)}</td>
+        <td class="num-cell" style="font-size:10.5px;">${fmtShortDate(t.date)}</td>
         <td style="white-space:nowrap;">${actionHtml}</td>
       </tr>
     `;
@@ -986,26 +1032,86 @@ function renderInventoryList() {
     const actionsHtml = isConfirming
       ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteInventory(${i.id})">تأكيد</button>
          <button type="button" class="tbl-action-btn" onclick="askDeleteInventory(0)">لا</button>`
-      : `<button type="button" class="tbl-action-btn" onclick="openInventoryForm(${i.id})">تعديل</button>
+      : `<button type="button" class="tbl-action-btn" onclick="openInventoryHistory(${i.id})">حركات</button>
+         <button type="button" class="tbl-action-btn" onclick="openInventoryForm(${i.id})">تعديل</button>
          <button type="button" class="tbl-action-btn del" onclick="askDeleteInventory(${i.id})">حذف</button>`;
 
     return `
       <div class="card compact-card">
         <div class="card-title-row" style="margin-bottom:3px;">
-          <div>
+          <div style="min-width:0; flex:1;">
             <strong>${escapeHtml(i.name)}</strong> ${badge}
             <div class="muted-text">${escapeHtml(i.category || 'عام')} • ${escapeHtml(i.unit || 'حبة')}</div>
           </div>
-          <strong style="font-size:14px;">الكمية: ${i.quantity}</strong>
+          <strong class="cell-num" style="font-size:14px;">الكمية: ${i.quantity}</strong>
         </div>
         <div class="card-title-row" style="margin-bottom:0;">
-          <span class="muted-text">شراء: ${fmtMoney(i.purchasePrice)} | بيع: ${fmtMoney(i.sellingPrice)} ${escapeHtml(appCurrency)}</span>
+          <span class="muted-text cell-num">شراء: ${fmtMoney(i.purchasePrice)} | بيع: ${fmtMoney(i.sellingPrice)} ${escapeHtml(appCurrency)}</span>
           <div class="btn-row-compact">${actionsHtml}</div>
         </div>
       </div>
     `;
   }).join('');
 }
+
+function openInventoryHistory(itemId) {
+  if (!window.Android || !itemId) return;
+  window.Android.getInventoryHistory(itemId, nextReqId());
+}
+
+function closeInventoryHistory() {
+  const box = document.getElementById('inventory-history-card');
+  if (box) box.classList.add('hidden');
+}
+
+function exportInventoryPdf() {
+  if (!window.Android) return;
+  window.Android.exportInventoryPdf(nextReqId());
+}
+
+window.onInventoryHistoryData = function (jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr);
+    const box = document.getElementById('inventory-history-card');
+    if (!box) return;
+    const item = data.item;
+    const movements = data.movements || [];
+    const rowsHtml = movements.length === 0
+      ? '<div class="muted-text" style="text-align:center; padding:6px;">لا توجد حركات فواتير مسجلة لهذا الصنف</div>'
+      : `<div class="table-wrap" style="margin-top:6px;"><table class="data-table ruled-table"><thead><tr><th>الفاتورة</th><th>الطرف</th><th>الكمية</th><th>السعر</th><th>التاريخ</th></tr></thead><tbody>` +
+        movements.map(m => {
+          const isAdd = m.deltaQty > 0;
+          const cls = isAdd ? 'text-success' : 'text-danger';
+          const qtyStr = isAdd ? `+${m.deltaQty}` : String(m.deltaQty);
+          return `<tr onclick="openEditInvoice(${m.invoiceId})">
+            <td><strong>#${escapeHtml(m.invoiceNumber)}</strong></td>
+            <td>${escapeHtml(m.partyName)}</td>
+            <td class="num-cell ${cls}" style="font-weight:800;">${qtyStr}</td>
+            <td class="num-cell">${fmtMoney(m.unitPrice)}</td>
+            <td class="num-cell" style="font-size:10.5px;">${fmtShortDate(m.date)}</td>
+          </tr>`;
+        }).join('') +
+        `</tbody></table></div>`;
+
+    box.innerHTML = `
+      <div class="card-title-row" style="margin-bottom:4px;">
+        <strong>حركات الصنف: ${escapeHtml(item.name)} (الحالي: ${item.quantity})</strong>
+        <button type="button" class="link-btn" onclick="closeInventoryHistory()">إغلاق</button>
+      </div>
+      <div class="summary-strip" style="margin-bottom:4px;">
+        <span>الوارد (+): ${data.totalPurchased || 0}</span>
+        <span>المباع (-): ${data.totalSold || 0}</span>
+        <span>التكلفة: ${fmtMoney(item.purchasePrice)}</span>
+      </div>
+      ${rowsHtml}
+    `;
+    box.classList.remove('hidden');
+    const scroll = document.getElementById('main-scroll');
+    if (scroll) scroll.scrollTop = 0;
+  } catch (e) {
+    console.error(e);
+  }
+};
 
 function openInventoryForm(itemId) {
   editingInventoryId = itemId || 0;
@@ -1190,6 +1296,7 @@ function confirmDeleteInvoice(id) {
 
 function quickThermalPreview(id) {
   if (!window.Android) return;
+  thermalReturnView = currentView;
   activePreviewInvoiceId = id;
   verifiedPreviewSignature = '';
   const btn = document.getElementById('btn-thermal-print-now');
@@ -1819,6 +1926,13 @@ function renderCart() {
   updateInvoiceTotals();
 }
 
+function toggleInvoiceWaMenu(forceState) {
+  const menu = document.getElementById('invoice-wa-menu');
+  if (!menu) return;
+  const nextShow = typeof forceState === 'boolean' ? forceState : menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !nextShow);
+}
+
 function setPaymentMode(mode) {
   if (document.getElementById('inv-type').value !== 'PURCHASE') {
     document.getElementById('inv-type').value = mode;
@@ -1834,8 +1948,17 @@ function setPaymentMode(mode) {
 
 function updatePaymentModeButtons() {
   const type = document.getElementById('inv-type').value;
-  document.getElementById('btn-mode-cash').classList.toggle('active-cash', type === 'CASH');
-  document.getElementById('btn-mode-credit').classList.toggle('active-credit', type === 'CREDIT');
+  const cashBtn = document.getElementById('btn-mode-cash');
+  const creditBtn = document.getElementById('btn-mode-credit');
+  if (cashBtn) cashBtn.classList.toggle('active-cash', type === 'CASH');
+  if (creditBtn) creditBtn.classList.toggle('active-credit', type === 'CREDIT');
+  if (type === 'CASH') {
+    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
+    const paidEl = document.getElementById('inv-paid');
+    if (paidEl && subtotal > 0 && (!paidEl.value || parseFloat(paidEl.value) === 0)) {
+      paidEl.value = String(Math.round(subtotal * 100) / 100);
+    }
+  }
 }
 
 function payFullInvoice() {
@@ -1958,6 +2081,7 @@ function saveInvoiceAction(followUpAction) {
 function runInvoiceFollowUp(invoiceId, action) {
   if (!window.Android || !invoiceId) return;
   if (action === 'THERMAL_PREVIEW') {
+    thermalReturnView = 'create-invoice';
     activePreviewInvoiceId = invoiceId;
     verifiedPreviewSignature = '';
     const btn = document.getElementById('btn-thermal-print-now');
@@ -1975,9 +2099,19 @@ function runInvoiceFollowUp(invoiceId, action) {
 window.onThermalPreviewData = function (jsonStr) {
   try {
     const data = JSON.parse(jsonStr);
-    activePreviewInvoiceId = data.invoiceId;
-    verifiedPreviewSignature = data.previewSignature || String(data.invoiceId);
-    document.getElementById('thermal-preview-title').textContent = `معاينة فاتورة #${data.invoiceNumber}`;
+    const kind = (data.kind || 'INVOICE').toUpperCase();
+    activePreviewState = {
+      kind,
+      targetId: kind === 'INVOICE' ? (data.invoiceId || 0) : (data.targetId || 0),
+      extraStr: data.extraStr || '',
+      startMillis: data.startMillis || 0,
+      endMillis: data.endMillis || 0
+    };
+    activePreviewInvoiceId = kind === 'INVOICE' ? (data.invoiceId || 0) : 0;
+    verifiedPreviewSignature = data.previewSignature || '';
+
+    document.getElementById('thermal-preview-title').textContent =
+      data.title || (data.invoiceNumber ? `معاينة فاتورة #${data.invoiceNumber}` : 'معاينة الطباعة الحرارية');
     document.getElementById('thermal-width-badge').textContent = `${data.widthMm} مم`;
     document.getElementById('thermal-printer-status-bar').textContent = data.connected
       ? `متصل بالطابعة: ${data.printerName || 'طابعة بلوتوث'}`
@@ -1987,50 +2121,99 @@ window.onThermalPreviewData = function (jsonStr) {
     const p80 = document.getElementById('preview-width-80');
     if (p58) p58.className = data.widthMm === 58 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
     if (p80) p80.className = data.widthMm === 80 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
+
     const printBtn = document.getElementById('btn-thermal-print-now');
     if (printBtn) printBtn.disabled = false;
+
+    const waBtn = document.getElementById('btn-preview-wa-share');
+    const pdfBtn = document.getElementById('btn-preview-open-pdf');
+    if (waBtn) waBtn.classList.toggle('hidden', kind !== 'INVOICE' && kind !== 'STATEMENT' && kind !== 'REPORT');
+    if (pdfBtn) pdfBtn.classList.toggle('hidden', kind === 'TX');
+
     switchView('thermal-preview');
   } catch (e) {
     console.error(e);
   }
 };
 
+function requestActivePreviewRefresh() {
+  if (!window.Android) return;
+  const st = activePreviewState;
+  if (st.kind === 'INVOICE' && st.targetId) {
+    window.Android.previewThermalInvoice(st.targetId, nextReqId());
+  } else if (st.kind && st.kind !== 'INVOICE') {
+    window.Android.previewGenericThermal(st.kind, st.targetId, st.extraStr, st.startMillis, st.endMillis, nextReqId());
+  }
+}
+
 function switchPreviewWidth(widthMm) {
-  if (!window.Android || !activePreviewInvoiceId) return;
+  if (!window.Android) return;
   verifiedPreviewSignature = '';
   const printBtn = document.getElementById('btn-thermal-print-now');
   if (printBtn) printBtn.disabled = true;
   const reqId = nextReqId(() => {
-    window.Android.previewThermalInvoice(activePreviewInvoiceId, nextReqId());
+    requestActivePreviewRefresh();
   });
   window.Android.setPrinterWidth(widthMm, reqId);
 }
 
 function printActivePreviewInvoice() {
-  if (!window.Android || !activePreviewInvoiceId) return;
+  if (!window.Android) return;
   if (!verifiedPreviewSignature) {
     showToast('المعاينة إلزامية قبل الطباعة — جاري تحديث المعاينة', 'error');
-    window.Android.previewThermalInvoice(activePreviewInvoiceId, nextReqId());
+    requestActivePreviewRefresh();
     return;
   }
-  window.Android.printInvoice(activePreviewInvoiceId, nextReqId());
+  const st = activePreviewState;
+  if (st.kind === 'INVOICE' && st.targetId) {
+    window.Android.printInvoice(st.targetId, nextReqId());
+  } else {
+    window.Android.printGenericThermal(st.kind, st.targetId, st.extraStr, st.startMillis, st.endMillis, nextReqId());
+  }
 }
 
 function shareActivePreviewImage() {
-  if (window.Android && activePreviewInvoiceId) {
-    window.Android.shareInvoiceImage(activePreviewInvoiceId, nextReqId());
+  if (!window.Android) return;
+  const st = activePreviewState;
+  if (st.kind === 'INVOICE' && st.targetId) {
+    window.Android.shareInvoiceImage(st.targetId, nextReqId());
+  } else if (st.kind === 'STATEMENT' && st.targetId) {
+    window.Android.shareStatementWhatsAppPdf(st.extraStr, st.targetId, nextReqId());
+  } else if (st.kind === 'REPORT') {
+    window.Android.shareReportWhatsAppPdf(st.startMillis, st.endMillis, st.extraStr, nextReqId());
   }
 }
 
 function openActivePreviewPdf() {
-  if (window.Android && activePreviewInvoiceId) {
-    window.Android.generateAndOpenPdf(activePreviewInvoiceId, nextReqId());
+  if (!window.Android) return;
+  const st = activePreviewState;
+  if (st.kind === 'INVOICE' && st.targetId) {
+    window.Android.generateAndOpenPdf(st.targetId, nextReqId());
+  } else if (st.kind === 'STATEMENT' && st.targetId) {
+    window.Android.exportStatementPdf(st.extraStr, st.targetId, nextReqId());
+  } else if (st.kind === 'REPORT') {
+    window.Android.exportFinancialReportPdf(st.startMillis, st.endMillis, st.extraStr, nextReqId());
   }
 }
 
 function saveActiveThermalImageToFolder() {
-  if (window.Android && activePreviewInvoiceId) {
-    window.Android.saveThermalPreviewToAppFolder(activePreviewInvoiceId, nextReqId());
+  if (!window.Android) return;
+  const st = activePreviewState;
+  if (st.kind === 'INVOICE' && st.targetId) {
+    window.Android.saveThermalPreviewToAppFolder(st.targetId, nextReqId());
+  } else {
+    window.Android.saveGenericThermalToAppFolder(st.kind, st.targetId, st.extraStr, st.startMillis, st.endMillis, nextReqId());
+  }
+}
+
+function returnFromThermalPreview() {
+  const dest = thermalReturnView || 'create-invoice';
+  if (dest === 'customer-detail' && activeCustomerId) {
+    openCustomerDetail(activeCustomerId);
+  } else if (dest === 'supplier-detail' && activeSupplierId) {
+    openSupplierDetail(activeSupplierId);
+  } else {
+    switchView(dest);
   }
 }
 
@@ -2075,6 +2258,22 @@ function exportCurrentReportPdf() {
   if (!window.Android) return;
   const { start, now, label } = getReportRangeBounds();
   window.Android.exportFinancialReportPdf(start, now, label, nextReqId());
+}
+
+function shareCurrentReportWhatsApp() {
+  if (!window.Android) return;
+  const { start, now, label } = getReportRangeBounds();
+  window.Android.shareReportWhatsAppPdf(start, now, label, nextReqId());
+}
+
+function previewReportThermal() {
+  if (!window.Android) return;
+  thermalReturnView = 'reports';
+  verifiedPreviewSignature = '';
+  const btn = document.getElementById('btn-thermal-print-now');
+  if (btn) btn.disabled = true;
+  const { start, now, label } = getReportRangeBounds();
+  window.Android.previewGenericThermal('REPORT', 0, label, start, now, nextReqId());
 }
 
 window.onReportsData = function (jsonStr) {
