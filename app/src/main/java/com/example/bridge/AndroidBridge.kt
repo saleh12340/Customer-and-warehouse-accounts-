@@ -16,6 +16,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class AndroidBridge(
@@ -29,6 +30,7 @@ class AndroidBridge(
   private val engine = GroceryAccountingEngine(database)
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
   private val saveInvoiceLock = AtomicBoolean(false)
+  private val previewedInvoiceSignatures = ConcurrentHashMap.newKeySet<String>()
 
   private fun callJs(fnName: String, jsonPayload: String) {
     val quoted = JSONObject.quote(jsonPayload)
@@ -224,9 +226,22 @@ class AndroidBridge(
 
   @JavascriptInterface
   fun addCustomerTransaction(customerId: Long, amount: Double, isDebit: Boolean, description: String, reqId: String) {
+    addCustomerTransactionWithDate(customerId, amount, isDebit, description, 0L, reqId)
+  }
+
+  @JavascriptInterface
+  fun addCustomerTransactionWithDate(
+    customerId: Long,
+    amount: Double,
+    isDebit: Boolean,
+    description: String,
+    dateMillis: Long,
+    reqId: String
+  ) {
     scope.launch(Dispatchers.IO) {
       try {
-        engine.addCustomerTransaction(customerId, amount, isDebit, description)
+        val effectiveDate = if (dateMillis > 0L) dateMillis else System.currentTimeMillis()
+        engine.addCustomerTransaction(customerId, amount, isDebit, description, effectiveDate)
         getCustomerDetail(customerId)
         refreshCoreViews()
         notifyResult(reqId, true, if (isDebit) "تم تسجيل مبلغ عليه ✓" else "تم تسجيل دفعة له ✓")
@@ -238,9 +253,23 @@ class AndroidBridge(
 
   @JavascriptInterface
   fun updateCustomerTransaction(txId: Long, customerId: Long, amount: Double, isDebit: Boolean, description: String, reqId: String) {
+    updateCustomerTransactionWithDate(txId, customerId, amount, isDebit, description, 0L, reqId)
+  }
+
+  @JavascriptInterface
+  fun updateCustomerTransactionWithDate(
+    txId: Long,
+    customerId: Long,
+    amount: Double,
+    isDebit: Boolean,
+    description: String,
+    dateMillis: Long,
+    reqId: String
+  ) {
     scope.launch(Dispatchers.IO) {
       try {
-        engine.updateCustomerTransaction(txId, amount, isDebit, description)
+        val effectiveDate = dateMillis.takeIf { it > 0L }
+        engine.updateCustomerTransaction(txId, amount, isDebit, description, effectiveDate)
         getCustomerDetail(customerId)
         refreshCoreViews()
         notifyResult(reqId, true, "تم تعديل الحركة وتحديث الرصيد ✓")
@@ -406,9 +435,22 @@ class AndroidBridge(
 
   @JavascriptInterface
   fun addSupplierTransaction(supplierId: Long, amount: Double, isCredit: Boolean, description: String, reqId: String) {
+    addSupplierTransactionWithDate(supplierId, amount, isCredit, description, 0L, reqId)
+  }
+
+  @JavascriptInterface
+  fun addSupplierTransactionWithDate(
+    supplierId: Long,
+    amount: Double,
+    isCredit: Boolean,
+    description: String,
+    dateMillis: Long,
+    reqId: String
+  ) {
     scope.launch(Dispatchers.IO) {
       try {
-        engine.addSupplierTransaction(supplierId, amount, isCredit, description)
+        val effectiveDate = if (dateMillis > 0L) dateMillis else System.currentTimeMillis()
+        engine.addSupplierTransaction(supplierId, amount, isCredit, description, effectiveDate)
         getSupplierDetail(supplierId)
         refreshCoreViews()
         notifyResult(reqId, true, if (isCredit) "تم تسجيل مستحقات للمورد ✓" else "تم تسجيل دفعة سداد للمورد ✓")
@@ -420,9 +462,23 @@ class AndroidBridge(
 
   @JavascriptInterface
   fun updateSupplierTransaction(txId: Long, supplierId: Long, amount: Double, isCredit: Boolean, description: String, reqId: String) {
+    updateSupplierTransactionWithDate(txId, supplierId, amount, isCredit, description, 0L, reqId)
+  }
+
+  @JavascriptInterface
+  fun updateSupplierTransactionWithDate(
+    txId: Long,
+    supplierId: Long,
+    amount: Double,
+    isCredit: Boolean,
+    description: String,
+    dateMillis: Long,
+    reqId: String
+  ) {
     scope.launch(Dispatchers.IO) {
       try {
-        engine.updateSupplierTransaction(txId, amount, isCredit, description)
+        val effectiveDate = dateMillis.takeIf { it > 0L }
+        engine.updateSupplierTransaction(txId, amount, isCredit, description, effectiveDate)
         getSupplierDetail(supplierId)
         refreshCoreViews()
         notifyResult(reqId, true, "تم تعديل حركة المورد وتحديث الرصيد ✓")
@@ -646,6 +702,7 @@ class AndroidBridge(
         val partyId = obj.optLong("partyId", 0L)
         val partyName = obj.optString("partyName", "عميل نقدي")
         val paidAmount = obj.optDouble("paidAmount", 0.0)
+        val dateOpt = obj.optLong("date", 0L).takeIf { it > 0L }
         val itemsArray = obj.optJSONArray("items") ?: JSONArray()
 
         val items = mutableListOf<InvoiceItemEntity>()
@@ -672,7 +729,8 @@ class AndroidBridge(
           partyId = partyId,
           partyName = partyName,
           rawItems = items,
-          paidAmount = paidAmount
+          paidAmount = paidAmount,
+          invoiceDateMillis = dateOpt
         )
 
         refreshCoreViews()
@@ -704,31 +762,45 @@ class AndroidBridge(
     }
   }
 
+  private fun computePreviewSignature(inv: InvoiceEntity, items: List<InvoiceItemEntity>, widthMm: Int): String {
+    val itemsSig = items.joinToString("|") { "${it.itemId}:${it.itemName}:${it.quantity}:${it.unitPrice}" }
+    return "${inv.id}_${inv.invoiceNumber}_${inv.date}_${inv.totalAmount}_${inv.paidAmount}_${widthMm}_${itemsSig.hashCode()}"
+  }
+
+  private suspend fun emitThermalPreview(withItems: InvoiceWithItems): Pair<String, Int> {
+    val inv = withItems.invoice
+    val balanceAfter = resolvePartyBalance(inv)
+    val settings = StorePreferences.getSettings(activity)
+    val widthMm = settings.printerWidthMm
+    val signature = computePreviewSignature(inv, withItems.items, widthMm)
+    val base64 = BluetoothPrinterManager.renderInvoicePreviewBase64(
+      context = activity,
+      invoice = inv,
+      items = withItems.items,
+      partyBalanceAfter = balanceAfter,
+      paperWidthMm = widthMm
+    )
+    previewedInvoiceSignatures.add(signature)
+    val conn = BluetoothPrinterManager.getConnectionInfo()
+    val payload = JSONObject().apply {
+      put("invoiceId", inv.id)
+      put("invoiceNumber", inv.invoiceNumber)
+      put("widthMm", widthMm)
+      put("previewSignature", signature)
+      put("connected", BluetoothPrinterManager.isConnected())
+      put("printerName", conn.first)
+      put("imageBase64", base64)
+    }
+    callJs("onThermalPreviewData", payload.toString())
+    return signature to widthMm
+  }
+
   @JavascriptInterface
   fun previewThermalInvoice(invoiceId: Long, reqId: String) {
     scope.launch(Dispatchers.IO) {
       try {
         val withItems = database.invoiceDao().getInvoiceWithItems(invoiceId) ?: error("احفظ الفاتورة أولاً للمعاينة")
-        val inv = withItems.invoice
-        val balanceAfter = resolvePartyBalance(inv)
-        val settings = StorePreferences.getSettings(activity)
-        val base64 = BluetoothPrinterManager.renderInvoicePreviewBase64(
-          context = activity,
-          invoice = inv,
-          items = withItems.items,
-          partyBalanceAfter = balanceAfter,
-          paperWidthMm = settings.printerWidthMm
-        )
-        val conn = BluetoothPrinterManager.getConnectionInfo()
-        val payload = JSONObject().apply {
-          put("invoiceId", inv.id)
-          put("invoiceNumber", inv.invoiceNumber)
-          put("widthMm", settings.printerWidthMm)
-          put("connected", BluetoothPrinterManager.isConnected())
-          put("printerName", conn.first)
-          put("imageBase64", base64)
-        }
-        callJs("onThermalPreviewData", payload.toString())
+        emitThermalPreview(withItems)
         notifyResult(reqId, true, "تم تجهيز معاينة الإيصال الحراري")
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر إنشاء معاينة الإيصال")
@@ -742,8 +814,14 @@ class AndroidBridge(
       try {
         val withItems = database.invoiceDao().getInvoiceWithItems(invoiceId) ?: error("احفظ الفاتورة أولاً للطباعة")
         val inv = withItems.invoice
-        val balanceAfter = resolvePartyBalance(inv)
         val settings = StorePreferences.getSettings(activity)
+        val signature = computePreviewSignature(inv, withItems.items, settings.printerWidthMm)
+        if (!previewedInvoiceSignatures.contains(signature)) {
+          emitThermalPreview(withItems)
+          notifyResult(reqId, false, "المعاينة إلزامية قبل الطباعة البلوتوث — راجع المعاينة ثم اضغط طباعة")
+          return@launch
+        }
+        val balanceAfter = resolvePartyBalance(inv)
         val result = BluetoothPrinterManager.printInvoiceReceipt(
           context = activity,
           invoice = inv,
@@ -1003,7 +1081,8 @@ class AndroidBridge(
           "صنف تجريبي 2 × 250 = 500 ${settings.currency}"
         ),
         footer = "الإجمالي: 1,000 ${settings.currency}",
-        paperWidthMm = settings.printerWidthMm
+        paperWidthMm = settings.printerWidthMm,
+        context = activity
       )
       notifyResult(
         reqId,

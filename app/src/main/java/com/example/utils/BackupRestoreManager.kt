@@ -120,7 +120,7 @@ object BackupRestoreManager {
     require(invoices.map { it.id }.distinct().size == invoices.size) { "توجد معرفات فواتير مكررة" }
     require(invoices.map { it.invoiceNumber }.distinct().size == invoices.size) { "توجد أرقام فواتير مكررة" }
     require(invoiceItems.all { item ->
-      item.invoiceId > 0 && item.itemId > 0 && item.unitPrice >= 0 && item.totalPrice >= 0 &&
+      item.invoiceId > 0 && item.itemId >= 0 && item.unitPrice >= 0 && item.totalPrice >= 0 &&
         invoices.any { it.id == item.invoiceId }
     }) { "توجد تفاصيل فاتورة غير مرتبطة أو بأسعار غير صحيحة" }
 

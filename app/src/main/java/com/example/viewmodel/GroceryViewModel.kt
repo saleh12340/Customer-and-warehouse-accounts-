@@ -56,7 +56,7 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
         val expectedTotal = item.quantity.toDouble() * item.unitPrice
         val tolerance = 0.000001 * maxOf(1.0, abs(expectedTotal))
         item.itemName.trim().isBlank() ||
-          item.itemId <= 0 ||
+          item.itemId < 0 ||
           item.quantity <= 0 ||
           !item.unitPrice.isFinite() ||
           item.unitPrice < 0 ||
@@ -243,8 +243,10 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
           val oldInvoice = previous.invoice
           val oldStockSign = if (oldInvoice.type == "PURCHASE") -1 else 1
           previous.items.forEach { oldItem ->
-            check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldItem.quantity) == 1) {
-              "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}. قد تكون الكمية قد استُهلكت"
+            if (oldItem.itemId > 0L) {
+              check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldItem.quantity) == 1) {
+                "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}. قد تكون الكمية قد استُهلكت"
+              }
             }
           }
 
@@ -284,8 +286,10 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
 
           val newStockSign = if (normalizedType == "PURCHASE") 1 else -1
           normalizedItems.forEach { item ->
-            check(inventoryDao.adjustQuantity(item.itemId, newStockSign * item.quantity) == 1) {
-              "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+            if (item.itemId > 0L) {
+              check(inventoryDao.adjustQuantity(item.itemId, newStockSign * item.quantity) == 1) {
+                "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+              }
             }
           }
 
@@ -360,9 +364,11 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
           // Every non-purchase invoice leaves stock; purchases add stock.
           val stockDeltaSign = if (normalizedType == "PURCHASE") 1 else -1
           for (item in normalizedItems) {
-            val changedRows = inventoryDao.adjustQuantity(item.itemId, stockDeltaSign * item.quantity)
-            check(changedRows == 1) {
-              "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+            if (item.itemId > 0L) {
+              val changedRows = inventoryDao.adjustQuantity(item.itemId, stockDeltaSign * item.quantity)
+              check(changedRows == 1) {
+                "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+              }
             }
           }
 

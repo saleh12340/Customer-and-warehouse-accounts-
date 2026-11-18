@@ -43,13 +43,13 @@ object PdfGenerator {
       val output = File(pdfDir, "invoice_${safeNumber.ifBlank { invoice.id.toString() }}.pdf")
       val date = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date(invoice.date))
 
-      val titlePaint = textPaint(19f, Color.rgb(15, 76, 156), true)
-      val subPaint = textPaint(10f, Color.rgb(90, 98, 106))
-      val bodyPaint = textPaint(11f, Color.BLACK)
-      val smallPaint = textPaint(9f, Color.DKGRAY)
-      val headerPaint = textPaint(10f, Color.WHITE, true)
-      val totalPaint = textPaint(11.5f, Color.BLACK, true)
-      val accentTotalPaint = textPaint(12.5f, Color.rgb(15, 76, 156), true)
+      val titlePaint = textPaint(context, 19f, Color.rgb(15, 76, 156), true)
+      val subPaint = textPaint(context, 10f, Color.rgb(90, 98, 106))
+      val bodyPaint = textPaint(context, 11f, Color.BLACK)
+      val smallPaint = textPaint(context, 9f, Color.DKGRAY)
+      val headerPaint = textPaint(context, 10f, Color.WHITE, true)
+      val totalPaint = textPaint(context, 11.5f, Color.BLACK, true)
+      val accentTotalPaint = textPaint(context, 12.5f, Color.rgb(15, 76, 156), true)
       val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(218, 222, 226)
         strokeWidth = 0.8f
@@ -68,7 +68,7 @@ object PdfGenerator {
       val colQtyX = colPriceX + priceW
       val colNameX = colQtyX + qtyW
 
-      val measured = measureItemsForTest(items)
+      val measured = measureItemsForTest(items, context)
       val pagesItems = planPages(measured)
       val lastPageItemsH = pagesItems.last().sumOf { it.rowH.toDouble() }.toFloat()
       val lastPageStartY = if (pagesItems.size == 1) 185f + 34f else 108f + 34f
@@ -202,8 +202,8 @@ object PdfGenerator {
     return pagesItems
   }
 
-  internal fun measureItemsForTest(items: List<InvoiceItemEntity>): List<MeasuredItem> {
-    val bodyPaint = textPaint(11f, Color.BLACK)
+  internal fun measureItemsForTest(items: List<InvoiceItemEntity>, context: Context? = null): List<MeasuredItem> {
+    val bodyPaint = textPaint(context, 11f, Color.BLACK)
     val nameW = CONTENT_WIDTH - 110f - 95f - 65f
     return items.map { item ->
       val layout = buildRtlLayout(item.itemName, bodyPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 4)
@@ -226,11 +226,11 @@ object PdfGenerator {
       val output = File(reportDir, "report_${stamp}.pdf")
       val dateText = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date())
 
-      val titlePaint = textPaint(19f, Color.rgb(15, 76, 156), true)
-      val subPaint = textPaint(10.5f, Color.rgb(90, 98, 106))
-      val sectionPaint = textPaint(13f, Color.rgb(15, 76, 156), true)
-      val bodyPaint = textPaint(11.5f, Color.BLACK)
-      val boldPaint = textPaint(11.5f, Color.BLACK, true)
+      val titlePaint = textPaint(context, 19f, Color.rgb(15, 76, 156), true)
+      val subPaint = textPaint(context, 10.5f, Color.rgb(90, 98, 106))
+      val sectionPaint = textPaint(context, 13f, Color.rgb(15, 76, 156), true)
+      val bodyPaint = textPaint(context, 11.5f, Color.BLACK)
+      val boldPaint = textPaint(context, 11.5f, Color.BLACK, true)
       val boxFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 252) }
       val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(210, 218, 228)
@@ -324,11 +324,11 @@ object PdfGenerator {
     return file.takeIf { it.exists() && it.length() > 0 }
   }
 
-  private fun textPaint(size: Float, color: Int, bold: Boolean = false) =
+  private fun textPaint(context: Context?, size: Float, color: Int, bold: Boolean = false) =
     TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
       textSize = size
       this.color = color
-      typeface = if (bold) Typeface.create(Typeface.DEFAULT, Typeface.BOLD) else Typeface.DEFAULT
+      typeface = if (bold) ArabicFontHelper.getBold(context) else ArabicFontHelper.getRegular(context)
     }
 
   private fun buildRtlLayout(

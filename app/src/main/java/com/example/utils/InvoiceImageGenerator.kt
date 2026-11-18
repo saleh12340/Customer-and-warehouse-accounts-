@@ -44,17 +44,17 @@ object InvoiceImageGenerator {
       val currency = settings.currency
       val dateStr = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date(invoice.date))
 
-      val titlePaint = textPaint(34f, Color.WHITE, bold = true)
-      val subHeaderPaint = textPaint(20f, Color.rgb(225, 236, 255))
-      val metaBoldPaint = textPaint(22f, Color.rgb(33, 37, 41), bold = true)
-      val metaPaint = textPaint(20f, Color.rgb(73, 80, 87))
-      val thPaint = textPaint(20f, Color.WHITE, bold = true)
-      val tdPaint = textPaint(20f, Color.rgb(33, 37, 41))
-      val tdBoldPaint = textPaint(20f, Color.rgb(15, 76, 156), bold = true)
-      val totalPaint = textPaint(24f, Color.rgb(15, 76, 156), bold = true)
-      val greenPaint = textPaint(22f, Color.rgb(40, 167, 69), bold = true)
-      val redPaint = textPaint(22f, Color.rgb(220, 53, 69), bold = true)
-      val footerPaint = textPaint(18f, Color.rgb(108, 117, 125))
+      val titlePaint = textPaint(context, 34f, Color.WHITE, bold = true)
+      val subHeaderPaint = textPaint(context, 20f, Color.rgb(225, 236, 255))
+      val metaBoldPaint = textPaint(context, 22f, Color.rgb(33, 37, 41), bold = true)
+      val metaPaint = textPaint(context, 20f, Color.rgb(73, 80, 87))
+      val thPaint = textPaint(context, 20f, Color.WHITE, bold = true)
+      val tdPaint = textPaint(context, 20f, Color.rgb(33, 37, 41))
+      val tdBoldPaint = textPaint(context, 20f, Color.rgb(15, 76, 156), bold = true)
+      val totalPaint = textPaint(context, 24f, Color.rgb(15, 76, 156), bold = true)
+      val greenPaint = textPaint(context, 22f, Color.rgb(40, 167, 69), bold = true)
+      val redPaint = textPaint(context, 22f, Color.rgb(220, 53, 69), bold = true)
+      val footerPaint = textPaint(context, 18f, Color.rgb(108, 117, 125))
 
       val contentW = IMG_WIDTH - MARGIN * 2
       val nameW = 360f
@@ -192,11 +192,11 @@ object InvoiceImageGenerator {
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
   }
 
-  private fun textPaint(size: Float, color: Int, bold: Boolean = false) =
+  private fun textPaint(context: Context?, size: Float, color: Int, bold: Boolean = false) =
     TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
       textSize = size
       this.color = color
-      typeface = if (bold) Typeface.create(Typeface.DEFAULT, Typeface.BOLD) else Typeface.DEFAULT
+      typeface = if (bold) ArabicFontHelper.getBold(context) else ArabicFontHelper.getRegular(context)
     }
 
   private fun buildRtlLayout(

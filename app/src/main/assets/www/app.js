@@ -46,6 +46,8 @@ let editingInvoiceId = 0;
 let invoiceDirty = false;
 let pendingDeleteInvoiceId = 0;
 let activePreviewInvoiceId = 0;
+let verifiedPreviewSignature = '';
+let batchEntryRows = [];
 
 let reqSeq = 1;
 const pendingCallbacks = {};
@@ -127,6 +129,22 @@ function fmtShortDate(millis) {
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   return `${m}/${day} ${hh}:${mm}`;
+}
+
+function toDateTimeLocalValue(millis) {
+  const d = millis ? new Date(millis) : new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+
+function fromDateTimeLocalValue(val) {
+  if (!val) return 0;
+  const ms = Date.parse(val);
+  return Number.isFinite(ms) && ms > 0 ? ms : 0;
 }
 
 function invoiceTypeAr(type) {
@@ -361,7 +379,10 @@ function renderCustomersList() {
         </div>
         <div class="list-item-actions">
           <span class="${cls}" style="font-weight:800; font-size:13.5px;">${label} ${escapeHtml(appCurrency)}</span>
-          <span class="badge badge-blue">كشف الحساب</span>
+          <div class="btn-row-compact">
+            <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openCustomerForm(${c.id})">تعديل</button>
+            <span class="badge badge-blue">كشف الحساب</span>
+          </div>
         </div>
       </div>
     `;
@@ -372,16 +393,22 @@ function openCustomerForm(customerId) {
   editingCustomerId = customerId || 0;
   const isEdit = editingCustomerId > 0;
   document.getElementById('customer-form-title').textContent = isEdit ? 'تعديل بيانات العميل' : 'إضافة عميل جديد';
+  const balLabel = document.getElementById('cust-form-balance-label');
+  if (balLabel) balLabel.textContent = isEdit ? 'الرصيد الحالي' : 'الرصيد الافتتاحي';
 
   const balInput = document.getElementById('cust-form-balance');
-  balInput.disabled = isEdit;
+  balInput.disabled = false;
 
-  if (isEdit && activeCustomerDetail && activeCustomerDetail.customer.id === editingCustomerId) {
-    const c = activeCustomerDetail.customer;
+  const fromDetail = (activeCustomerDetail && activeCustomerDetail.customer.id === editingCustomerId)
+    ? activeCustomerDetail.customer
+    : null;
+  const c = isEdit ? (fromDetail || customersData.find(x => x.id === editingCustomerId)) : null;
+
+  if (c) {
     document.getElementById('cust-form-name').value = c.name || '';
     document.getElementById('cust-form-phone').value = c.phone || '';
     document.getElementById('cust-form-address').value = c.address || '';
-    balInput.value = c.balance ? String(c.balance) : '0';
+    balInput.value = c.balance !== undefined && c.balance !== null ? String(c.balance) : '0';
   } else {
     document.getElementById('cust-form-name').value = '';
     document.getElementById('cust-form-phone').value = '';
@@ -426,6 +453,8 @@ function openCustomerDetail(customerId) {
   document.getElementById('customer-delete-confirm').classList.add('hidden');
   document.getElementById('tx-amount').value = '';
   document.getElementById('tx-desc').value = '';
+  const txDateEl = document.getElementById('tx-date');
+  if (txDateEl) txDateEl.value = toDateTimeLocalValue(Date.now());
   switchView('customer-detail');
   if (window.Android) {
     window.Android.getCustomerDetail(customerId);
@@ -544,10 +573,12 @@ function startEditCustomerTx(txId) {
   if (!tx) return;
   editingCustomerTxId = txId;
   const titleEl = document.getElementById('cust-tx-form-title');
-  titleEl.textContent = 'تعديل الحركة المحددة (اضغط عليه أو له للحفظ)';
+  titleEl.textContent = 'تعديل الحركة المحددة (عدّل المبلغ أو البيان أو التاريخ ثم اضغط عليه أو له)';
   titleEl.classList.remove('hidden');
   document.getElementById('tx-amount').value = tx.amount;
   document.getElementById('tx-desc').value = tx.description;
+  const txDateEl = document.getElementById('tx-date');
+  if (txDateEl) txDateEl.value = toDateTimeLocalValue(tx.date);
   document.getElementById('cust-tx-cancel-edit').classList.remove('hidden');
 }
 
@@ -556,6 +587,8 @@ function cancelEditCustomerTx() {
   document.getElementById('cust-tx-form-title').classList.add('hidden');
   document.getElementById('tx-amount').value = '';
   document.getElementById('tx-desc').value = '';
+  const txDateEl = document.getElementById('tx-date');
+  if (txDateEl) txDateEl.value = toDateTimeLocalValue(Date.now());
   document.getElementById('cust-tx-cancel-edit').classList.add('hidden');
 }
 
@@ -575,6 +608,8 @@ function confirmDeleteCustomerTx(txId) {
 function submitCustomerTx(isDebit) {
   const amount = parseFloat(document.getElementById('tx-amount').value);
   const desc = (document.getElementById('tx-desc').value || '').trim();
+  const txDateEl = document.getElementById('tx-date');
+  const dateMillis = txDateEl ? fromDateTimeLocalValue(txDateEl.value) : 0;
   if (!Number.isFinite(amount) || amount <= 0) {
     showToast('الرجاء إدخال مبلغ صحيح أكبر من صفر', 'error');
     return;
@@ -585,9 +620,17 @@ function submitCustomerTx(isDebit) {
     cancelEditCustomerTx();
   });
   if (editingCustomerTxId > 0) {
-    window.Android.updateCustomerTransaction(editingCustomerTxId, activeCustomerId, amount, isDebit, desc, reqId);
+    if (window.Android.updateCustomerTransactionWithDate) {
+      window.Android.updateCustomerTransactionWithDate(editingCustomerTxId, activeCustomerId, amount, isDebit, desc, dateMillis, reqId);
+    } else {
+      window.Android.updateCustomerTransaction(editingCustomerTxId, activeCustomerId, amount, isDebit, desc, reqId);
+    }
   } else {
-    window.Android.addCustomerTransaction(activeCustomerId, amount, isDebit, desc, reqId);
+    if (window.Android.addCustomerTransactionWithDate) {
+      window.Android.addCustomerTransactionWithDate(activeCustomerId, amount, isDebit, desc, dateMillis, reqId);
+    } else {
+      window.Android.addCustomerTransaction(activeCustomerId, amount, isDebit, desc, reqId);
+    }
   }
 }
 
@@ -647,7 +690,10 @@ function renderSuppliersList() {
         </div>
         <div class="list-item-actions">
           <span class="${cls}" style="font-weight:800; font-size:13.5px;">${balLabel} ${escapeHtml(appCurrency)}</span>
-          <span class="badge badge-blue">كشف المورد</span>
+          <div class="btn-row-compact">
+            <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openSupplierForm(${s.id})">تعديل</button>
+            <span class="badge badge-blue">كشف المورد</span>
+          </div>
         </div>
       </div>
     `;
@@ -658,16 +704,22 @@ function openSupplierForm(supplierId) {
   editingSupplierId = supplierId || 0;
   const isEdit = editingSupplierId > 0;
   document.getElementById('supplier-form-title').textContent = isEdit ? 'تعديل بيانات المورد' : 'إضافة مورد جديد';
+  const balLabel = document.getElementById('supp-form-balance-label');
+  if (balLabel) balLabel.textContent = isEdit ? 'الرصيد الحالي' : 'الرصيد الافتتاحي';
 
   const balInput = document.getElementById('supp-form-balance');
-  balInput.disabled = isEdit;
+  balInput.disabled = false;
 
-  if (isEdit && activeSupplierDetail && activeSupplierDetail.supplier.id === editingSupplierId) {
-    const s = activeSupplierDetail.supplier;
+  const fromDetail = (activeSupplierDetail && activeSupplierDetail.supplier.id === editingSupplierId)
+    ? activeSupplierDetail.supplier
+    : null;
+  const s = isEdit ? (fromDetail || suppliersData.find(x => x.id === editingSupplierId)) : null;
+
+  if (s) {
     document.getElementById('supp-form-name').value = s.name || '';
     document.getElementById('supp-form-company').value = s.company || '';
     document.getElementById('supp-form-phone').value = s.phone || '';
-    balInput.value = s.balance ? String(s.balance) : '0';
+    balInput.value = s.balance !== undefined && s.balance !== null ? String(s.balance) : '0';
   } else {
     document.getElementById('supp-form-name').value = '';
     document.getElementById('supp-form-company').value = '';
@@ -712,6 +764,8 @@ function openSupplierDetail(supplierId) {
   document.getElementById('supplier-delete-confirm').classList.add('hidden');
   document.getElementById('supp-tx-amount').value = '';
   document.getElementById('supp-tx-desc').value = '';
+  const txDateEl = document.getElementById('supp-tx-date');
+  if (txDateEl) txDateEl.value = toDateTimeLocalValue(Date.now());
   switchView('supplier-detail');
   if (window.Android) {
     window.Android.getSupplierDetail(supplierId);
@@ -815,10 +869,12 @@ function startEditSupplierTx(txId) {
   if (!tx) return;
   editingSupplierTxId = txId;
   const titleEl = document.getElementById('supp-tx-form-title');
-  titleEl.textContent = 'تعديل حركة المورد (اضغط له أو عليه للحفظ)';
+  titleEl.textContent = 'تعديل حركة المورد (عدّل المبلغ أو البيان أو التاريخ ثم اضغط له أو عليه)';
   titleEl.classList.remove('hidden');
   document.getElementById('supp-tx-amount').value = tx.amount;
   document.getElementById('supp-tx-desc').value = tx.description;
+  const txDateEl = document.getElementById('supp-tx-date');
+  if (txDateEl) txDateEl.value = toDateTimeLocalValue(tx.date);
   document.getElementById('supp-tx-cancel-edit').classList.remove('hidden');
 }
 
@@ -827,6 +883,8 @@ function cancelEditSupplierTx() {
   document.getElementById('supp-tx-form-title').classList.add('hidden');
   document.getElementById('supp-tx-amount').value = '';
   document.getElementById('supp-tx-desc').value = '';
+  const txDateEl = document.getElementById('supp-tx-date');
+  if (txDateEl) txDateEl.value = toDateTimeLocalValue(Date.now());
   document.getElementById('supp-tx-cancel-edit').classList.add('hidden');
 }
 
@@ -844,6 +902,8 @@ function confirmDeleteSupplierTx(txId) {
 function submitSupplierTx(isCredit) {
   const amount = parseFloat(document.getElementById('supp-tx-amount').value);
   const desc = (document.getElementById('supp-tx-desc').value || '').trim();
+  const txDateEl = document.getElementById('supp-tx-date');
+  const dateMillis = txDateEl ? fromDateTimeLocalValue(txDateEl.value) : 0;
   if (!Number.isFinite(amount) || amount <= 0) {
     showToast('الرجاء إدخال مبلغ صحيح أكبر من صفر', 'error');
     return;
@@ -851,9 +911,17 @@ function submitSupplierTx(isCredit) {
   if (!window.Android || !activeSupplierId) return;
   const reqId = nextReqId(() => cancelEditSupplierTx());
   if (editingSupplierTxId > 0) {
-    window.Android.updateSupplierTransaction(editingSupplierTxId, activeSupplierId, amount, isCredit, desc, reqId);
+    if (window.Android.updateSupplierTransactionWithDate) {
+      window.Android.updateSupplierTransactionWithDate(editingSupplierTxId, activeSupplierId, amount, isCredit, desc, dateMillis, reqId);
+    } else {
+      window.Android.updateSupplierTransaction(editingSupplierTxId, activeSupplierId, amount, isCredit, desc, reqId);
+    }
   } else {
-    window.Android.addSupplierTransaction(activeSupplierId, amount, isCredit, desc, reqId);
+    if (window.Android.addSupplierTransactionWithDate) {
+      window.Android.addSupplierTransactionWithDate(activeSupplierId, amount, isCredit, desc, dateMillis, reqId);
+    } else {
+      window.Android.addSupplierTransaction(activeSupplierId, amount, isCredit, desc, reqId);
+    }
   }
 }
 
@@ -1123,6 +1191,9 @@ function confirmDeleteInvoice(id) {
 function quickThermalPreview(id) {
   if (!window.Android) return;
   activePreviewInvoiceId = id;
+  verifiedPreviewSignature = '';
+  const btn = document.getElementById('btn-thermal-print-now');
+  if (btn) btn.disabled = true;
   window.Android.previewThermalInvoice(id, nextReqId());
 }
 
@@ -1142,19 +1213,25 @@ function openCreateInvoiceForParty(type, partyId) {
   openCreateInvoice(type, partyId);
 }
 
+function createBlankBatchRow() {
+  return { itemId: 0, itemName: '', qty: '1', unitPrice: '', total: '' };
+}
+
 function openCreateInvoice(presetType, presetPartyId) {
   editingInvoiceId = 0;
   invoiceDirty = true;
   cartItems = [];
+  batchEntryRows = [createBlankBatchRow(), createBlankBatchRow()];
   document.getElementById('invoice-screen-title').textContent = 'إصدار فاتورة جديدة';
   document.getElementById('btn-save-invoice').textContent = 'حفظ الفاتورة';
   document.getElementById('invoice-saved-badge').classList.add('hidden');
   document.getElementById('inv-type').value = presetType || 'CASH';
   document.getElementById('inv-paid').value = '';
-  document.getElementById('inv-item-qty').value = '';
-  document.getElementById('inv-item-price').value = '';
-  document.getElementById('inv-item-total').value = '';
+  const invDateEl = document.getElementById('inv-date');
+  if (invDateEl) invDateEl.value = toDateTimeLocalValue(Date.now());
   document.getElementById('quick-add-stock-box').classList.add('hidden');
+  const multiBox = document.getElementById('multi-stock-picker-box');
+  if (multiBox) multiBox.classList.add('hidden');
   document.getElementById('exchange-calc-box').classList.add('hidden');
 
   if (window.Android) {
@@ -1172,6 +1249,7 @@ function openCreateInvoice(presetType, presetPartyId) {
       updatePartyBalanceChip();
     }, 120);
   }
+  renderBatchEntryRows();
   renderCart();
   switchView('create-invoice');
 }
@@ -1190,6 +1268,7 @@ window.onNextInvoiceNumber = function (jsonStr) {
 function openEditInvoice(invoiceId) {
   editingInvoiceId = invoiceId;
   invoiceDirty = false;
+  batchEntryRows = [createBlankBatchRow(), createBlankBatchRow()];
   if (window.Android) {
     window.Android.getCustomers();
     window.Android.getSuppliers();
@@ -1210,6 +1289,8 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
     document.getElementById('invoice-saved-badge').classList.remove('hidden');
     document.getElementById('inv-number').value = inv.invoiceNumber;
     document.getElementById('inv-type').value = inv.type === 'SALE' ? 'CASH' : inv.type;
+    const invDateEl = document.getElementById('inv-date');
+    if (invDateEl) invDateEl.value = toDateTimeLocalValue(inv.date);
     onInvoiceTypeChange();
     document.getElementById('inv-party').value = String(inv.partyId || 0);
     document.getElementById('inv-paid').value = inv.paidAmount > 0 ? String(inv.paidAmount) : '';
@@ -1222,9 +1303,12 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
       totalPrice: i.totalPrice
     }));
 
+    batchEntryRows = [createBlankBatchRow()];
+    renderBatchEntryRows();
     populateItemDropdown();
     renderCart();
     updatePartyBalanceChip();
+    invoiceDirty = false;
     if (currentView !== 'create-invoice' && currentView !== 'thermal-preview') {
       switchView('create-invoice');
     }
@@ -1319,72 +1403,292 @@ function updatePartyBalanceChip() {
   }
 }
 
+function markInvoiceDirty() {
+  invoiceDirty = true;
+}
+
+function onInvoicePartyChanged() {
+  markInvoiceDirty();
+  updatePartyBalanceChip();
+}
+
 function populateItemDropdown() {
-  const select = document.getElementById('inv-item-select');
-  const prev = select.value;
-  const type = document.getElementById('inv-type').value;
-  let html = '<option value="">اختر الصنف...</option>';
-  inventoryData.forEach(i => {
-    const price = type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice;
-    html += `<option value="${i.id}" data-price="${price}" data-name="${escapeHtml(i.name)}">${escapeHtml(i.name)} (${i.quantity}) - ${fmtMoney(price)}</option>`;
-  });
-  select.innerHTML = html;
-  if (prev) select.value = prev;
+  const datalist = document.getElementById('inv-items-datalist');
+  if (datalist) {
+    datalist.innerHTML = inventoryData.map(i =>
+      `<option value="${escapeHtml(i.name)}">`
+    ).join('');
+  }
+  const multiBox = document.getElementById('multi-stock-picker-box');
+  if (multiBox && !multiBox.classList.contains('hidden')) {
+    renderMultiStockPicker();
+  }
 }
 
-function onItemSelect() {
-  const select = document.getElementById('inv-item-select');
-  const opt = select.options[select.selectedIndex];
-  if (opt && opt.dataset.price !== undefined) {
-    const price = parseFloat(opt.dataset.price) || 0;
-    document.getElementById('inv-item-price').value = price > 0 ? String(price) : '';
-    const rawQty = document.getElementById('inv-item-qty').value;
-    const qty = rawQty === '' ? 1 : (parseInt(rawQty, 10) || 1);
-    if (price > 0) {
-      document.getElementById('inv-item-total').value = Math.round(qty * price * 100) / 100;
+function renderBatchEntryRows() {
+  const container = document.getElementById('invoice-batch-rows');
+  if (!container) return;
+  if (!batchEntryRows || batchEntryRows.length === 0) {
+    batchEntryRows = [createBlankBatchRow()];
+  }
+  container.innerHTML = batchEntryRows.map((row, idx) => `
+    <div class="ruled-input-row grid-invoice-batch-row">
+      <input type="number" id="batch-total-${idx}" class="ruled-cell cell-num" placeholder="الإجمالي" step="0.01" min="0"
+        value="${escapeHtml(row.total)}" oninput="onBatchRowTotalInput(${idx}, this.value)">
+      <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="1" min="1"
+        value="${escapeHtml(row.qty)}" oninput="onBatchRowQtyInput(${idx}, this.value)">
+      <input type="text" id="batch-name-${idx}" class="ruled-cell" list="inv-items-datalist"
+        placeholder="اسم الصنف (${idx + 1})..." value="${escapeHtml(row.itemName)}"
+        oninput="onBatchRowNameInput(${idx}, this.value)" onchange="onBatchRowNameInput(${idx}, this.value)">
+      <input type="number" id="batch-price-${idx}" class="ruled-cell cell-num cell-auto" placeholder="آلي" step="0.01" min="0"
+        value="${escapeHtml(row.unitPrice)}" oninput="onBatchRowUnitPriceInput(${idx}, this.value)">
+      <button type="button" class="row-remove-cell" onclick="removeBatchRow(${idx})" aria-label="حذف صف">×</button>
+    </div>
+  `).join('');
+}
+
+function addBatchRow() {
+  batchEntryRows.push(createBlankBatchRow());
+  renderBatchEntryRows();
+  const lastIdx = batchEntryRows.length - 1;
+  setTimeout(() => {
+    const el = document.getElementById(`batch-name-${lastIdx}`);
+    if (el) el.focus();
+  }, 40);
+}
+
+function removeBatchRow(idx) {
+  if (batchEntryRows.length <= 1) {
+    batchEntryRows[0] = createBlankBatchRow();
+  } else {
+    batchEntryRows.splice(idx, 1);
+  }
+  renderBatchEntryRows();
+}
+
+function onBatchRowNameInput(idx, val) {
+  const row = batchEntryRows[idx];
+  if (!row) return;
+  row.itemName = val;
+  const clean = (val || '').trim().toLowerCase();
+  const matched = clean ? inventoryData.find(x => (x.name || '').trim().toLowerCase() === clean) : null;
+  const invType = document.getElementById('inv-type').value;
+  if (matched) {
+    row.itemId = matched.id;
+    const suggestedPrice = invType === 'PURCHASE' ? matched.purchasePrice : matched.sellingPrice;
+    if (suggestedPrice > 0) {
+      row.unitPrice = String(suggestedPrice);
+      const qty = parseInt(row.qty, 10) || 1;
+      row.total = String(Math.round(qty * suggestedPrice * 100) / 100);
+      const priceEl = document.getElementById(`batch-price-${idx}`);
+      const totalEl = document.getElementById(`batch-total-${idx}`);
+      if (priceEl) priceEl.value = row.unitPrice;
+      if (totalEl) totalEl.value = row.total;
     }
+  } else {
+    row.itemId = 0;
   }
 }
 
-function onTotalDirectInput() {
-  const rawQty = document.getElementById('inv-item-qty').value;
-  const qty = rawQty === '' ? 1 : (parseInt(rawQty, 10) || 1);
-  const total = parseFloat(document.getElementById('inv-item-total').value);
-  if (qty > 0 && Number.isFinite(total) && total >= 0) {
-    document.getElementById('inv-item-price').value = Math.round((total / qty) * 10000) / 10000;
-  } else if (document.getElementById('inv-item-total').value === '') {
-    document.getElementById('inv-item-price').value = '';
+function onBatchRowTotalInput(idx, val) {
+  const row = batchEntryRows[idx];
+  if (!row) return;
+  row.total = val;
+  const qty = parseInt(row.qty, 10) || 1;
+  const total = parseFloat(val);
+  if (val === '') {
+    row.unitPrice = '';
+  } else if (qty > 0 && Number.isFinite(total) && total >= 0) {
+    row.unitPrice = String(Math.round((total / qty) * 10000) / 10000);
   }
+  const priceEl = document.getElementById(`batch-price-${idx}`);
+  if (priceEl) priceEl.value = row.unitPrice;
 }
 
-function onQtyOrTotalChange() {
-  const rawQty = document.getElementById('inv-item-qty').value;
-  const qty = rawQty === '' ? 1 : parseInt(rawQty, 10);
+function onBatchRowQtyInput(idx, val) {
+  const row = batchEntryRows[idx];
+  if (!row) return;
+  row.qty = val;
+  const qty = val === '' ? 1 : parseInt(val, 10);
   if (!Number.isFinite(qty) || qty <= 0) return;
 
-  const totalRaw = document.getElementById('inv-item-total').value;
-  const priceRaw = document.getElementById('inv-item-price').value;
-
-  if (totalRaw !== '') {
-    const total = parseFloat(totalRaw);
+  if (row.total !== '') {
+    const total = parseFloat(row.total);
     if (Number.isFinite(total) && total >= 0) {
-      document.getElementById('inv-item-price').value = Math.round((total / qty) * 10000) / 10000;
+      row.unitPrice = String(Math.round((total / qty) * 10000) / 10000);
+      const priceEl = document.getElementById(`batch-price-${idx}`);
+      if (priceEl) priceEl.value = row.unitPrice;
     }
-  } else if (priceRaw !== '') {
-    const price = parseFloat(priceRaw);
+  } else if (row.unitPrice !== '') {
+    const price = parseFloat(row.unitPrice);
     if (Number.isFinite(price) && price >= 0) {
-      document.getElementById('inv-item-total').value = Math.round(qty * price * 100) / 100;
+      row.total = String(Math.round(qty * price * 100) / 100);
+      const totalEl = document.getElementById(`batch-total-${idx}`);
+      if (totalEl) totalEl.value = row.total;
     }
   }
 }
 
-function onUnitPriceManualInput() {
-  const rawQty = document.getElementById('inv-item-qty').value;
-  const qty = rawQty === '' ? 1 : (parseInt(rawQty, 10) || 1);
-  const price = parseFloat(document.getElementById('inv-item-price').value);
-  if (qty > 0 && Number.isFinite(price) && price >= 0) {
-    document.getElementById('inv-item-total').value = Math.round(qty * price * 100) / 100;
+function onBatchRowUnitPriceInput(idx, val) {
+  const row = batchEntryRows[idx];
+  if (!row) return;
+  row.unitPrice = val;
+  const qty = parseInt(row.qty, 10) || 1;
+  const price = parseFloat(val);
+  if (val === '') {
+    row.total = '';
+  } else if (qty > 0 && Number.isFinite(price) && price >= 0) {
+    row.total = String(Math.round(qty * price * 100) / 100);
   }
+  const totalEl = document.getElementById(`batch-total-${idx}`);
+  if (totalEl) totalEl.value = row.total;
+}
+
+function appendItemLineToCart(itemId, itemName, qty, unitPrice, totalPrice) {
+  const normalizedUnit = Math.round((totalPrice / qty) * 10000) / 10000;
+  const cleanName = itemName.trim();
+  const existingIdx = cartItems.findIndex(x =>
+    x.itemId === itemId &&
+    x.itemName.trim().toLowerCase() === cleanName.toLowerCase() &&
+    Math.abs(x.unitPrice - normalizedUnit) < 0.0001
+  );
+  if (existingIdx >= 0) {
+    cartItems[existingIdx].quantity += qty;
+    cartItems[existingIdx].totalPrice = Math.round(cartItems[existingIdx].quantity * normalizedUnit * 100) / 100;
+  } else {
+    cartItems.push({
+      itemId: itemId || 0,
+      itemName: cleanName,
+      quantity: qty,
+      unitPrice: normalizedUnit,
+      totalPrice: Math.round(totalPrice * 100) / 100
+    });
+  }
+}
+
+function addBatchItemsToCart() {
+  const pendingLines = [];
+  let errorMsg = '';
+
+  for (let i = 0; i < batchEntryRows.length; i++) {
+    const r = batchEntryRows[i];
+    const name = (r.itemName || '').trim();
+    const hasPriceOrTotal = r.total !== '' || r.unitPrice !== '';
+    if (!name && !hasPriceOrTotal) continue;
+
+    if (!name) {
+      errorMsg = `أدخل اسم الصنف في الصف ${i + 1}`;
+      break;
+    }
+    const qty = r.qty === '' ? 1 : parseInt(r.qty, 10);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      errorMsg = `الكمية غير صحيحة في الصف ${i + 1}`;
+      break;
+    }
+    const directTotal = parseFloat(r.total);
+    let unitPrice = parseFloat(r.unitPrice);
+    if ((!Number.isFinite(unitPrice) || unitPrice < 0) && Number.isFinite(directTotal) && directTotal >= 0) {
+      unitPrice = directTotal / qty;
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      errorMsg = `أدخل الإجمالي أو السعر للصنف "${name}"`;
+      break;
+    }
+
+    const totalPrice = (Number.isFinite(directTotal) && directTotal >= 0)
+      ? Math.round(directTotal * 100) / 100
+      : Math.round(qty * unitPrice * 100) / 100;
+
+    // Resolve matching inventory item ID if user typed an inventory item name
+    const matched = inventoryData.find(x => (x.name || '').trim().toLowerCase() === name.toLowerCase());
+    const resolvedId = r.itemId > 0 ? r.itemId : (matched ? matched.id : 0);
+
+    pendingLines.push({ itemId: resolvedId, itemName: name, qty, unitPrice, totalPrice });
+  }
+
+  if (errorMsg) {
+    showToast(errorMsg, 'error');
+    return;
+  }
+  if (pendingLines.length === 0) {
+    showToast('أدخل صنفاً واحداً أو أكثر ثم اضغط إضافة', 'error');
+    return;
+  }
+
+  pendingLines.forEach(line => {
+    appendItemLineToCart(line.itemId, line.itemName, line.qty, line.unitPrice, line.totalPrice);
+  });
+
+  invoiceDirty = true;
+  batchEntryRows = [createBlankBatchRow(), createBlankBatchRow()];
+  renderBatchEntryRows();
+
+  if (document.getElementById('inv-type').value === 'CASH') {
+    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
+    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
+  }
+  renderCart();
+  showToast(`تمت إضافة ${pendingLines.length} ${pendingLines.length === 1 ? 'صنف' : 'أصناف'} إلى الفاتورة ✓`, 'success');
+}
+
+function addCartItem() {
+  addBatchItemsToCart();
+}
+
+function toggleMultiStockPicker(forceState) {
+  const box = document.getElementById('multi-stock-picker-box');
+  if (!box) return;
+  const nextShow = typeof forceState === 'boolean' ? forceState : box.classList.contains('hidden');
+  box.classList.toggle('hidden', !nextShow);
+  if (nextShow) renderMultiStockPicker();
+}
+
+function renderMultiStockPicker() {
+  const container = document.getElementById('multi-stock-list');
+  if (!container) return;
+  const query = (document.getElementById('multi-stock-search').value || '').trim().toLowerCase();
+  const type = document.getElementById('inv-type').value;
+  const list = inventoryData.filter(i => !query || (i.name || '').toLowerCase().includes(query));
+
+  if (list.length === 0) {
+    container.innerHTML = '<div class="muted-text" style="text-align:center;">لا توجد أصناف في المخزن بعد</div>';
+    return;
+  }
+  container.innerHTML = list.map(i => {
+    const price = type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice;
+    return `
+      <div class="multi-stock-item">
+        <input type="checkbox" class="multi-stock-check" data-id="${i.id}" data-name="${escapeHtml(i.name)}" data-price="${price}">
+        <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(i.name)} <small class="muted-text">(${i.quantity})</small></span>
+        <input type="number" class="qty-inline-input" id="mstock-qty-${i.id}" min="1" value="1">
+        <span class="cell-num" style="font-weight:700; color:var(--dark-header);">${fmtMoney(price)}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function applyMultiStockSelection() {
+  const checks = Array.from(document.querySelectorAll('.multi-stock-check:checked'));
+  if (checks.length === 0) {
+    showToast('حدد صنفاً واحداً على الأقل من القائمة', 'error');
+    return;
+  }
+  checks.forEach(cb => {
+    const itemId = parseInt(cb.dataset.id, 10) || 0;
+    const itemName = cb.dataset.name || '';
+    const unitPrice = parseFloat(cb.dataset.price) || 0;
+    const qtyEl = document.getElementById(`mstock-qty-${itemId}`);
+    const qty = qtyEl ? (parseInt(qtyEl.value, 10) || 1) : 1;
+    appendItemLineToCart(itemId, itemName, qty, unitPrice, Math.round(qty * unitPrice * 100) / 100);
+  });
+  invoiceDirty = true;
+  if (document.getElementById('inv-type').value === 'CASH') {
+    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
+    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
+  }
+  toggleMultiStockPicker(false);
+  renderCart();
+  showToast(`تمت إضافة ${checks.length} أصناف دفعة واحدة ✓`, 'success');
 }
 
 function toggleQuickAddStock(forceState) {
@@ -1410,10 +1714,15 @@ function submitQuickAddStock() {
     document.getElementById('quick-stock-buy').value = '';
     document.getElementById('quick-stock-sell').value = '';
     setTimeout(() => {
-      if (created && created.id) {
-        const sel = document.getElementById('inv-item-select');
-        sel.value = String(created.id);
-        onItemSelect();
+      if (created && created.id && batchEntryRows.length > 0) {
+        const idx = 0;
+        const type = document.getElementById('inv-type').value;
+        const suggested = type === 'PURCHASE' ? created.purchasePrice : created.sellingPrice;
+        batchEntryRows[idx].itemId = created.id;
+        batchEntryRows[idx].itemName = created.name;
+        batchEntryRows[idx].unitPrice = suggested > 0 ? String(suggested) : '';
+        batchEntryRows[idx].total = suggested > 0 ? String(suggested) : '';
+        renderBatchEntryRows();
       }
     }, 150);
   });
@@ -1426,59 +1735,6 @@ function submitQuickAddStock() {
     purchasePrice,
     sellingPrice
   }), reqId);
-}
-
-function addCartItem() {
-  const select = document.getElementById('inv-item-select');
-  const itemId = parseInt(select.value, 10);
-  if (!itemId) {
-    showToast('اختر صنفاً من المخزن أو أضفه أولاً', 'error');
-    return;
-  }
-  const opt = select.options[select.selectedIndex];
-  const itemName = opt.dataset.name || opt.text.split('(')[0].trim();
-
-  const rawQty = document.getElementById('inv-item-qty').value;
-  const qty = rawQty === '' ? 1 : parseInt(rawQty, 10);
-  if (!Number.isFinite(qty) || qty <= 0) {
-    showToast('أدخل كمية صحيحة أكبر من صفر', 'error');
-    return;
-  }
-
-  let unitPrice = parseFloat(document.getElementById('inv-item-price').value);
-  const directTotal = parseFloat(document.getElementById('inv-item-total').value);
-  if ((!Number.isFinite(unitPrice) || unitPrice < 0) && Number.isFinite(directTotal) && directTotal >= 0) {
-    unitPrice = directTotal / qty;
-  }
-  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-    showToast('أدخل الإجمالي أو سعر الوحدة', 'error');
-    return;
-  }
-
-  const totalPrice = Number.isFinite(directTotal) && directTotal >= 0
-    ? Math.round(directTotal * 100) / 100
-    : Math.round(qty * unitPrice * 100) / 100;
-  const normalizedUnit = Math.round((totalPrice / qty) * 10000) / 10000;
-
-  const existingIdx = cartItems.findIndex(x => x.itemId === itemId && Math.abs(x.unitPrice - normalizedUnit) < 0.0001);
-  if (existingIdx >= 0) {
-    cartItems[existingIdx].quantity += qty;
-    cartItems[existingIdx].totalPrice = Math.round(cartItems[existingIdx].quantity * normalizedUnit * 100) / 100;
-  } else {
-    cartItems.push({ itemId, itemName, quantity: qty, unitPrice: normalizedUnit, totalPrice });
-  }
-
-  invoiceDirty = true;
-  document.getElementById('inv-item-qty').value = '';
-  document.getElementById('inv-item-total').value = '';
-  document.getElementById('inv-item-price').value = '';
-  select.value = '';
-
-  if (document.getElementById('inv-type').value === 'CASH') {
-    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
-    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
-  }
-  renderCart();
 }
 
 function updateCartQty(idx, newQtyVal) {
@@ -1508,6 +1764,29 @@ function updateCartLineTotal(idx, newTotalVal) {
   renderCart();
 }
 
+function updateCartUnitPrice(idx, newPriceVal) {
+  const price = parseFloat(newPriceVal);
+  if (!Number.isFinite(price) || price < 0) return;
+  const qty = cartItems[idx].quantity || 1;
+  cartItems[idx].unitPrice = Math.round(price * 10000) / 10000;
+  cartItems[idx].totalPrice = Math.round(qty * price * 100) / 100;
+  invoiceDirty = true;
+  if (document.getElementById('inv-type').value === 'CASH') {
+    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
+    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
+  }
+  renderCart();
+}
+
+function updateCartItemName(idx, newNameVal) {
+  const clean = (newNameVal || '').trim();
+  if (!clean) return;
+  const matched = inventoryData.find(x => (x.name || '').trim().toLowerCase() === clean.toLowerCase());
+  cartItems[idx].itemName = clean;
+  cartItems[idx].itemId = matched ? matched.id : 0;
+  invoiceDirty = true;
+}
+
 function removeCartItem(index) {
   cartItems.splice(index, 1);
   invoiceDirty = true;
@@ -1525,14 +1804,14 @@ function renderCart() {
   const tbody = document.getElementById('cart-items-tbody');
   document.getElementById('inv-items-count-badge').textContent = `${cartItems.length} أصناف`;
   if (cartItems.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-secondary);">أضف أصنافاً من الصف المسطر بالأعلى</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-secondary);">أضف صنفاً أو عدة أصناف من الجدول المسطر بالأعلى</td></tr>';
   } else {
     tbody.innerHTML = cartItems.map((item, idx) => `
       <tr>
         <td><input type="number" class="qty-inline-input" style="width:66px; color:var(--success-green);" min="0" step="0.01" value="${item.totalPrice}" onchange="updateCartLineTotal(${idx}, this.value)"></td>
         <td><input type="number" class="qty-inline-input" min="1" value="${item.quantity}" onchange="updateCartQty(${idx}, this.value)"></td>
-        <td><strong>${escapeHtml(item.itemName)}</strong></td>
-        <td style="font-weight:700; color:var(--dark-header); background:#F5F8FF;">${fmtMoney(item.unitPrice)}</td>
+        <td><input type="text" class="inline-name-input" value="${escapeHtml(item.itemName)}" onchange="updateCartItemName(${idx}, this.value)"></td>
+        <td><input type="number" class="qty-inline-input" style="width:60px; color:var(--dark-header); background:#F5F8FF;" min="0" step="0.01" value="${item.unitPrice}" onchange="updateCartUnitPrice(${idx}, this.value)"></td>
         <td><button type="button" class="tbl-action-btn del" onclick="removeCartItem(${idx})">حذف</button></td>
       </tr>
     `).join('');
@@ -1635,6 +1914,8 @@ function saveInvoiceAction(followUpAction) {
     : 'عميل نقدي';
   const rawPaid = document.getElementById('inv-paid').value;
   const paid = rawPaid === '' ? 0 : (parseFloat(rawPaid) || 0);
+  const invDateEl = document.getElementById('inv-date');
+  const dateMillis = invDateEl ? fromDateTimeLocalValue(invDateEl.value) : 0;
 
   if (!number) {
     showToast('أدخل رقم الفاتورة', 'error');
@@ -1656,7 +1937,8 @@ function saveInvoiceAction(followUpAction) {
     partyId,
     partyName,
     items: cartItems,
-    paidAmount: paid
+    paidAmount: paid,
+    date: dateMillis
   };
 
   const reqId = nextReqId((data) => {
@@ -1677,6 +1959,9 @@ function runInvoiceFollowUp(invoiceId, action) {
   if (!window.Android || !invoiceId) return;
   if (action === 'THERMAL_PREVIEW') {
     activePreviewInvoiceId = invoiceId;
+    verifiedPreviewSignature = '';
+    const btn = document.getElementById('btn-thermal-print-now');
+    if (btn) btn.disabled = true;
     window.Android.previewThermalInvoice(invoiceId, nextReqId());
   } else if (action === 'PDF') {
     window.Android.generateAndOpenPdf(invoiceId, nextReqId());
@@ -1691,22 +1976,44 @@ window.onThermalPreviewData = function (jsonStr) {
   try {
     const data = JSON.parse(jsonStr);
     activePreviewInvoiceId = data.invoiceId;
+    verifiedPreviewSignature = data.previewSignature || String(data.invoiceId);
     document.getElementById('thermal-preview-title').textContent = `معاينة فاتورة #${data.invoiceNumber}`;
     document.getElementById('thermal-width-badge').textContent = `${data.widthMm} مم`;
     document.getElementById('thermal-printer-status-bar').textContent = data.connected
       ? `متصل بالطابعة: ${data.printerName || 'طابعة بلوتوث'}`
       : 'تنبيه: الطابعة الحرارية غير متصلة حالياً — يمكنك الاتصال بها من الإعدادات';
     document.getElementById('thermal-preview-img').src = 'data:image/png;base64,' + data.imageBase64;
+    const p58 = document.getElementById('preview-width-58');
+    const p80 = document.getElementById('preview-width-80');
+    if (p58) p58.className = data.widthMm === 58 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
+    if (p80) p80.className = data.widthMm === 80 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
+    const printBtn = document.getElementById('btn-thermal-print-now');
+    if (printBtn) printBtn.disabled = false;
     switchView('thermal-preview');
   } catch (e) {
     console.error(e);
   }
 };
 
+function switchPreviewWidth(widthMm) {
+  if (!window.Android || !activePreviewInvoiceId) return;
+  verifiedPreviewSignature = '';
+  const printBtn = document.getElementById('btn-thermal-print-now');
+  if (printBtn) printBtn.disabled = true;
+  const reqId = nextReqId(() => {
+    window.Android.previewThermalInvoice(activePreviewInvoiceId, nextReqId());
+  });
+  window.Android.setPrinterWidth(widthMm, reqId);
+}
+
 function printActivePreviewInvoice() {
-  if (window.Android && activePreviewInvoiceId) {
-    window.Android.printInvoice(activePreviewInvoiceId, nextReqId());
+  if (!window.Android || !activePreviewInvoiceId) return;
+  if (!verifiedPreviewSignature) {
+    showToast('المعاينة إلزامية قبل الطباعة — جاري تحديث المعاينة', 'error');
+    window.Android.previewThermalInvoice(activePreviewInvoiceId, nextReqId());
+    return;
   }
+  window.Android.printInvoice(activePreviewInvoiceId, nextReqId());
 }
 
 function shareActivePreviewImage() {

@@ -75,13 +75,31 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
 
       if (id > 0) {
         val current = customerDao.getCustomerById(id) ?: error("العميل غير موجود")
+        val diff = initialBalance - current.balance
         customerDao.updateCustomer(
           current.copy(
             name = cleanName,
             phone = phone.trim(),
-            address = address.trim()
+            address = address.trim(),
+            balance = initialBalance
           )
         )
+        if (abs(diff) > 0.001) {
+          val existingTxs = transactionDao.getTransactionsForPartySnapshot("CUSTOMER", id)
+          if (existingTxs.isNotEmpty()) {
+            transactionDao.insertTransaction(
+              TransactionEntity(
+                partyType = "CUSTOMER",
+                partyId = id,
+                partyName = cleanName,
+                type = if (diff > 0) "DEBIT (عليه)" else "CREDIT (له)",
+                amount = abs(diff),
+                description = "تعديل رصيد يدوي",
+                date = System.currentTimeMillis()
+              )
+            )
+          }
+        }
         id
       } else {
         customerDao.insertCustomer(
@@ -138,7 +156,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     txId: Long,
     amount: Double,
     isDebit: Boolean,
-    description: String
+    description: String,
+    dateMillis: Long? = null
   ) {
     require(amount.isFinite() && amount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
     database.withTransaction {
@@ -151,7 +170,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         oldTx.copy(
           type = if (isDebit) "DEBIT (عليه)" else "CREDIT (له)",
           amount = amount,
-          description = description.trim().ifBlank { oldTx.description }
+          description = description.trim().ifBlank { oldTx.description },
+          date = dateMillis?.takeIf { it > 0L } ?: oldTx.date
         )
       )
     }
@@ -194,13 +214,31 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
 
       if (id > 0) {
         val current = supplierDao.getSupplierById(id) ?: error("المورد غير موجود")
+        val diff = initialBalance - current.balance
         supplierDao.updateSupplier(
           current.copy(
             name = cleanName,
             phone = phone.trim(),
-            company = company.trim()
+            company = company.trim(),
+            balance = initialBalance
           )
         )
+        if (abs(diff) > 0.001) {
+          val existingTxs = transactionDao.getTransactionsForPartySnapshot("SUPPLIER", id)
+          if (existingTxs.isNotEmpty()) {
+            transactionDao.insertTransaction(
+              TransactionEntity(
+                partyType = "SUPPLIER",
+                partyId = id,
+                partyName = cleanName,
+                type = if (diff > 0) "CREDIT (له)" else "DEBIT (عليه)",
+                amount = abs(diff),
+                description = "تعديل رصيد يدوي",
+                date = System.currentTimeMillis()
+              )
+            )
+          }
+        }
         id
       } else {
         supplierDao.insertSupplier(
@@ -258,7 +296,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     txId: Long,
     amount: Double,
     isCredit: Boolean,
-    description: String
+    description: String,
+    dateMillis: Long? = null
   ) {
     require(amount.isFinite() && amount > 0) { "أدخل مبلغاً صحيحاً أكبر من صفر" }
     database.withTransaction {
@@ -271,7 +310,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         oldTx.copy(
           type = if (isCredit) "CREDIT (له)" else "DEBIT (عليه)",
           amount = amount,
-          description = description.trim().ifBlank { oldTx.description }
+          description = description.trim().ifBlank { oldTx.description },
+          date = dateMillis?.takeIf { it > 0L } ?: oldTx.date
         )
       )
     }
@@ -353,7 +393,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     partyId: Long,
     partyName: String,
     rawItems: List<InvoiceItemEntity>,
-    paidAmount: Double
+    paidAmount: Double,
+    invoiceDateMillis: Long? = null
   ): Long {
     val normalizedItems = rawItems.map {
       val computedTotal = it.quantity.toDouble() * it.unitPrice
@@ -382,19 +423,20 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         check(customerDao.getCustomerById(partyId) != null) { "العميل المحدد غير موجود" }
       }
 
-      val now = System.currentTimeMillis()
       val targetInvoiceId: Long
+      val effectiveDate: Long
 
       if (invoiceId > 0) {
         val previous = invoiceDao.getInvoiceWithItems(invoiceId) ?: error("الفاتورة المطلوب تعديلها غير موجودة")
         reverseInvoiceEffects(previous)
 
+        effectiveDate = invoiceDateMillis?.takeIf { it > 0L } ?: previous.invoice.date
         val updated = previous.invoice.copy(
           invoiceNumber = cleanNumber,
           type = normalizedType,
           partyId = partyId,
           partyName = cleanPartyName,
-          date = now,
+          date = effectiveDate,
           totalAmount = validation.totalAmount,
           paidAmount = paidAmount,
           remainingAmount = validation.remainingAmount,
@@ -404,12 +446,13 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         invoiceDao.deleteItemsForInvoice(invoiceId)
         targetInvoiceId = invoiceId
       } else {
+        effectiveDate = invoiceDateMillis?.takeIf { it > 0L } ?: System.currentTimeMillis()
         val created = InvoiceEntity(
           invoiceNumber = cleanNumber,
           type = normalizedType,
           partyId = partyId,
           partyName = cleanPartyName,
-          date = now,
+          date = effectiveDate,
           totalAmount = validation.totalAmount,
           paidAmount = paidAmount,
           remainingAmount = validation.remainingAmount,
@@ -422,8 +465,10 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
 
       val newStockSign = if (normalizedType == "PURCHASE") 1 else -1
       for (item in normalizedItems) {
-        check(inventoryDao.adjustQuantity(item.itemId, newStockSign * item.quantity) == 1) {
-          "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+        if (item.itemId > 0L) {
+          check(inventoryDao.adjustQuantity(item.itemId, newStockSign * item.quantity) == 1) {
+            "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+          }
         }
       }
 
@@ -438,7 +483,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
               type = "CREDIT (له)",
               amount = validation.remainingAmount,
               description = "فاتورة مشتريات رقم $cleanNumber",
-              date = now
+              date = effectiveDate
             )
           )
         } else {
@@ -451,7 +496,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
               type = "DEBIT (عليه)",
               amount = validation.remainingAmount,
               description = "فاتورة مبيعات رقم $cleanNumber",
-              date = now
+              date = effectiveDate
             )
           )
         }
@@ -474,8 +519,10 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val oldInvoice = previous.invoice
     val oldStockSign = if (oldInvoice.type == "PURCHASE") -1 else 1
     for (oldItem in previous.items) {
-      check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldItem.quantity) == 1) {
-        "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}"
+      if (oldItem.itemId > 0L) {
+        check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldItem.quantity) == 1) {
+          "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}"
+        }
       }
     }
     if (oldInvoice.remainingAmount > 0.000001 && oldInvoice.partyId > 0) {

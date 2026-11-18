@@ -147,7 +147,7 @@
 
           <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
             <span>العنوان / التفاصيل</span>
-            <span>الرصيد الافتتاحي</span>
+            <span id="cust-form-balance-label">الرصيد الافتتاحي</span>
           </div>
           <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="cust-form-address" class="ruled-cell" placeholder="الحي / الشارع...">
@@ -175,15 +175,17 @@
           </div>
         </div>
 
-        <!-- Pinned Compact Ruled Entry Row (Right-to-Left: المبلغ -> البيان/التفاصيل) -->
+        <!-- Pinned Compact Ruled Entry Row (Right-to-Left: المبلغ | التفاصيل | التاريخ) -->
         <div class="card compact-card entry-dock-card">
           <div class="ruled-grid-labels grid-tx-entry">
-            <span>المبلغ (الإجمالي)</span>
+            <span>المبلغ</span>
             <span>التفاصيل / البيان</span>
+            <span>التاريخ والوقت</span>
           </div>
           <div class="ruled-input-row grid-tx-entry">
             <input type="number" id="tx-amount" class="ruled-cell cell-num" placeholder="المبلغ" step="0.01" min="0">
             <input type="text" id="tx-desc" class="ruled-cell" placeholder="بيان الحركة / سداد / دين...">
+            <input type="datetime-local" id="tx-date" class="ruled-cell cell-num">
           </div>
           <div class="tx-action-grid">
             <button type="button" class="btn btn-danger btn-compact" onclick="submitCustomerTx(true)">عليه (- دين)</button>
@@ -260,7 +262,7 @@
 
           <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
             <span>الشركة / التفاصيل</span>
-            <span>الرصيد الافتتاحي</span>
+            <span id="supp-form-balance-label">الرصيد الافتتاحي</span>
           </div>
           <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="supp-form-company" class="ruled-cell" placeholder="اسم الشركة أو الموزع...">
@@ -290,12 +292,14 @@
 
         <div class="card compact-card entry-dock-card">
           <div class="ruled-grid-labels grid-tx-entry">
-            <span>المبلغ (الإجمالي)</span>
+            <span>المبلغ</span>
             <span>التفاصيل / البيان</span>
+            <span>التاريخ والوقت</span>
           </div>
           <div class="ruled-input-row grid-tx-entry">
             <input type="number" id="supp-tx-amount" class="ruled-cell cell-num" placeholder="المبلغ" step="0.01" min="0">
             <input type="text" id="supp-tx-desc" class="ruled-cell" placeholder="بيان حركة المورد / سداد...">
+            <input type="datetime-local" id="supp-tx-date" class="ruled-cell cell-num">
           </div>
           <div class="tx-action-grid">
             <button type="button" class="btn btn-danger btn-compact" onclick="submitSupplierTx(true)">له (+ مستحق)</button>
@@ -415,30 +419,46 @@
 
     <!-- 7. Create / Edit Invoice Screen -->
     <section id="view-create-invoice" class="view">
-      <!-- Sticky Top Ruled Input Bar (Right-to-Left: الإجمالي | الكمية | التفاصيل | سعر الواحدة آلي) -->
+      <!-- Sticky Top Ruled Multi-Row Input Bar (Right-to-Left: الإجمالي | الكمية | التفاصيل | سعر الواحدة آلي) -->
       <div class="sticky-top-panel invoice-top-sticky">
         <div class="section-head" style="margin-bottom:4px;">
           <h2 id="invoice-screen-title">إصدار فاتورة جديدة</h2>
           <div class="btn-row-compact">
             <span id="invoice-saved-badge" class="badge badge-green hidden">محفوظة ✓</span>
-            <button type="button" class="link-btn" onclick="toggleQuickAddStock()">+ صنف مخزن جديد</button>
+            <button type="button" class="link-btn" onclick="toggleMultiStockPicker()">اختيار متعدد</button>
+            <button type="button" class="link-btn" onclick="toggleQuickAddStock()">+ للمخزن</button>
           </div>
         </div>
 
+        <datalist id="inv-items-datalist"></datalist>
+
         <div class="card compact-card entry-dock-card">
-          <div class="ruled-grid-labels grid-invoice-entry">
+          <div class="ruled-grid-labels grid-invoice-batch-row">
             <span>الإجمالي</span>
             <span>الكمية</span>
-            <span>التفاصيل (الصنف)</span>
+            <span>التفاصيل (اختر أو اكتب)</span>
             <span>سعر الواحدة</span>
+            <span></span>
           </div>
-          <div class="ruled-input-row grid-invoice-entry">
-            <input type="number" id="inv-item-total" class="ruled-cell cell-num" placeholder="الإجمالي" step="0.01" min="0" oninput="onTotalDirectInput()">
-            <input type="number" id="inv-item-qty" class="ruled-cell cell-num" placeholder="الكمية" min="1" oninput="onQtyOrTotalChange()">
-            <select id="inv-item-select" class="ruled-cell cell-select" onchange="onItemSelect()">
-              <option value="">اختر الصنف...</option>
-            </select>
-            <input type="number" id="inv-item-price" class="ruled-cell cell-num cell-auto" step="0.01" min="0" placeholder="سعر آلي" oninput="onUnitPriceManualInput()">
+
+          <div id="invoice-batch-rows" class="batch-rows-stack"></div>
+
+          <div class="btn-row" style="margin-top:5px;">
+            <button type="button" class="btn btn-success btn-compact" style="flex:2;" onclick="addBatchItemsToCart()">+ إضافة الأصناف إلى الفاتورة</button>
+            <button type="button" class="btn btn-outline-primary btn-compact" style="flex:1;" onclick="addBatchRow()">+ صف إضافي</button>
+          </div>
+
+          <!-- Collapsible Multi-Item Stock Picker -->
+          <div id="multi-stock-picker-box" class="inline-subbox hidden">
+            <div class="card-title-row" style="margin-bottom:2px;">
+              <strong style="font-size:12px;">تحديد عدة أصناف من المخزن دفعة واحدة</strong>
+              <button type="button" class="link-btn" onclick="toggleMultiStockPicker(false)">إغلاق</button>
+            </div>
+            <div class="ruled-input-row ruled-search-row" style="margin-bottom:4px;">
+              <input type="text" id="multi-stock-search" class="ruled-cell" placeholder="بحث في أصناف المخزن..." oninput="renderMultiStockPicker()">
+            </div>
+            <div id="multi-stock-list" class="multi-stock-list"></div>
+            <button type="button" class="btn btn-primary btn-sm" style="margin-top:6px; width:100%;" onclick="applyMultiStockSelection()">إضافة الأصناف المحددة للفاتورة</button>
           </div>
 
           <!-- Inline Quick-Add Inventory Sub-Form -->
@@ -461,24 +481,24 @@
             </div>
           </div>
 
-          <!-- Compact 1-Line Invoice Meta Row (RTL: الطرف | نوع الفاتورة | الرقم) -->
-          <div class="ruled-grid-labels grid-inv-meta" style="margin-top:6px;">
+          <!-- Compact Invoice Meta Row (RTL: الطرف | النوع | الرقم | التاريخ) -->
+          <div class="ruled-grid-labels grid-inv-meta-4" style="margin-top:6px;">
             <span>العميل / المورد</span>
             <span>نوع الفاتورة</span>
             <span>رقم الفاتورة</span>
+            <span>التاريخ</span>
           </div>
-          <div class="ruled-input-row grid-inv-meta">
-            <select id="inv-party" class="ruled-cell cell-select" onchange="updatePartyBalanceChip()"></select>
+          <div class="ruled-input-row grid-inv-meta-4">
+            <select id="inv-party" class="ruled-cell cell-select" onchange="onInvoicePartyChanged()"></select>
             <select id="inv-type" class="ruled-cell cell-select" onchange="onInvoiceTypeChange()">
               <option value="CASH">بيع نقدي</option>
               <option value="CREDIT">بيع آجل</option>
               <option value="PURCHASE">شراء</option>
             </select>
-            <input type="text" id="inv-number" class="ruled-cell cell-num" placeholder="رقم الفاتورة">
+            <input type="text" id="inv-number" class="ruled-cell cell-num" placeholder="رقم الفاتورة" oninput="markInvoiceDirty()">
+            <input type="datetime-local" id="inv-date" class="ruled-cell cell-num" onchange="markInvoiceDirty()">
           </div>
           <label id="party-label" class="hidden">العميل</label>
-
-          <button type="button" class="btn btn-success btn-compact" style="margin-top:6px;" onclick="addCartItem()">+ إضافة الصنف إلى الفاتورة</button>
           <div id="inv-quick-party-chips" class="quick-chips"></div>
         </div>
       </div>
@@ -556,19 +576,26 @@
       </div>
     </section>
 
-    <!-- 7b. Thermal Receipt Preview Screen -->
+    <!-- 7b. Mandatory Thermal Receipt Preview Screen -->
     <section id="view-thermal-preview" class="view">
       <div class="section-head">
         <h2 id="thermal-preview-title">معاينة الطباعة الحرارية</h2>
         <span id="thermal-width-badge" class="badge badge-blue">58 مم</span>
       </div>
       <div class="card compact-card">
+        <div class="info-pill" style="background:#E8F0FE; color:var(--dark-header); margin-top:0; margin-bottom:5px;">
+          معاينة إلزامية قبل الطباعة البلوتوث — تأكد من وضوح الإيصال واستغلال الورق
+        </div>
         <div id="thermal-printer-status-bar" class="info-pill">جاري التحقق من حالة الطابعة...</div>
+        <div class="btn-row" style="margin-top:6px;">
+          <button type="button" id="preview-width-58" class="btn btn-outline btn-compact" onclick="switchPreviewWidth(58)">ورق 58 مم</button>
+          <button type="button" id="preview-width-80" class="btn btn-outline btn-compact" onclick="switchPreviewWidth(80)">ورق 80 مم</button>
+        </div>
         <div class="paper-receipt-frame">
           <img id="thermal-preview-img" src="" alt="معاينة الإيصال الحراري">
         </div>
         <div class="btn-row" style="margin-top: 8px;">
-          <button type="button" class="btn btn-success btn-compact" onclick="printActivePreviewInvoice()">طباعة حرارية الآن</button>
+          <button type="button" id="btn-thermal-print-now" class="btn btn-success btn-compact" onclick="printActivePreviewInvoice()" disabled>طباعة حرارية الآن</button>
           <button type="button" class="btn btn-whatsapp btn-compact" onclick="shareActivePreviewImage()">مشاركة صورة واتساب</button>
         </div>
         <div class="btn-row">

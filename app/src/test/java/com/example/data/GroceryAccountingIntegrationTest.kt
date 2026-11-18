@@ -162,4 +162,104 @@ class GroceryAccountingIntegrationTest {
     }
     appEngine.resetAllDatabase()
   }
+
+  @Test
+  fun multiItemInvoiceWithCustomAndInventoryItemsSupportsEditingAndBackupRestore() = runBlocking {
+    val appDb = AppDatabase.getDatabase(context)
+    val appEngine = GroceryAccountingEngine(appDb)
+    appEngine.resetAllDatabase()
+
+    val custId = appEngine.saveCustomer(0L, "سليمان البرعسي", "777000222", "ذمار", 0.0)
+    val stockId = appEngine.saveInventoryItem(0L, "دقيق ابيض", "حبوب", 15, 3000.0, 3500.0, "كيس")
+
+    val customDate = 1763312400000L
+    val invoiceId = appEngine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "INV-MULTI-1",
+      type = "CREDIT",
+      partyId = custId,
+      partyName = "سليمان البرعسي",
+      rawItems = listOf(
+        InvoiceItemEntity(0L, 0L, stockId, "دقيق ابيض", 2, 3500.0, 7000.0),
+        InvoiceItemEntity(0L, 0L, 0L, "بضاعة خارجية سريعة", 3, 500.0, 1500.0)
+      ),
+      paidAmount = 1000.0,
+      invoiceDateMillis = customDate
+    )
+
+    assertEquals(13, appDb.inventoryDao().getItemById(stockId)!!.quantity)
+    assertEquals(7500.0, appDb.customerDao().getCustomerById(custId)!!.balance, 0.01)
+    assertEquals(customDate, appDb.invoiceDao().getInvoiceWithItems(invoiceId)!!.invoice.date)
+
+    // Edit multi-item invoice: change date, update inventory qty to 1, add another custom item
+    val editedDate = 1763398800000L
+    appEngine.saveInvoice(
+      invoiceId = invoiceId,
+      invoiceNumber = "INV-MULTI-1",
+      type = "CREDIT",
+      partyId = custId,
+      partyName = "سليمان البرعسي",
+      rawItems = listOf(
+        InvoiceItemEntity(0L, 0L, stockId, "دقيق ابيض", 1, 3500.0, 3500.0),
+        InvoiceItemEntity(0L, 0L, 0L, "بضاعة خارجية سريعة", 3, 500.0, 1500.0),
+        InvoiceItemEntity(0L, 0L, 0L, "خدمة نقل وتوصيل", 1, 1000.0, 1000.0)
+      ),
+      paidAmount = 1500.0,
+      invoiceDateMillis = editedDate
+    )
+
+    assertEquals(14, appDb.inventoryDao().getItemById(stockId)!!.quantity)
+    assertEquals(4500.0, appDb.customerDao().getCustomerById(custId)!!.balance, 0.01)
+    val editedWithItems = appDb.invoiceDao().getInvoiceWithItems(invoiceId)!!
+    assertEquals(editedDate, editedWithItems.invoice.date)
+    assertEquals(3, editedWithItems.items.size)
+
+    // Backup & Restore must succeed even when invoice contains itemId == 0L lines
+    val backupFile = File(context.cacheDir, "multi_custom_backup.json")
+    val uri = Uri.fromFile(backupFile)
+    val exportMsg = BackupRestoreManager.exportToUri(context, uri)
+    assertTrue(exportMsg.contains("بنجاح"))
+
+    appEngine.resetAllDatabase()
+    val restoreMsg = BackupRestoreManager.restoreFromUri(context, uri)
+    assertTrue(restoreMsg.contains("1 فاتورة"))
+    val restoredItems = appDb.invoiceDao().getInvoiceWithItems(invoiceId)!!.items
+    assertEquals(3, restoredItems.size)
+    assertTrue(restoredItems.any { it.itemId == 0L && it.itemName == "خدمة نقل وتوصيل" })
+    appEngine.resetAllDatabase()
+  }
+
+  @Test
+  fun allowsEditingCustomerAndSupplierBalancesAndTransactionDates() = runBlocking {
+    // 1. Editing balance before any transactions updates opening balance cleanly
+    val custId = engine.saveCustomer(0L, "عميل اختبار", "771234000", "صنعاء", 1000.0)
+    engine.saveCustomer(custId, "عميل اختبار", "771234000", "صنعاء", 1500.0)
+    assertEquals(1500.0, db.customerDao().getCustomerById(custId)!!.balance, 0.01)
+
+    // 2. Editing balance when transactions exist appends a manual balance adjustment entry
+    val txDate = 1763312400000L
+    val txId = engine.addCustomerTransaction(custId, 500.0, isDebit = true, description = "أغراض", dateMillis = txDate)
+    assertEquals(2000.0, db.customerDao().getCustomerById(custId)!!.balance, 0.01)
+
+    engine.saveCustomer(custId, "عميل اختبار", "771234000", "صنعاء", 2600.0)
+    val detailAfterBalEdit = engine.getCustomerDetail(custId)!!
+    assertEquals(2600.0, detailAfterBalEdit.customer.balance, 0.01)
+    assertTrue(detailAfterBalEdit.transactions.any { it.transaction.description == "تعديل رصيد يدوي" && it.transaction.amount == 600.0 })
+
+    // 3. Edit customer transaction date + amount
+    val newTxDate = 1763399900000L
+    engine.updateCustomerTransaction(txId, 700.0, isDebit = true, description = "أغراض معدلة", dateMillis = newTxDate)
+    assertEquals(newTxDate, db.transactionDao().getTransactionById(txId)!!.date)
+    assertEquals(2800.0, db.customerDao().getCustomerById(custId)!!.balance, 0.01)
+
+    // 4. Supplier balance editing + transaction date editing
+    val suppId = engine.saveSupplier(0L, "مورد اختبار", "770009999", "الشركة", 2000.0)
+    val stxId = engine.addSupplierTransaction(suppId, 1000.0, isCredit = true, description = "دفعة بضاعة", dateMillis = txDate)
+    engine.saveSupplier(suppId, "مورد اختبار", "770009999", "الشركة", 3500.0)
+    assertEquals(3500.0, db.supplierDao().getSupplierById(suppId)!!.balance, 0.01)
+
+    engine.updateSupplierTransaction(stxId, 1200.0, isCredit = true, description = "بضاعة معدلة", dateMillis = newTxDate)
+    assertEquals(newTxDate, db.transactionDao().getTransactionById(stxId)!!.date)
+    assertEquals(3700.0, db.supplierDao().getSupplierById(suppId)!!.balance, 0.01)
+  }
 }

@@ -96,14 +96,37 @@ class PdfGeneratorAndImageTest {
 
     val bmp58 = BluetoothPrinterManager.buildInvoiceReceiptBitmap(context, invoice, items, 27500.0, paperWidthMm = 58)
     assertEquals(384, bmp58.width)
+    assertTrue(bmp58.height in 250..1200)
+    val escPosBytes = BluetoothPrinterManager.convertBitmapToEscPos(bmp58)
+    assertTrue(escPosBytes.size > 500)
     bmp58.recycle()
 
     val bmp80 = BluetoothPrinterManager.buildInvoiceReceiptBitmap(context, invoice, items, 27500.0, paperWidthMm = 80)
     assertEquals(576, bmp80.width)
+    assertTrue(bmp80.height in 250..1400)
     bmp80.recycle()
 
     val previewB64 = BluetoothPrinterManager.renderInvoicePreviewBase64(context, invoice, items, 27500.0, paperWidthMm = 58)
     val rawPng = Base64.decode(previewB64, Base64.DEFAULT)
     assertTrue(rawPng.size > 100)
+  }
+
+  @Test
+  fun loadsAmiriFontAndRendersCompactThermalPreview() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val regular = ArabicFontHelper.getRegular(context)
+    val bold = ArabicFontHelper.getBold(context)
+    assertNotNull(regular)
+    assertNotNull(bold)
+
+    val preview80 = BluetoothPrinterManager.renderInvoicePreviewBase64(
+      context = context,
+      invoice = sampleInvoice(),
+      items = sampleItems(2),
+      partyBalanceAfter = 27500.0,
+      paperWidthMm = 80
+    )
+    val decoded = Base64.decode(preview80, Base64.DEFAULT)
+    assertTrue(decoded.size > 200)
   }
 }

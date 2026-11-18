@@ -67,4 +67,22 @@ class GroceryViewModelValidationTest {
     assertEquals("PAID", result.status)
     assertEquals(0.0, result.remainingAmount, 0.000001)
   }
+
+  @Test
+  fun allowsCustomUnlistedItemAndRejectsNegativeItemId() {
+    val customLine = InvoiceItemEntity(
+      invoiceId = 0L,
+      itemId = 0L,
+      itemName = "صنف حر غير مسجل بالمخزن",
+      quantity = 3,
+      unitPrice = 250.0,
+      totalPrice = 750.0
+    )
+    val customRes = GroceryViewModel.validateInvoiceInput("INV-FREE", "CASH", listOf(customLine), 750.0)
+    assertTrue(customRes.isValid)
+    assertEquals(750.0, customRes.totalAmount, 0.000001)
+
+    val invalidLine = customLine.copy(itemId = -1L)
+    assertFalse(GroceryViewModel.validateInvoiceInput("INV-NEG", "CASH", listOf(invalidLine), 0.0).isValid)
+  }
 }

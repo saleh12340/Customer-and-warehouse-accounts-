@@ -96,39 +96,45 @@ object BluetoothPrinterManager {
   fun getConnectionInfo(): Pair<String, String> =
     if (isConnected()) connectedDeviceName to connectedDeviceAddress else "" to ""
 
-  fun printReceiptText(title: String, details: List<String>, footer: String, paperWidthMm: Int = 58): Boolean {
+  fun printReceiptText(
+    title: String,
+    details: List<String>,
+    footer: String,
+    paperWidthMm: Int = 58,
+    context: Context? = null
+  ): Boolean {
     val receipt = buildString {
       appendLine("بقالة العزي للمواد الغذائية")
       appendLine(title)
-      appendLine("================================")
+      appendLine("────────────────────────────")
       details.forEach { appendLine(it) }
-      appendLine("--------------------------------")
+      appendLine("────────────────────────────")
       appendLine(footer)
-      appendLine("شكراً لزيارتكم")
+      appendLine("شكراً لتعاملكم معنا")
     }
-    return printReceiptBitmap(receipt, paperWidthMm)
+    return printReceiptBitmap(receipt, paperWidthMm, context)
   }
 
-  fun printReceiptBitmap(receiptText: String, paperWidthMm: Int = 58): Boolean {
+  fun printReceiptBitmap(receiptText: String, paperWidthMm: Int = 58, context: Context? = null): Boolean {
     val width = if (paperWidthMm == 80) 576 else 384
     val fontSize = if (paperWidthMm == 80) 24f else 20f
     val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
       color = Color.BLACK
       textSize = fontSize
-      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      typeface = ArabicFontHelper.getBold(context)
     }
 
-    val staticLayout = StaticLayout.Builder.obtain(receiptText, 0, receiptText.length, textPaint, width - 16)
+    val staticLayout = StaticLayout.Builder.obtain(receiptText, 0, receiptText.length, textPaint, width - 8)
       .setAlignment(Layout.Alignment.ALIGN_CENTER)
       .setTextDirection(TextDirectionHeuristics.RTL)
       .setIncludePad(false)
-      .setLineSpacing(0f, 1.25f)
+      .setLineSpacing(0f, 1.15f)
       .build()
 
-    val bitmap = Bitmap.createBitmap(width, staticLayout.height + 36, Bitmap.Config.ARGB_8888)
+    val bitmap = Bitmap.createBitmap(width, staticLayout.height + 16, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(Color.WHITE)
-    canvas.translate(8f, 16f)
+    canvas.translate(4f, 6f)
     staticLayout.draw(canvas)
 
     return sendBitmapToPrinter(bitmap).first
@@ -144,109 +150,171 @@ object BluetoothPrinterManager {
     val settings = StorePreferences.getSettings(context)
     val width = if (paperWidthMm == 80) 576 else 384
     val isWide = width >= 576
-    val pad = 8f
+    // Minimal horizontal margins to maximize paper utilization
+    val pad = if (isWide) 4f else 2f
     val contentW = width - pad * 2
     val currency = settings.currency
-    val dateStr = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US).format(Date(invoice.date))
+    val dateStr = SimpleDateFormat("yy/MM/dd HH:mm", Locale.US).format(Date(invoice.date))
 
-    val titleSize = if (isWide) 28f else 22f
-    val bodySize = if (isWide) 22f else 17f
-    val smallSize = if (isWide) 19f else 15f
+    // Amiri font sizes tuned for HD thermal crispness at 203 DPI
+    val titleSize = if (isWide) 30f else 23f
+    val totalBoxSize = if (isWide) 25f else 19.5f
+    val boldSize = if (isWide) 21f else 16.5f
+    val bodySize = if (isWide) 19.5f else 15.5f
+    val metaSize = if (isWide) 18.5f else 14.5f
 
-    val titlePaint = textPaint(titleSize, bold = true)
-    val boldPaint = textPaint(bodySize, bold = true)
-    val bodyPaint = textPaint(smallSize, bold = false)
-    val linePaint = Paint().apply {
+    val titlePaint = textPaint(context, titleSize, bold = true)
+    val totalBoxPaint = textPaint(context, totalBoxSize, bold = true)
+    val boldPaint = textPaint(context, boldSize, bold = true)
+    val bodyPaint = textPaint(context, bodySize, bold = false)
+    val metaPaint = textPaint(context, metaSize, bold = true)
+    val headerTextPaint = textPaint(context, boldSize, bold = true, color = Color.WHITE)
+
+    val heavyLinePaint = Paint().apply {
       color = Color.BLACK
       strokeWidth = 2f
+      style = Paint.Style.STROKE
+    }
+    val rulePaint = Paint().apply {
+      color = Color.BLACK
+      strokeWidth = 1.4f
+      style = Paint.Style.STROKE
+    }
+    val solidBlackPaint = Paint().apply {
+      color = Color.BLACK
+      style = Paint.Style.FILL
     }
 
-    // Column proportions (RTL: right-to-left => الصنف | الكمية | السعر | الإجمالي)
-    val totalW = if (isWide) 115f else 82f
-    val priceW = if (isWide) 105f else 74f
-    val qtyW = if (isWide) 75f else 54f
+    // RTL Table columns (right-to-left): الصنف | الكمية | السعر | الإجمالي
+    val totalW = if (isWide) 114f else 78f
+    val priceW = if (isWide) 98f else 66f
+    val qtyW = if (isWide) 60f else 42f
     val nameW = contentW - totalW - priceW - qtyW
 
-    val measuredItems = items.map { item ->
-      val nameLayout = buildRtlLayout(item.itemName, bodyPaint, nameW.toInt() - 4, Layout.Alignment.ALIGN_NORMAL, maxLines = 3)
-      val rowH = maxOf(if (isWide) 36 else 30, nameLayout.height + 10)
-      Triple(item, nameLayout, rowH)
-    }
-
-    val headerEst = if (isWide) 165 else 140
-    val thH = if (isWide) 36 else 30
-    val rowsH = measuredItems.sumOf { it.third }
-    val balanceH = if (partyBalanceAfter != null && invoice.partyId > 0) (if (isWide) 72 else 60) else 0
-    val footerEst = (if (isWide) 170 else 145) + balanceH
-    val totalHeight = headerEst + thH + rowsH + footerEst
-
-    val bitmap = Bitmap.createBitmap(width, totalHeight.coerceAtLeast(240), Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    canvas.drawColor(Color.WHITE)
-
-    var y = 10f
-    y += drawRtl(canvas, settings.storeName, pad, y, contentW, titlePaint, Layout.Alignment.ALIGN_CENTER) + 4f
-    if (settings.storePhone.isNotBlank()) {
-      y += drawRtl(canvas, "جوال: ${settings.storePhone}", pad, y, contentW, bodyPaint, Layout.Alignment.ALIGN_CENTER) + 4f
-    }
-    canvas.drawLine(pad, y, width - pad, y, linePaint)
-    y += 8f
-
-    val typeAr = InvoiceImageGenerator.invoiceTypeArabic(invoice.type)
-    y += drawRtl(canvas, "$typeAr  -  رقم: ${invoice.invoiceNumber}", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
-    y += drawRtl(canvas, "التاريخ: $dateStr", pad, y, contentW, bodyPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
-    val partyLabel = if (invoice.type.equals("PURCHASE", true)) "المورد" else "العميل"
-    y += drawRtl(canvas, "$partyLabel: ${invoice.partyName}", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 8f
-
-    canvas.drawLine(pad, y, width - pad, y, linePaint)
-    y += 6f
-
-    // RTL Column positions
     val colTotalX = pad
     val colPriceX = colTotalX + totalW
     val colQtyX = colPriceX + priceW
     val colNameX = colQtyX + qtyW
 
-    drawRtl(canvas, "الصنف", colNameX, y, nameW, boldPaint, Layout.Alignment.ALIGN_NORMAL)
-    drawRtl(canvas, "الكمية", colQtyX, y, qtyW, boldPaint, Layout.Alignment.ALIGN_CENTER)
-    drawRtl(canvas, "السعر", colPriceX, y, priceW, boldPaint, Layout.Alignment.ALIGN_CENTER)
-    drawRtl(canvas, "الإجمالي", colTotalX, y, totalW, boldPaint, Layout.Alignment.ALIGN_OPPOSITE)
-    y += thH
-    canvas.drawLine(pad, y, width - pad, y, linePaint)
-    y += 6f
+    val measuredItems = items.map { item ->
+      val nameLayout = buildRtlLayout(
+        text = item.itemName,
+        paint = boldPaint,
+        width = (nameW - 6f).toInt(),
+        alignment = Layout.Alignment.ALIGN_NORMAL,
+        maxLines = 3
+      )
+      val rowH = maxOf(if (isWide) 32 else 25, nameLayout.height + 6)
+      Triple(item, nameLayout, rowH)
+    }
+
+    val storeContact = listOfNotNull(
+      settings.storePhone.takeIf { it.isNotBlank() }?.let { "ج: $it" },
+      settings.storeAddress.takeIf { it.isNotBlank() }
+    ).joinToString(" | ")
+
+    val typeAr = InvoiceImageGenerator.invoiceTypeArabic(invoice.type)
+    val partyLabel = if (invoice.type.equals("PURCHASE", true)) "المورد" else "العميل"
+
+    val headerEst = (if (isWide) 136 else 112) + if (storeContact.isNotBlank()) 24 else 0
+    val thH = if (isWide) 34 else 27
+    val rowsH = measuredItems.sumOf { it.third }
+    val balanceH = if (partyBalanceAfter != null && invoice.partyId > 0) (if (isWide) 36 else 30) else 0
+    val footerEst = (if (isWide) 132 else 110) + balanceH
+    val estHeight = (headerEst + thH + rowsH + footerEst).coerceAtLeast(180)
+
+    val bitmap = Bitmap.createBitmap(width, estHeight, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    canvas.drawColor(Color.WHITE)
+
+    var y = 3f
+    // Store Header
+    y += drawRtl(canvas, settings.storeName, pad, y, contentW, titlePaint, Layout.Alignment.ALIGN_CENTER) + 1f
+    if (storeContact.isNotBlank()) {
+      y += drawRtl(canvas, storeContact, pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER) + 2f
+    }
+    canvas.drawLine(pad, y, width - pad, y, heavyLinePaint)
+    y += 3f
+
+    // Compact 2-Column Metadata Row (Right: Type + Number | Left: Date) to save paper height
+    val rightMetaW = contentW * 0.56f
+    val leftMetaW = contentW - rightMetaW
+    val hRight = drawRtl(canvas, "$typeAr #${invoice.invoiceNumber}", pad + leftMetaW, y, rightMetaW, boldPaint, Layout.Alignment.ALIGN_NORMAL)
+    val hLeft = drawRtl(canvas, dateStr, pad, y, leftMetaW, metaPaint, Layout.Alignment.ALIGN_OPPOSITE)
+    y += maxOf(hRight, hLeft) + 2f
+
+    // Party Line
+    y += drawRtl(canvas, "$partyLabel: ${invoice.partyName}", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+
+    // Table Start (HD Inverted Black Header Bar + Sharp Vertical/Horizontal Grid)
+    val tableTop = y
+    canvas.drawRect(pad, tableTop, width - pad, tableTop + thH, solidBlackPaint)
+    val thTextY = tableTop + (if (isWide) 4f else 2f)
+    drawRtl(canvas, "الصنف", colNameX + 3f, thTextY, nameW - 6f, headerTextPaint, Layout.Alignment.ALIGN_NORMAL)
+    drawRtl(canvas, "عدد", colQtyX + 2f, thTextY, qtyW - 4f, headerTextPaint, Layout.Alignment.ALIGN_CENTER)
+    drawRtl(canvas, "سعر", colPriceX + 2f, thTextY, priceW - 4f, headerTextPaint, Layout.Alignment.ALIGN_CENTER)
+    drawRtl(canvas, "إجمالي", colTotalX + 3f, thTextY, totalW - 6f, headerTextPaint, Layout.Alignment.ALIGN_CENTER)
+    y = tableTop + thH
 
     measuredItems.forEach { (item, nameLayout, rowH) ->
+      val textY = y + 3f
       canvas.save()
-      canvas.translate(colNameX, y)
+      canvas.translate(colNameX + 3f, textY)
       nameLayout.draw(canvas)
       canvas.restore()
 
-      drawRtl(canvas, item.quantity.toString(), colQtyX, y, qtyW, bodyPaint, Layout.Alignment.ALIGN_CENTER)
-      drawRtl(canvas, formatNum(item.unitPrice), colPriceX, y, priceW, bodyPaint, Layout.Alignment.ALIGN_CENTER)
-      drawRtl(canvas, formatNum(item.totalPrice), colTotalX, y, totalW, boldPaint, Layout.Alignment.ALIGN_OPPOSITE)
+      drawRtl(canvas, item.quantity.toString(), colQtyX + 2f, textY, qtyW - 4f, boldPaint, Layout.Alignment.ALIGN_CENTER)
+      drawRtl(canvas, formatNum(item.unitPrice), colPriceX + 2f, textY, priceW - 4f, bodyPaint, Layout.Alignment.ALIGN_CENTER)
+      drawRtl(canvas, formatNum(item.totalPrice), colTotalX + 3f, textY, totalW - 6f, boldPaint, Layout.Alignment.ALIGN_CENTER)
+
       y += rowH
+      canvas.drawLine(pad, y, width - pad, y, rulePaint)
     }
 
-    canvas.drawLine(pad, y, width - pad, y, linePaint)
-    y += 8f
+    // Draw crisp outer box & column dividers for table body
+    canvas.drawRect(pad, tableTop, width - pad, y, heavyLinePaint)
+    canvas.drawLine(colNameX, tableTop, colNameX, y, rulePaint)
+    canvas.drawLine(colQtyX, tableTop, colQtyX, y, rulePaint)
+    canvas.drawLine(colPriceX, tableTop, colPriceX, y, rulePaint)
 
-    y += drawRtl(canvas, "الإجمالي: ${formatNum(invoice.totalAmount)} $currency", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
-    y += drawRtl(canvas, "المدفوع: ${formatNum(invoice.paidAmount)} $currency", pad, y, contentW, bodyPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
-    y += drawRtl(canvas, "المتبقي من الفاتورة: ${formatNum(invoice.remainingAmount)} $currency", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 6f
+    y += 5f
+
+    // Highlighted Total Box
+    val totalLayoutH = drawRtl(
+      canvas = canvas,
+      text = "الإجمالي: ${formatNum(invoice.totalAmount)} $currency",
+      x = pad + 4f,
+      y = y + 3f,
+      width = contentW - 8f,
+      paint = totalBoxPaint,
+      alignment = Layout.Alignment.ALIGN_CENTER
+    )
+    val boxBottom = y + totalLayoutH + 6f
+    canvas.drawRect(pad, y, width - pad, boxBottom, heavyLinePaint)
+    y = boxBottom + 4f
+
+    // Compact 2-Column Paid & Remaining Row (saves vertical paper)
+    val halfW = contentW / 2f
+    val paidH = drawRtl(canvas, "الواصل: ${formatNum(invoice.paidAmount)}", pad + halfW, y, halfW, boldPaint, Layout.Alignment.ALIGN_NORMAL)
+    val remH = drawRtl(canvas, "المتبقي: ${formatNum(invoice.remainingAmount)}", pad, y, halfW, boldPaint, Layout.Alignment.ALIGN_OPPOSITE)
+    y += maxOf(paidH, remH) + 3f
 
     if (partyBalanceAfter != null && invoice.partyId > 0) {
       val prevBalance = partyBalanceAfter - invoice.remainingAmount
-      y += drawRtl(canvas, "الرصيد السابق: ${formatNum(prevBalance)} $currency", pad, y, contentW, bodyPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
-      val balLabel = if (partyBalanceAfter > 0) "عليه ${formatNum(partyBalanceAfter)}" else if (partyBalanceAfter < 0) "له ${formatNum(-partyBalanceAfter)}" else "0"
-      y += drawRtl(canvas, "رصيد الحساب النهائي: $balLabel $currency", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 6f
+      val balLabel = if (partyBalanceAfter > 0) "عليه ${formatNum(partyBalanceAfter)}"
+      else if (partyBalanceAfter < 0) "له ${formatNum(-partyBalanceAfter)}"
+      else "خالص 0"
+      val prevH = drawRtl(canvas, "السابق: ${formatNum(prevBalance)}", pad + halfW, y, halfW, metaPaint, Layout.Alignment.ALIGN_NORMAL)
+      val curH = drawRtl(canvas, "الحساب: $balLabel", pad, y, halfW, metaPaint, Layout.Alignment.ALIGN_OPPOSITE)
+      y += maxOf(prevH, curH) + 3f
     }
 
-    canvas.drawLine(pad, y, width - pad, y, linePaint)
-    y += 8f
-    drawRtl(canvas, "شكراً لتعاملكم معنا", pad, y, contentW, bodyPaint, Layout.Alignment.ALIGN_CENTER)
+    canvas.drawLine(pad, y, width - pad, y, rulePaint)
+    y += 3f
+    y += drawRtl(canvas, "شكراً لتعاملكم معنا • ${settings.storeName}", pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER)
 
-    // Crop unused bottom space cleanly to avoid excessive blank paper feed
-    val finalH = (y + 34).toInt().coerceIn(200, bitmap.height)
+    // Tight crop with minimal trailing whitespace to avoid wasting thermal paper
+    val finalH = (y + 10f).toInt().coerceIn(140, bitmap.height)
     return if (finalH < bitmap.height) {
       Bitmap.createBitmap(bitmap, 0, 0, width, finalH).also { bitmap.recycle() }
     } else {
@@ -321,7 +389,7 @@ object BluetoothPrinterManager {
         out.write(bytes, offset, len)
         offset += len
       }
-      out.write(byteArrayOf(0x1B, 0x64, 0x03)) // ESC d 3 feed lines
+      out.write(byteArrayOf(0x1B, 0x64, 0x02)) // Minimal 2-line paper feed
       out.write(byteArrayOf(0x1D, 0x56, 0x42, 0x00)) // GS V B 0 partial cut (ignored safely if no cutter)
       out.flush()
       true to "تمت طباعة الإيصال بنجاح"
@@ -332,11 +400,11 @@ object BluetoothPrinterManager {
     }
   }
 
-  private fun textPaint(size: Float, bold: Boolean = false) =
+  private fun textPaint(context: Context?, size: Float, bold: Boolean = false, color: Int = Color.BLACK) =
     TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-      color = Color.BLACK
+      this.color = color
       textSize = size
-      typeface = if (bold) Typeface.create(Typeface.DEFAULT, Typeface.BOLD) else Typeface.DEFAULT
+      typeface = if (bold) ArabicFontHelper.getBold(context) else ArabicFontHelper.getRegular(context)
     }
 
   private fun buildRtlLayout(
@@ -379,12 +447,14 @@ object BluetoothPrinterManager {
     }
   }
 
-  private fun convertBitmapToEscPos(bitmap: Bitmap): ByteArray {
+  internal fun convertBitmapToEscPos(bitmap: Bitmap): ByteArray {
     val width = bitmap.width
     val height = bitmap.height
     val bytesWidth = (width + 7) / 8
-    val command = ByteArrayOutputStream(8 + bytesWidth * height)
+    val pixels = IntArray(width * height)
+    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
+    val command = ByteArrayOutputStream(8 + bytesWidth * height)
     // GS v 0 raster bit image
     command.write(0x1D)
     command.write(0x76)
@@ -396,17 +466,19 @@ object BluetoothPrinterManager {
     command.write((height shr 8) and 0xFF)
 
     for (y in 0 until height) {
+      val rowOffset = y * width
       for (xBytes in 0 until bytesWidth) {
         var byteVal = 0
         for (bit in 0..7) {
           val x = xBytes * 8 + bit
           if (x < width) {
-            val pixel = bitmap.getPixel(x, y)
-            val red = Color.red(pixel)
-            val green = Color.green(pixel)
-            val blue = Color.blue(pixel)
-            val luminance = (0.299 * red + 0.587 * green + 0.114 * blue).toInt()
-            if (luminance < 160) {
+            val pixel = pixels[rowOffset + x]
+            val red = (pixel shr 16) and 0xFF
+            val green = (pixel shr 8) and 0xFF
+            val blue = pixel and 0xFF
+            // High-definition contrast threshold tuned for Amiri strokes on 203 DPI thermal paper
+            val luminance = (299 * red + 587 * green + 114 * blue) / 1000
+            if (luminance < 192) {
               byteVal = byteVal or (1 shl (7 - bit))
             }
           }

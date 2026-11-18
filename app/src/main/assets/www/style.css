@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Amiri';
+  src: url('fonts/amiri.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --primary-blue: #1E6FEB;
   --dark-header: #0F4C9C;
@@ -12,6 +20,7 @@
   --text-secondary: #64748B;
   --border-color: #CBD5E1;
   --rule-border: #B3C2D8;
+  --app-font: 'Amiri', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 * {
@@ -19,7 +28,7 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: var(--app-font);
 }
 
 html, body {
@@ -340,15 +349,23 @@ select.ruled-cell,
 
 /* Exact Grid Layouts (Right-to-Left order) */
 .grid-invoice-entry {
-  grid-template-columns: 1.05fr 0.7fr 1.65fr 1fr;
+  grid-template-columns: 1.05fr 0.65fr 1.65fr 0.95fr;
+}
+
+.grid-invoice-batch-row {
+  grid-template-columns: 1.02fr 0.62fr 1.68fr 0.92fr 30px;
 }
 
 .grid-inv-meta {
   grid-template-columns: 1.45fr 0.95fr 0.9fr;
 }
 
+.grid-inv-meta-4 {
+  grid-template-columns: 1.35fr 0.85fr 0.9fr 1.15fr;
+}
+
 .grid-tx-entry {
-  grid-template-columns: 1fr 1.8fr;
+  grid-template-columns: 0.9fr 1.45fr 1.15fr;
 }
 
 .grid-cust-name-first {
@@ -381,6 +398,66 @@ select.ruled-cell,
 
 .grid-filter-2 {
   grid-template-columns: 1.55fr 1fr;
+}
+
+.batch-rows-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row-remove-cell {
+  border: none;
+  background: #FFF1F2;
+  color: var(--danger-red);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+}
+
+.multi-stock-list {
+  max-height: 190px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.multi-stock-item {
+  display: grid;
+  grid-template-columns: 24px 1.6fr 64px 74px;
+  align-items: center;
+  gap: 5px;
+  background: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+
+.multi-stock-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-blue);
+}
+
+.inline-name-input {
+  width: 100%;
+  min-width: 72px;
+  height: 30px;
+  padding: 2px 6px;
+  border: 1px solid var(--rule-border);
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 12.5px;
+  text-align: right;
+  background: #FFFFFF;
+  color: var(--text-primary);
 }
 
 /* Fixed Bottom Navigation */
