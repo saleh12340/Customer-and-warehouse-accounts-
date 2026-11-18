@@ -12,6 +12,7 @@ import android.text.StaticLayout
 import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import androidx.core.content.FileProvider
+import com.example.data.FinancialReportSnapshot
 import com.example.data.InvoiceEntity
 import com.example.data.InvoiceItemEntity
 import java.io.File
@@ -158,6 +159,16 @@ object PdfGenerator {
       }
 
       FileOutputStream(output).use { stream -> document.writeTo(stream) }
+      runCatching {
+        AppDownloadsFolderManager.saveFile(
+          context = context,
+          subfolder = AppDownloadsFolderManager.SUB_PDFS,
+          sourceFile = output,
+          displayName = output.name,
+          mimeType = "application/pdf",
+          overwriteExisting = true
+        )
+      }
       output
     } catch (error: Exception) {
       error.printStackTrace()
@@ -198,6 +209,112 @@ object PdfGenerator {
       val layout = buildRtlLayout(item.itemName, bodyPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 4)
       val rowH = maxOf(28f, layout.height + 14f)
       MeasuredItem(item, layout, rowH)
+    }
+  }
+
+  fun generateFinancialReportPdf(
+    context: Context,
+    report: FinancialReportSnapshot,
+    periodLabel: String
+  ): Pair<File, SavedDownloadResult>? {
+    val document = PdfDocument()
+    return try {
+      val settings = StorePreferences.getSettings(context)
+      val currency = settings.currency
+      val reportDir = File(context.filesDir, "reports").apply { mkdirs() }
+      val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+      val output = File(reportDir, "report_${stamp}.pdf")
+      val dateText = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date())
+
+      val titlePaint = textPaint(19f, Color.rgb(15, 76, 156), true)
+      val subPaint = textPaint(10.5f, Color.rgb(90, 98, 106))
+      val sectionPaint = textPaint(13f, Color.rgb(15, 76, 156), true)
+      val bodyPaint = textPaint(11.5f, Color.BLACK)
+      val boldPaint = textPaint(11.5f, Color.BLACK, true)
+      val boxFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 252) }
+      val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(210, 218, 228)
+        strokeWidth = 0.8f
+      }
+
+      val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
+      val page = document.startPage(pageInfo)
+      val canvas = page.canvas
+      var y = MARGIN
+
+      y += drawRtl(canvas, "${settings.storeName} - التقرير المالي", MARGIN, y, CONTENT_WIDTH, titlePaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+      y += drawRtl(canvas, "الفترة: $periodLabel   |   تاريخ الإصدار: $dateText", MARGIN, y, CONTENT_WIDTH, subPaint, Layout.Alignment.ALIGN_NORMAL) + 12f
+
+      canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 184f, 8f, 8f, boxFill)
+      var sy = y + 12f
+      val lines = listOf(
+        "مبيعات الفترة (${report.invoiceCount} فاتورة): ${formatMoney(report.periodSales)} $currency",
+        "صافي الربح الإجمالي (بعد COGS): ${formatMoney(report.grossProfit)} $currency",
+        "تكلفة البضاعة المباعة: ${formatMoney(report.cogs)} $currency",
+        "إجمالي المشتريات: ${formatMoney(report.periodPurchases)} $currency",
+        "التحصيل النقدي: ${formatMoney(report.cashSales)} $currency   |   مبيعات آجلة: ${formatMoney(report.creditSales)} $currency",
+        "ديون العملاء: ${formatMoney(report.totalDebts)} $currency   |   مستحقات الموردين: ${formatMoney(report.totalPayables)} $currency",
+        "قيمة المخزون بالتكلفة: ${formatMoney(report.inventoryCostValue)} $currency   |   بسعر البيع: ${formatMoney(report.inventoryRetailValue)} $currency"
+      )
+      lines.forEach { text ->
+        sy += drawRtl(canvas, text, MARGIN + 12f, sy, CONTENT_WIDTH - 24f, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 7f
+      }
+      y += 198f
+
+      if (report.topItems.isNotEmpty()) {
+        y += drawRtl(canvas, "الأصناف الأكثر مبيعاً", MARGIN, y, CONTENT_WIDTH, sectionPaint, Layout.Alignment.ALIGN_NORMAL) + 6f
+        report.topItems.take(8).forEach { item ->
+          if (y > BOTTOM_LIMIT - 80f) return@forEach
+          y += drawRtl(
+            canvas,
+            "${item.itemName}  —  الكمية: ${item.totalQuantity}  —  الإيراد: ${formatMoney(item.totalRevenue)} $currency",
+            MARGIN,
+            y,
+            CONTENT_WIDTH,
+            bodyPaint,
+            Layout.Alignment.ALIGN_NORMAL
+          ) + 4f
+          canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, linePaint)
+          y += 5f
+        }
+        y += 8f
+      }
+
+      if (report.topDebtors.isNotEmpty() && y < BOTTOM_LIMIT - 40f) {
+        y += drawRtl(canvas, "أعلى العملاء مديونية", MARGIN, y, CONTENT_WIDTH, sectionPaint, Layout.Alignment.ALIGN_NORMAL) + 6f
+        report.topDebtors.take(6).forEach { c ->
+          if (y > BOTTOM_LIMIT) return@forEach
+          y += drawRtl(
+            canvas,
+            "${c.name}  —  ${formatMoney(c.balance)} $currency",
+            MARGIN,
+            y,
+            CONTENT_WIDTH,
+            bodyPaint,
+            Layout.Alignment.ALIGN_NORMAL
+          ) + 4f
+        }
+      }
+
+      document.finishPage(page)
+      FileOutputStream(output).use { stream -> document.writeTo(stream) }
+      val saved = AppDownloadsFolderManager.saveFile(
+        context = context,
+        subfolder = AppDownloadsFolderManager.SUB_REPORTS,
+        sourceFile = output,
+        displayName = output.name,
+        mimeType = "application/pdf",
+        overwriteExisting = false
+      ) ?: SavedDownloadResult(getUriForFile(context, output), output.absolutePath, output.name, false)
+      output to saved
+    } catch (error: Exception) {
+      error.printStackTrace()
+      null
+    } finally {
+      try {
+        document.close()
+      } catch (_: Exception) {
+      }
     }
   }
 

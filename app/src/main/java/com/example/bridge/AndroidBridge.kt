@@ -1,6 +1,7 @@
 package com.example.bridge
 
 import android.app.Activity
+import android.net.Uri
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.example.data.*
@@ -21,7 +22,8 @@ class AndroidBridge(
   private val activity: Activity,
   private val webView: WebView,
   private val onRequestBackupExport: () -> Unit = {},
-  private val onRequestBackupImport: () -> Unit = {}
+  private val onRequestBackupImport: () -> Unit = {},
+  private val onRequestLinkFolder: () -> Unit = {}
 ) {
   private val database = AppDatabase.getDatabase(activity)
   private val engine = GroceryAccountingEngine(database)
@@ -1022,6 +1024,156 @@ class AndroidBridge(
   }
 
   @JavascriptInterface
+  fun exportBackupToAppFolder(reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val result = BackupRestoreManager.exportToAppDownloadsFolder(activity)
+        getAppFolderFiles()
+        notifyResult(
+          reqId,
+          true,
+          "تم حفظ النسخة الاحتياطية في ${result.displayPath} ✓"
+        )
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر حفظ النسخة الاحتياطية في مجلد بقاله العزي")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun linkAppFolder() {
+    activity.runOnUiThread { onRequestLinkFolder() }
+  }
+
+  @JavascriptInterface
+  fun unlinkAppFolder(reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      StorePreferences.clearLinkedFolderUri(activity)
+      getAppFolderFiles()
+      notifyResult(reqId, true, "تم إلغاء ربط المجلد المخصص")
+    }
+  }
+
+  @JavascriptInterface
+  fun getAppFolderFiles() {
+    scope.launch(Dispatchers.IO) {
+      val snapshot = AppDownloadsFolderManager.listFiles(activity)
+      val payload = JSONObject().apply {
+        put("folderDisplayPath", snapshot.folderDisplayPath)
+        put("linkedTreeActive", snapshot.linkedTreeActive)
+        put("isPublicDownloadsApiSupported", snapshot.isPublicDownloadsApiSupported)
+        put("files", JSONArray().apply {
+          snapshot.files.forEach { f ->
+            put(JSONObject().apply {
+              put("id", f.id)
+              put("uriString", f.uriString)
+              put("displayName", f.displayName)
+              put("category", f.category)
+              put("subfolder", f.subfolder)
+              put("mimeType", f.mimeType)
+              put("sizeBytes", f.sizeBytes)
+              put("modifiedMillis", f.modifiedMillis)
+              put("source", f.source)
+            })
+          }
+        })
+      }
+      callJs("onAppFolderFilesData", payload.toString())
+    }
+  }
+
+  @JavascriptInterface
+  fun openAppFolderFile(uriString: String, mimeType: String, reqId: String) {
+    activity.runOnUiThread {
+      val ok = AppDownloadsFolderManager.openFile(activity, uriString, mimeType)
+      if (!ok) {
+        notifyResult(reqId, false, "لا يوجد تطبيق مناسب لفتح هذا الملف على جهازك")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun shareAppFolderFile(uriString: String, mimeType: String, title: String, reqId: String) {
+    activity.runOnUiThread {
+      val ok = AppDownloadsFolderManager.shareFile(activity, uriString, mimeType, title)
+      if (!ok) {
+        notifyResult(reqId, false, "تعذر مشاركة الملف المحدد")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun deleteAppFolderFile(uriString: String, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      val ok = AppDownloadsFolderManager.deleteFile(activity, uriString)
+      getAppFolderFiles()
+      notifyResult(
+        reqId,
+        ok,
+        if (ok) "تم حذف الملف من مجلد بقاله العزي" else "تعذر حذف الملف المحدد"
+      )
+    }
+  }
+
+  @JavascriptInterface
+  fun restoreBackupFromAppFolder(uriString: String, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val msg = BackupRestoreManager.restoreFromUri(activity, Uri.parse(uriString))
+        refreshCoreViews()
+        getAppFolderFiles()
+        notifyResult(reqId, true, msg)
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "فشلت استعادة النسخة الاحتياطية")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun saveThermalPreviewToAppFolder(invoiceId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val withItems = database.invoiceDao().getInvoiceWithItems(invoiceId) ?: error("احفظ الفاتورة أولاً")
+        val inv = withItems.invoice
+        val balanceAfter = resolvePartyBalance(inv)
+        val settings = StorePreferences.getSettings(activity)
+        val saved = BluetoothPrinterManager.saveThermalReceiptImageToDownloads(
+          context = activity,
+          invoice = inv,
+          items = withItems.items,
+          partyBalanceAfter = balanceAfter,
+          paperWidthMm = settings.printerWidthMm
+        )
+        getAppFolderFiles()
+        notifyResult(reqId, true, "تم حفظ صورة الإيصال في ${saved.displayPath} ✓")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر حفظ صورة الإيصال")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun exportFinancialReportPdf(startDateMillis: Long, endDateMillis: Long, periodLabel: String, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val effectiveStart = if (startDateMillis > 0) startDateMillis else 0L
+        val effectiveEnd = if (endDateMillis > 0) endDateMillis else Long.MAX_VALUE
+        val report = engine.buildReport(effectiveStart, effectiveEnd)
+        val result = PdfGenerator.generateFinancialReportPdf(activity, report, periodLabel.ifBlank { "الكل" })
+          ?: error("تعذر إنشاء ملف التقرير PDF")
+        val uri = PdfGenerator.getUriForFile(activity, result.first)
+        activity.runOnUiThread {
+          WhatsAppHelper.openPdf(activity, uri)
+        }
+        getAppFolderFiles()
+        notifyResult(reqId, true, "تم حفظ التقرير المالي في ${result.second.displayPath} ✓")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر تصدير التقرير PDF")
+      }
+    }
+  }
+
+  @JavascriptInterface
   fun resetAppDatabase(reqId: String) {
     scope.launch(Dispatchers.IO) {
       try {
@@ -1036,7 +1188,13 @@ class AndroidBridge(
 
   fun onBackupOperationComplete(success: Boolean, message: String) {
     if (success) refreshCoreViews()
+    getAppFolderFiles()
     notifyResult("backup_op", success, message)
+  }
+
+  fun onFolderLinkResult(success: Boolean, message: String) {
+    getAppFolderFiles()
+    notifyResult("folder_link_op", success, message)
   }
 
   // ---------------- Helpers ----------------

@@ -268,6 +268,30 @@ object BluetoothPrinterManager {
     return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
   }
 
+  fun saveThermalReceiptImageToDownloads(
+    context: Context,
+    invoice: InvoiceEntity,
+    items: List<InvoiceItemEntity>,
+    partyBalanceAfter: Double?,
+    paperWidthMm: Int
+  ): SavedDownloadResult {
+    val bitmap = buildInvoiceReceiptBitmap(context, invoice, items, partyBalanceAfter, paperWidthMm)
+    val out = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+    bitmap.recycle()
+    val safeNumber = invoice.invoiceNumber.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48)
+      .ifBlank { invoice.id.toString() }
+    val fileName = "thermal_${safeNumber}.png"
+    return AppDownloadsFolderManager.saveBytes(
+      context = context,
+      subfolder = AppDownloadsFolderManager.SUB_IMAGES,
+      fileName = fileName,
+      mimeType = "image/png",
+      bytes = out.toByteArray(),
+      overwriteExisting = true
+    )
+  }
+
   fun printInvoiceReceipt(
     context: Context,
     invoice: InvoiceEntity,

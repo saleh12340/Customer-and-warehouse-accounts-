@@ -136,22 +136,22 @@
           <h2 id="customer-form-title">إضافة عميل جديد</h2>
         </div>
         <div class="card compact-card">
-          <div class="ruled-grid-labels grid-cust-2">
-            <span>الرصيد الافتتاحي</span>
+          <div class="ruled-grid-labels grid-cust-name-first">
             <span>اسم العميل *</span>
+            <span>رقم الجوال</span>
           </div>
-          <div class="ruled-input-row grid-cust-2">
-            <input type="number" id="cust-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
+          <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="cust-form-name" class="ruled-cell" placeholder="أدخل اسم العميل...">
+            <input type="tel" id="cust-form-phone" class="ruled-cell cell-num" placeholder="77xxxxxxx">
           </div>
 
-          <div class="ruled-grid-labels grid-cust-2" style="margin-top:6px;">
-            <span>رقم الجوال</span>
+          <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
             <span>العنوان / التفاصيل</span>
+            <span>الرصيد الافتتاحي</span>
           </div>
-          <div class="ruled-input-row grid-cust-2">
-            <input type="tel" id="cust-form-phone" class="ruled-cell cell-num" placeholder="77xxxxxxx">
+          <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="cust-form-address" class="ruled-cell" placeholder="الحي / الشارع...">
+            <input type="number" id="cust-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
           </div>
 
           <div class="btn-row" style="margin-top:8px;">
@@ -249,22 +249,22 @@
           <h2 id="supplier-form-title">إضافة مورد جديد</h2>
         </div>
         <div class="card compact-card">
-          <div class="ruled-grid-labels grid-cust-2">
-            <span>الرصيد الافتتاحي</span>
+          <div class="ruled-grid-labels grid-cust-name-first">
             <span>اسم المورد *</span>
+            <span>رقم الجوال</span>
           </div>
-          <div class="ruled-input-row grid-cust-2">
-            <input type="number" id="supp-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
+          <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="supp-form-name" class="ruled-cell" placeholder="أدخل اسم المورد...">
+            <input type="tel" id="supp-form-phone" class="ruled-cell cell-num" placeholder="77xxxxxxx">
           </div>
 
-          <div class="ruled-grid-labels grid-cust-2" style="margin-top:6px;">
-            <span>رقم الجوال</span>
+          <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
             <span>الشركة / التفاصيل</span>
+            <span>الرصيد الافتتاحي</span>
           </div>
-          <div class="ruled-input-row grid-cust-2">
-            <input type="tel" id="supp-form-phone" class="ruled-cell cell-num" placeholder="77xxxxxxx">
+          <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="supp-form-company" class="ruled-cell" placeholder="اسم الشركة أو الموزع...">
+            <input type="number" id="supp-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
           </div>
 
           <div class="btn-row" style="margin-top:8px;">
@@ -443,17 +443,17 @@
 
           <!-- Inline Quick-Add Inventory Sub-Form -->
           <div id="quick-add-stock-box" class="inline-subbox hidden">
-            <div class="ruled-grid-labels grid-inv-4">
-              <span>سعر البيع</span>
-              <span>سعر الشراء</span>
-              <span>اسم الصنف الجديد</span>
+            <div class="ruled-grid-labels grid-quick-stock">
+              <span>اسم الصنف الجديد *</span>
               <span>الكمية</span>
+              <span>الشراء</span>
+              <span>البيع</span>
             </div>
-            <div class="ruled-input-row grid-inv-4">
-              <input type="number" id="quick-stock-sell" class="ruled-cell cell-num" placeholder="البيع" min="0" step="0.01">
-              <input type="number" id="quick-stock-buy" class="ruled-cell cell-num" placeholder="الشراء" min="0" step="0.01">
+            <div class="ruled-input-row grid-quick-stock">
               <input type="text" id="quick-stock-name" class="ruled-cell" placeholder="اسم الصنف...">
               <input type="number" id="quick-stock-qty" class="ruled-cell cell-num" placeholder="الكمية" min="1">
+              <input type="number" id="quick-stock-buy" class="ruled-cell cell-num" placeholder="الشراء" min="0" step="0.01">
+              <input type="number" id="quick-stock-sell" class="ruled-cell cell-num" placeholder="البيع" min="0" step="0.01">
             </div>
             <div class="btn-row" style="margin-top:6px;">
               <button type="button" class="btn btn-primary btn-sm" style="flex:1;" onclick="submitQuickAddStock()">حفظ للمخزن</button>
@@ -461,15 +461,20 @@
             </div>
           </div>
 
-          <!-- Compact 1-Line Invoice Meta Row + Add Button -->
-          <div class="ruled-input-row grid-inv-meta" style="margin-top:6px;">
-            <input type="text" id="inv-number" class="ruled-cell cell-num" placeholder="رقم الفاتورة">
-            <select id="inv-type" class="ruled-cell" onchange="onInvoiceTypeChange()">
+          <!-- Compact 1-Line Invoice Meta Row (RTL: الطرف | نوع الفاتورة | الرقم) -->
+          <div class="ruled-grid-labels grid-inv-meta" style="margin-top:6px;">
+            <span>العميل / المورد</span>
+            <span>نوع الفاتورة</span>
+            <span>رقم الفاتورة</span>
+          </div>
+          <div class="ruled-input-row grid-inv-meta">
+            <select id="inv-party" class="ruled-cell cell-select" onchange="updatePartyBalanceChip()"></select>
+            <select id="inv-type" class="ruled-cell cell-select" onchange="onInvoiceTypeChange()">
               <option value="CASH">بيع نقدي</option>
               <option value="CREDIT">بيع آجل</option>
               <option value="PURCHASE">شراء</option>
             </select>
-            <select id="inv-party" class="ruled-cell" onchange="updatePartyBalanceChip()"></select>
+            <input type="text" id="inv-number" class="ruled-cell cell-num" placeholder="رقم الفاتورة">
           </div>
           <label id="party-label" class="hidden">العميل</label>
 
@@ -521,7 +526,11 @@
             <strong style="font-size: 12px;">حاسبة الصرف والباقي للعميل</strong>
             <button type="button" class="link-btn" onclick="toggleExchangeCalc(false)">إخفاء</button>
           </div>
-          <div class="ruled-input-row grid-cust-2">
+          <div class="ruled-grid-labels grid-cust-name-first">
+            <span>المبلغ المستلم</span>
+            <span>سعر الصرف</span>
+          </div>
+          <div class="ruled-input-row grid-cust-name-first">
             <input type="number" id="calc-tendered" class="ruled-cell cell-num" placeholder="المبلغ المستلم" oninput="computeExchangeChange()">
             <input type="number" id="calc-rate" class="ruled-cell cell-num" placeholder="سعر الصرف (مثلاً 140)" value="140" oninput="computeExchangeChange()">
           </div>
@@ -563,7 +572,10 @@
           <button type="button" class="btn btn-whatsapp btn-compact" onclick="shareActivePreviewImage()">مشاركة صورة واتساب</button>
         </div>
         <div class="btn-row">
-          <button type="button" class="btn btn-primary btn-compact" onclick="openActivePreviewPdf()">فتح كملف PDF</button>
+          <button type="button" class="btn btn-primary btn-compact" onclick="saveActiveThermalImageToFolder()">حفظ الصورة في بقاله العزي</button>
+          <button type="button" class="btn btn-outline-primary btn-compact" onclick="openActivePreviewPdf()">فتح كملف PDF</button>
+        </div>
+        <div class="btn-row">
           <button type="button" class="btn btn-outline btn-compact" onclick="switchView('create-invoice')">رجوع للفاتورة</button>
         </div>
       </div>
@@ -574,6 +586,7 @@
       <div class="sticky-top-panel">
         <div class="section-head">
           <h2>التقارير المالية والمحاسبية</h2>
+          <button type="button" class="btn btn-primary btn-sm" onclick="exportCurrentReportPdf()">حفظ التقرير PDF</button>
         </div>
         <div class="pill-tabs" id="report-range-tabs">
           <button type="button" class="pill active" onclick="setReportRange('ALL', this)">الكل</button>
@@ -593,22 +606,22 @@
 
       <div class="card compact-card">
         <h3 style="margin-bottom:6px;">بيانات البقالة والعملة</h3>
-        <div class="ruled-grid-labels grid-set-name">
-          <span>العملة</span>
+        <div class="ruled-grid-labels grid-set-store-first">
           <span>اسم البقالة / المتجر</span>
+          <span>العملة</span>
         </div>
-        <div class="ruled-input-row grid-set-name">
-          <input type="text" id="set-currency" class="ruled-cell cell-num" placeholder="ر.ي">
+        <div class="ruled-input-row grid-set-store-first">
           <input type="text" id="set-store-name" class="ruled-cell" placeholder="اسم البقالة...">
+          <input type="text" id="set-currency" class="ruled-cell" placeholder="ر.ي">
         </div>
 
-        <div class="ruled-grid-labels grid-cust-2" style="margin-top:6px;">
-          <span>رقم الهاتف</span>
+        <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
           <span>العنوان</span>
+          <span>رقم الهاتف</span>
         </div>
-        <div class="ruled-input-row grid-cust-2">
-          <input type="tel" id="set-store-phone" class="ruled-cell cell-num" placeholder="77xxxxxxx">
+        <div class="ruled-input-row grid-cust-name-first">
           <input type="text" id="set-store-address" class="ruled-cell" placeholder="العنوان في الفاتورة...">
+          <input type="tel" id="set-store-phone" class="ruled-cell cell-num" placeholder="77xxxxxxx">
         </div>
         <button type="button" class="btn btn-primary btn-compact" style="margin-top:8px;" onclick="saveStoreSettings()">حفظ بيانات المتجر</button>
       </div>
@@ -631,12 +644,30 @@
       </div>
 
       <div class="card compact-card">
-        <h3>النسخ الاحتياطي والاستعادة</h3>
-        <p class="muted-text" style="margin: 4px 0;">حفظ نسخة مشفرة التحقق (JSON + SHA-256) على جهازك أو استعادتها.</p>
-        <div class="btn-row">
-          <button type="button" class="btn btn-success btn-compact" onclick="triggerBackup()">تصدير نسخة احتياطية</button>
-          <button type="button" class="btn btn-primary btn-compact" onclick="triggerRestore()">استعادة نسخة احتياطية</button>
+        <div class="card-title-row">
+          <h3>مجلد بقاله العزي والنسخ الاحتياطي</h3>
+          <button type="button" class="link-btn" onclick="refreshAppFolderFiles()">تحديث الملفات</button>
         </div>
+        <div class="info-pill" id="app-folder-status-pill">المسار: التنزيلات (Download) / بقاله العزي</div>
+        <p class="muted-text" style="margin: 5px 0;">يُحفظ تلقائياً داخل هذا المجلد: النسخ الاحتياطية (JSON + SHA-256)، فواتير PDF، صور الفواتير والإيصالات، والتقارير.</p>
+
+        <div class="btn-row">
+          <button type="button" class="btn btn-success btn-compact" onclick="exportBackupToFolder()">نسخ احتياطي في بقاله العزي</button>
+          <button type="button" class="btn btn-primary btn-compact" onclick="triggerRestore()">استعادة من ملف</button>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-outline-primary btn-compact" onclick="triggerBackup()">حفظ نسخة في موقع آخر</button>
+          <button type="button" id="btn-link-app-folder" class="btn btn-outline btn-compact" onclick="linkAppFolder()">ربط مجلد بقاله العزي</button>
+        </div>
+
+        <div class="pill-tabs" id="folder-filter-tabs" style="margin-top:8px;">
+          <button type="button" class="pill active" onclick="setFolderFilter('ALL', this)">الكل</button>
+          <button type="button" class="pill" onclick="setFolderFilter('BACKUP', this)">النسخ الاحتياطية</button>
+          <button type="button" class="pill" onclick="setFolderFilter('PDF', this)">الفواتير PDF</button>
+          <button type="button" class="pill" onclick="setFolderFilter('IMAGE', this)">الصور</button>
+          <button type="button" class="pill" onclick="setFolderFilter('REPORT', this)">التقارير</button>
+        </div>
+        <div id="app-folder-files-list" style="margin-top:4px;"></div>
       </div>
 
       <div class="card compact-card danger-card">
@@ -666,7 +697,7 @@
         <h3>سياسة الخصوصية والأمان</h3>
         <ul class="privacy-list">
           <li>يعمل التطبيق بنسبة 100% دون اتصال بالإنترنت (Offline).</li>
-          <li>تُحفظ جميع الفواتير والأرصدة وحركات الحساب محلياً على جهازك داخل قاعدة بيانات SQLite/Room.</li>
+          <li>تُحفظ جميع الفواتير والأرصدة وحركات الحساب محلياً على جهازك داخل قاعدة بيانات SQLite/Room، وتُحفظ الصادرات والصور والنسخ الاحتياطية في مجلد Download/بقاله العزي.</li>
           <li>لا يرسل التطبيق أي بيانات إلى خوادم خارجية أو أطراف ثالثة.</li>
           <li>أذونات البلوتوث تُستخدم فقط للبحث والاتصال بالطابعة الحرارية المقترنة.</li>
         </ul>

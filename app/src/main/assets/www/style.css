@@ -66,7 +66,9 @@ header.app-header {
   justify-content: space-between;
   padding: 0 8px;
   z-index: 1000;
-  box-shadow: 0 2px 6px rgba(15, 76, 156, 0.22);
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+  box-shadow: 0 2px 8px rgba(15, 76, 156, 0.22);
 }
 
 .header-right {
@@ -120,15 +122,16 @@ header.app-header h1 {
   left: 10px;
   max-width: 560px;
   margin: 0 auto;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 700;
   color: #FFFFFF;
   background-color: var(--dark-header);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
   z-index: 2500;
-  text-align: center;
+  text-align: right;
+  border-inline-start: 4px solid rgba(255, 255, 255, 0.45);
 }
 
 .toast-banner.toast-success { background-color: var(--success-green); }
@@ -145,10 +148,13 @@ header.app-header h1 {
   max-width: 82vw;
   background-color: var(--surface);
   z-index: 2000;
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
   box-shadow: -4px 0 18px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  text-align: right;
 }
 
 .drawer-header {
@@ -260,7 +266,8 @@ main.content-container {
   font-size: 10.5px;
   font-weight: 700;
   color: var(--dark-header);
-  text-align: center;
+  text-align: right;
+  padding-inline-start: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -270,7 +277,7 @@ main.content-container {
   display: grid;
   gap: 0;
   border: 1.5px solid var(--rule-border);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   background-color: #FFFFFF;
 }
@@ -285,9 +292,9 @@ main.content-container {
   min-width: 0;
   height: 38px;
   border: none;
-  border-left: 1px solid var(--rule-border);
+  border-inline-end: 1px solid var(--rule-border);
   border-radius: 0;
-  padding: 4px 6px;
+  padding: 4px 8px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
@@ -298,7 +305,7 @@ main.content-container {
 }
 
 .ruled-cell:last-child {
-  border-left: none;
+  border-inline-end: none;
 }
 
 .ruled-cell:focus {
@@ -308,9 +315,10 @@ main.content-container {
 }
 
 .cell-num {
-  text-align: center;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .cell-auto {
@@ -319,11 +327,15 @@ main.content-container {
   font-weight: 800;
 }
 
+select.ruled-cell,
 .cell-select {
   background-color: #FFFFFF;
   font-weight: 700;
-  padding-left: 4px;
-  padding-right: 4px;
+  padding-inline-start: 6px;
+  padding-inline-end: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230F4C9C' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 6px center;
 }
 
 /* Exact Grid Layouts (Right-to-Left order) */
@@ -332,11 +344,15 @@ main.content-container {
 }
 
 .grid-inv-meta {
-  grid-template-columns: 0.9fr 0.9fr 1.5fr;
+  grid-template-columns: 1.45fr 0.95fr 0.9fr;
 }
 
 .grid-tx-entry {
   grid-template-columns: 1fr 1.8fr;
+}
+
+.grid-cust-name-first {
+  grid-template-columns: 1.4fr 1fr;
 }
 
 .grid-cust-2 {
@@ -347,8 +363,16 @@ main.content-container {
   grid-template-columns: 1fr 0.72fr 1.6fr 0.98fr;
 }
 
+.grid-quick-stock {
+  grid-template-columns: 1.55fr 0.7fr 0.9fr 0.9fr;
+}
+
 .grid-inv-3 {
   grid-template-columns: 1fr 0.9fr 1.2fr;
+}
+
+.grid-set-store-first {
+  grid-template-columns: 2fr 0.75fr;
 }
 
 .grid-set-name {
@@ -365,6 +389,9 @@ nav.bottom-nav {
   flex-shrink: 0;
   background-color: var(--surface);
   border-top: 1px solid var(--border-color);
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.06);
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -395,11 +422,12 @@ nav.bottom-nav button.active {
 /* Cards & Metrics */
 .card {
   background-color: var(--surface);
-  border-radius: 9px;
+  border-radius: 12px;
   padding: 10px;
   margin-bottom: 8px;
   border: 1px solid var(--border-color);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  text-align: right;
 }
 
 .compact-card {
@@ -433,10 +461,12 @@ nav.bottom-nav button.active {
 
 .metric-card {
   background-color: var(--surface);
-  border-radius: 9px;
+  border-radius: 12px;
   padding: 10px;
   border: 1px solid var(--border-color);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   cursor: pointer;
+  text-align: right;
 }
 
 .metric-card .title {
@@ -487,19 +517,20 @@ nav.bottom-nav button.active {
   background-color: #FFF4E5;
   border: 1px solid #F7C97E;
   color: #8A5300;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 8px 11px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 700;
   margin-bottom: 8px;
   cursor: pointer;
+  text-align: right;
 }
 
 .summary-strip {
   background-color: #E8F0FE;
   border: 1px solid #C2D7FA;
   color: var(--dark-header);
-  border-radius: 7px;
+  border-radius: 10px;
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 700;
@@ -509,6 +540,7 @@ nav.bottom-nav button.active {
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
+  text-align: right;
 }
 
 .inline-confirm {
@@ -516,31 +548,34 @@ nav.bottom-nav button.active {
   border: 1px solid #FECDD3;
   color: #9F1239;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   margin-bottom: 6px;
   font-size: 12.5px;
   font-weight: 700;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  text-align: right;
 }
 
 .inline-subbox {
   background-color: var(--surface-alt);
   border: 1px dashed var(--rule-border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 8px;
   margin-top: 6px;
+  text-align: right;
 }
 
 .info-pill {
   background-color: #F1F5F9;
-  border-radius: 7px;
-  padding: 6px 9px;
+  border-radius: 10px;
+  padding: 6px 10px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
   margin-top: 5px;
+  text-align: right;
 }
 
 /* Pills & Chips */
@@ -599,7 +634,7 @@ nav.bottom-nav button.active {
   justify-content: center;
   min-height: 40px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: none;
   font-size: 13.5px;
   font-weight: 700;
@@ -656,39 +691,39 @@ nav.bottom-nav button.active {
   flex-wrap: wrap;
 }
 
-/* Ruled Data Tables */
+/* Ruled Data Tables (Wrapper handles smooth corner curvature) */
 .table-wrap {
   width: 100%;
   overflow-x: auto;
+  border: 1.5px solid var(--rule-border);
+  border-radius: 12px;
+  background-color: var(--surface);
 }
 
 table.data-table {
   width: 100%;
   border-collapse: collapse;
   background-color: var(--surface);
-  border: 1.5px solid var(--rule-border);
-  border-radius: 8px;
-  overflow: hidden;
 }
 
 table.data-table th, table.data-table td {
-  padding: 6px 5px;
-  text-align: center;
+  padding: 7px 6px;
+  text-align: right;
   font-size: 12px;
   border-bottom: 1px solid #CBD5E1;
   vertical-align: middle;
 }
 
-table.invoice-ruled-table td:nth-child(3) {
-  text-align: right;
+table.data-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 table.ruled-table th, table.ruled-table td {
-  border-left: 1px solid #CBD5E1;
+  border-inline-end: 1px solid #CBD5E1;
 }
 
 table.ruled-table th:last-child, table.ruled-table td:last-child {
-  border-left: none;
+  border-inline-end: none;
 }
 
 table.data-table th {
@@ -703,8 +738,8 @@ table.data-table th {
   border: 1px solid var(--border-color);
   background: #FFFFFF;
   color: var(--text-primary);
-  border-radius: 5px;
-  padding: 3px 6px;
+  border-radius: 7px;
+  padding: 3px 7px;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -716,23 +751,25 @@ table.data-table th {
 }
 
 .qty-inline-input {
-  width: 46px;
-  height: 28px;
-  padding: 2px;
+  width: 48px;
+  height: 30px;
+  padding: 2px 5px;
   border: 1px solid var(--rule-border);
-  border-radius: 5px;
-  text-align: center;
+  border-radius: 8px;
+  text-align: right;
   font-weight: 700;
   font-size: 12px;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 /* Invoice Totals & Dock */
 .invoice-totals-box {
   background-color: var(--surface-alt);
   border: 1px solid var(--rule-border);
-  border-radius: 8px;
-  padding: 8px;
-  margin-top: 6px;
+  border-radius: 12px;
+  padding: 9px;
+  margin-top: 7px;
 }
 
 .totals-row-ruled {
@@ -759,7 +796,7 @@ table.data-table th {
   width: 110px !important;
   height: 34px !important;
   border: 1.5px solid var(--rule-border) !important;
-  border-radius: 7px !important;
+  border-radius: 9px !important;
 }
 
 .remaining-row {
@@ -773,7 +810,7 @@ table.data-table th {
 .invoice-dock {
   background-color: var(--surface);
   border: 1px solid var(--rule-border);
-  border-radius: 9px;
+  border-radius: 12px;
   padding: 8px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
@@ -793,7 +830,7 @@ table.data-table th {
 
 .chip-action {
   min-height: 35px;
-  border-radius: 7px;
+  border-radius: 9px;
   border: 1px solid var(--border-color);
   background-color: var(--surface-alt);
   color: var(--text-primary);
@@ -826,13 +863,14 @@ table.data-table th {
   font-size: 12px;
   font-weight: 700;
   color: var(--dark-header);
+  text-align: right;
 }
 
 /* Thermal Preview Frame */
 .paper-receipt-frame {
   margin-top: 8px;
   background-color: #EAECEF;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 10px;
   display: flex;
   justify-content: center;
@@ -845,7 +883,7 @@ table.data-table th {
   height: auto;
   background: #FFFFFF;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 /* List Items & Badges */
@@ -856,17 +894,20 @@ table.data-table th {
   gap: 8px;
   background-color: var(--surface);
   padding: 10px;
-  border-radius: 9px;
+  border-radius: 12px;
   margin-bottom: 6px;
   border: 1px solid var(--border-color);
   cursor: pointer;
+  text-align: right;
 }
 
 .list-item-actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
+  text-align: right;
   gap: 3px;
+  flex-shrink: 0;
 }
 
 .badge {
@@ -889,7 +930,7 @@ table.data-table th {
   font-size: 13px;
   background: var(--surface);
   border: 1px dashed var(--border-color);
-  border-radius: 9px;
+  border-radius: 12px;
 }
 
 .privacy-list {

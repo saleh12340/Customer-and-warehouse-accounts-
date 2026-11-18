@@ -236,6 +236,7 @@ function loadViewData(view) {
   } else if (view === 'settings') {
     window.Android.getSettings();
     window.Android.getBluetoothDevices();
+    window.Android.getAppFolderFiles();
   }
 }
 
@@ -1097,9 +1098,9 @@ function renderInvoicesList() {
             <strong>فاتورة #${escapeHtml(inv.invoiceNumber)}</strong> ${statusBadge}
             <div class="muted-text">${escapeHtml(inv.partyName)} • ${escapeHtml(invoiceTypeAr(inv.type))} • ${fmtShortDate(inv.date)}</div>
           </div>
-          <div style="text-align:left;">
+          <div class="list-item-actions">
             <strong>${fmtMoney(inv.totalAmount)} ${escapeHtml(appCurrency)}</strong>
-            <div class="muted-text" style="font-size:11px;">متبقي: ${fmtMoney(inv.remainingAmount)}</div>
+            <span class="muted-text" style="font-size:11px;">متبقي: ${fmtMoney(inv.remainingAmount)}</span>
           </div>
         </div>
         <div class="btn-row-compact">${footerActions}</div>
@@ -1720,6 +1721,12 @@ function openActivePreviewPdf() {
   }
 }
 
+function saveActiveThermalImageToFolder() {
+  if (window.Android && activePreviewInvoiceId) {
+    window.Android.saveThermalPreviewToAppFolder(activePreviewInvoiceId, nextReqId());
+  }
+}
+
 // ---------------- Reports ----------------
 
 function setReportRange(range, btn) {
@@ -1729,23 +1736,38 @@ function setReportRange(range, btn) {
   loadReports();
 }
 
-function loadReports() {
-  if (!window.Android) return;
+function getReportRangeBounds() {
   const now = Date.now();
   let start = 0;
+  let label = 'الكل';
   if (reportRange === 'TODAY') {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     start = d.getTime();
+    label = 'اليوم';
   } else if (reportRange === 'WEEK') {
     start = now - 7 * 24 * 60 * 60 * 1000;
+    label = 'آخر 7 أيام';
   } else if (reportRange === 'MONTH') {
     const d = new Date();
     d.setDate(1);
     d.setHours(0, 0, 0, 0);
     start = d.getTime();
+    label = 'هذا الشهر';
   }
+  return { start, now, label };
+}
+
+function loadReports() {
+  if (!window.Android) return;
+  const { start, now } = getReportRangeBounds();
   window.Android.getReports(start, now);
+}
+
+function exportCurrentReportPdf() {
+  if (!window.Android) return;
+  const { start, now, label } = getReportRangeBounds();
+  window.Android.exportFinancialReportPdf(start, now, label, nextReqId());
 }
 
 window.onReportsData = function (jsonStr) {
@@ -1754,8 +1776,8 @@ window.onReportsData = function (jsonStr) {
     const container = document.getElementById('reports-list');
     const topItemsHtml = (data.topItems || []).length === 0
       ? '<div class="muted-text">لا توجد مبيعات في هذه الفترة</div>'
-      : `<div class="table-wrap"><table class="data-table ruled-table"><thead><tr><th>الإيراد</th><th>الكمية</th><th>الصنف</th></tr></thead><tbody>` +
-        data.topItems.map(item => `<tr><td><strong>${fmtMoney(item.revenue)}</strong></td><td>${item.quantity}</td><td style="text-align:right;">${escapeHtml(item.name)}</td></tr>`).join('') +
+      : `<div class="table-wrap"><table class="data-table ruled-table"><thead><tr><th>الصنف</th><th>الكمية</th><th>الإيراد</th></tr></thead><tbody>` +
+        data.topItems.map(item => `<tr><td>${escapeHtml(item.name)}</td><td>${item.quantity}</td><td><strong>${fmtMoney(item.revenue)} ${escapeHtml(appCurrency)}</strong></td></tr>`).join('') +
         `</tbody></table></div>`;
 
     const topDebtorsHtml = (data.topDebtors || []).length === 0
@@ -1873,7 +1895,7 @@ window.onBluetoothDevices = function (jsonStr) {
       const isActive = data.connected && data.connectedAddress === d.address;
       const cls = isActive ? 'btn btn-success btn-compact' : 'btn btn-outline btn-compact';
       const suffix = isActive ? ' (متصل)' : '';
-      return `<button type="button" class="${cls}" style="margin-top:5px;" onclick="connectPrinter('${escapeHtml(d.address)}')">${escapeHtml(d.name)} (${escapeHtml(d.address)})${suffix}</button>`;
+      return `<button type="button" class="${cls}" style="margin-top:5px; justify-content:space-between; text-align:right;" onclick="connectPrinter('${escapeHtml(d.address)}')"><span>${escapeHtml(d.name)}${suffix}</span><span class="cell-num" style="font-size:11px; opacity:0.8;">${escapeHtml(d.address)}</span></button>`;
     }).join('');
   } catch (e) {
     console.error(e);
@@ -1898,6 +1920,22 @@ function printTestReceipt() {
   }
 }
 
+let appFolderData = {
+  folderDisplayPath: 'Download/بقاله العزي',
+  linkedTreeActive: false,
+  isPublicDownloadsApiSupported: true,
+  files: []
+};
+let folderFilter = 'ALL';
+let renderedFolderFiles = [];
+let pendingRestoreFolderIdx = -1;
+let pendingDeleteFolderIdx = -1;
+
+function exportBackupToFolder() {
+  if (!window.Android) return;
+  window.Android.exportBackupToAppFolder(nextReqId());
+}
+
 function triggerBackup() {
   if (window.Android) {
     window.Android.exportBackup();
@@ -1908,6 +1946,169 @@ function triggerRestore() {
   if (window.Android) {
     window.Android.importBackup();
   }
+}
+
+function linkAppFolder() {
+  if (!window.Android) return;
+  if (appFolderData.linkedTreeActive) {
+    window.Android.unlinkAppFolder(nextReqId());
+  } else {
+    window.Android.linkAppFolder();
+  }
+}
+
+function refreshAppFolderFiles() {
+  if (window.Android) {
+    window.Android.getAppFolderFiles();
+  }
+}
+
+function setFolderFilter(filter, btn) {
+  folderFilter = filter;
+  pendingRestoreFolderIdx = -1;
+  pendingDeleteFolderIdx = -1;
+  document.querySelectorAll('#folder-filter-tabs .pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderAppFolderFiles();
+}
+
+window.onAppFolderFilesData = function (jsonStr) {
+  try {
+    appFolderData = JSON.parse(jsonStr);
+    pendingRestoreFolderIdx = -1;
+    pendingDeleteFolderIdx = -1;
+    const pill = document.getElementById('app-folder-status-pill');
+    if (pill) {
+      const linkNote = appFolderData.linkedTreeActive
+        ? 'مرتبط بالذاكرة ✓'
+        : (appFolderData.isPublicDownloadsApiSupported ? 'حفظ تلقائي في التنزيلات ✓' : 'مجلد التطبيق المحلي');
+      const count = (appFolderData.files || []).length;
+      pill.textContent = `المسار: ${appFolderData.folderDisplayPath || 'Download/بقاله العزي'}  •  ${linkNote}  •  ${count} ملف`;
+    }
+    const linkBtn = document.getElementById('btn-link-app-folder');
+    if (linkBtn) {
+      linkBtn.textContent = appFolderData.linkedTreeActive ? 'إلغاء ربط المجلد' : 'ربط مجلد بقاله العزي';
+    }
+    renderAppFolderFiles();
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+function fmtFileSize(bytes) {
+  const b = Number(bytes) || 0;
+  if (b < 1024) return `${b} بايت`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} ك.ب`;
+  return `${(b / (1024 * 1024)).toFixed(2)} م.ب`;
+}
+
+function folderCategoryBadge(cat) {
+  switch (cat) {
+    case 'BACKUP': return '<span class="badge badge-green">نسخة احتياطية</span>';
+    case 'PDF': return '<span class="badge badge-blue">فاتورة PDF</span>';
+    case 'IMAGE': return '<span class="badge badge-amber">صورة</span>';
+    case 'REPORT': return '<span class="badge badge-blue">تقرير</span>';
+    default: return '<span class="badge badge-blue">ملف</span>';
+  }
+}
+
+function renderAppFolderFiles() {
+  const container = document.getElementById('app-folder-files-list');
+  if (!container) return;
+
+  const all = appFolderData.files || [];
+  renderedFolderFiles = all.filter(f => folderFilter === 'ALL' || f.category === folderFilter);
+
+  if (renderedFolderFiles.length === 0) {
+    container.innerHTML = '<div class="empty-state" style="padding:12px;">لا توجد ملفات محفوظة في هذا القسم بعد</div>';
+    return;
+  }
+
+  container.innerHTML = renderedFolderFiles.map((f, idx) => {
+    const isBackup = f.category === 'BACKUP';
+    const isConfirmRestore = pendingRestoreFolderIdx === idx;
+    const isConfirmDelete = pendingDeleteFolderIdx === idx;
+
+    let actionButtons = '';
+    if (isConfirmRestore) {
+      actionButtons = `
+        <button type="button" class="tbl-action-btn" style="color:var(--success-green); border-color:#86EFAC;" onclick="confirmRestoreFolderFile(${idx})">تأكيد الاستعادة</button>
+        <button type="button" class="tbl-action-btn" onclick="cancelFolderConfirm()">إلغاء</button>
+      `;
+    } else if (isConfirmDelete) {
+      actionButtons = `
+        <button type="button" class="tbl-action-btn del" onclick="confirmDeleteFolderFile(${idx})">تأكيد الحذف</button>
+        <button type="button" class="tbl-action-btn" onclick="cancelFolderConfirm()">لا</button>
+      `;
+    } else {
+      const primaryBtn = isBackup
+        ? `<button type="button" class="tbl-action-btn" style="color:var(--success-green); border-color:#86EFAC;" onclick="askRestoreFolderFile(${idx})">استعادة</button>`
+        : `<button type="button" class="tbl-action-btn" onclick="openFolderFile(${idx})">فتح</button>`;
+      actionButtons = `
+        ${primaryBtn}
+        <button type="button" class="tbl-action-btn" onclick="shareFolderFile(${idx})">مشاركة</button>
+        <button type="button" class="tbl-action-btn del" onclick="askDeleteFolderFile(${idx})">حذف</button>
+      `;
+    }
+
+    const subText = f.subfolder ? `${f.subfolder} • ` : '';
+    return `
+      <div class="card compact-card" style="margin-bottom:5px; padding:8px;">
+        <div class="card-title-row" style="margin-bottom:4px;">
+          <div style="min-width:0; flex:1;">
+            <strong style="font-size:12.5px; word-break:break-word;">${escapeHtml(f.displayName)}</strong>
+            <div class="muted-text" style="font-size:11px;">${escapeHtml(subText)}${fmtFileSize(f.sizeBytes)} • ${fmtShortDate(f.modifiedMillis)}</div>
+          </div>
+          ${folderCategoryBadge(f.category)}
+        </div>
+        <div class="btn-row-compact">${actionButtons}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function cancelFolderConfirm() {
+  pendingRestoreFolderIdx = -1;
+  pendingDeleteFolderIdx = -1;
+  renderAppFolderFiles();
+}
+
+function askRestoreFolderFile(idx) {
+  pendingDeleteFolderIdx = -1;
+  pendingRestoreFolderIdx = idx;
+  renderAppFolderFiles();
+}
+
+function confirmRestoreFolderFile(idx) {
+  const f = renderedFolderFiles[idx];
+  if (!f || !window.Android) return;
+  pendingRestoreFolderIdx = -1;
+  window.Android.restoreBackupFromAppFolder(f.uriString, nextReqId());
+}
+
+function openFolderFile(idx) {
+  const f = renderedFolderFiles[idx];
+  if (!f || !window.Android) return;
+  window.Android.openAppFolderFile(f.uriString, f.mimeType || '*/*', nextReqId());
+}
+
+function shareFolderFile(idx) {
+  const f = renderedFolderFiles[idx];
+  if (!f || !window.Android) return;
+  window.Android.shareAppFolderFile(f.uriString, f.mimeType || '*/*', f.displayName, nextReqId());
+}
+
+function askDeleteFolderFile(idx) {
+  pendingRestoreFolderIdx = -1;
+  pendingDeleteFolderIdx = idx;
+  renderAppFolderFiles();
+}
+
+function confirmDeleteFolderFile(idx) {
+  const f = renderedFolderFiles[idx];
+  if (!f || !window.Android) return;
+  pendingDeleteFolderIdx = -1;
+  window.Android.deleteAppFolderFile(f.uriString, nextReqId());
 }
 
 function toggleResetConfirm(show) {

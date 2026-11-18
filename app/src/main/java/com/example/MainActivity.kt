@@ -2,6 +2,7 @@ package com.example
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -21,7 +22,10 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.bridge.AndroidBridge
+import com.example.utils.AppDownloadsFolderManager
 import com.example.utils.BackupRestoreManager
+import com.example.utils.StorePreferences
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -66,11 +70,23 @@ class MainActivity : ComponentActivity() {
       }
     }
 
+  private val linkFolderLauncher =
+    registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+      if (uri == null) return@registerForActivityResult
+      val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+      runCatching { contentResolver.takePersistableUriPermission(uri, flags) }
+      StorePreferences.saveLinkedFolderUri(this, uri.toString())
+      bridge.onFolderLinkResult(true, "تم ربط مجلد التنزيلات (بقاله العزي) بنجاح ✓")
+    }
+
   @SuppressLint("SetJavaScriptEnabled")
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     checkBluetoothPermissions()
+    lifecycleScope.launch(Dispatchers.IO) {
+      AppDownloadsFolderManager.ensureFolderInitialized(this@MainActivity)
+    }
 
     val rootContainer = FrameLayout(this).apply {
       setBackgroundColor(Color.parseColor("#0F4C9C"))
@@ -86,6 +102,9 @@ class MainActivity : ComponentActivity() {
       },
       onRequestBackupImport = {
         importBackupLauncher.launch(arrayOf("application/json", "*/*"))
+      },
+      onRequestLinkFolder = {
+        linkFolderLauncher.launch(AppDownloadsFolderManager.buildSuggestedDownloadsInitialUri())
       }
     )
 

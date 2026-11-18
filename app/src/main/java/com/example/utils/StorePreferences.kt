@@ -9,7 +9,8 @@ data class StoreSettings(
   val currency: String = "ر.ي",
   val printerWidthMm: Int = 58,
   val defaultPrinterAddress: String = "",
-  val defaultPrinterName: String = ""
+  val defaultPrinterName: String = "",
+  val linkedFolderUri: String = ""
 )
 
 object StorePreferences {
@@ -21,6 +22,7 @@ object StorePreferences {
   private const val KEY_PRINTER_WIDTH = "printer_width_mm"
   private const val KEY_PRINTER_ADDRESS = "default_printer_address"
   private const val KEY_PRINTER_NAME = "default_printer_name"
+  private const val KEY_LINKED_FOLDER_URI = "linked_folder_uri"
 
   fun getSettings(context: Context): StoreSettings {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -31,7 +33,8 @@ object StorePreferences {
       currency = prefs.getString(KEY_CURRENCY, "ر.ي") ?: "ر.ي",
       printerWidthMm = prefs.getInt(KEY_PRINTER_WIDTH, 58).let { if (it == 80) 80 else 58 },
       defaultPrinterAddress = prefs.getString(KEY_PRINTER_ADDRESS, "") ?: "",
-      defaultPrinterName = prefs.getString(KEY_PRINTER_NAME, "") ?: ""
+      defaultPrinterName = prefs.getString(KEY_PRINTER_NAME, "") ?: "",
+      linkedFolderUri = prefs.getString(KEY_LINKED_FOLDER_URI, "") ?: ""
     )
   }
 
@@ -57,6 +60,20 @@ object StorePreferences {
       .edit()
       .putString(KEY_PRINTER_ADDRESS, address)
       .putString(KEY_PRINTER_NAME, name)
+      .apply()
+  }
+
+  fun saveLinkedFolderUri(context: Context, uriString: String) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .edit()
+      .putString(KEY_LINKED_FOLDER_URI, uriString.trim())
+      .apply()
+  }
+
+  fun clearLinkedFolderUri(context: Context) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .edit()
+      .remove(KEY_LINKED_FOLDER_URI)
       .apply()
   }
 }

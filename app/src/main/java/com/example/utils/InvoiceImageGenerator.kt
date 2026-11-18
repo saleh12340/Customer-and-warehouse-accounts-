@@ -171,6 +171,16 @@ object InvoiceImageGenerator {
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
       }
       bitmap.recycle()
+      runCatching {
+        AppDownloadsFolderManager.saveFile(
+          context = context,
+          subfolder = AppDownloadsFolderManager.SUB_IMAGES,
+          sourceFile = outFile,
+          displayName = outFile.name,
+          mimeType = "image/png",
+          overwriteExisting = true
+        )
+      }
       outFile
     } catch (e: Exception) {
       e.printStackTrace()

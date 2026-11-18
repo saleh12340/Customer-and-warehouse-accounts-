@@ -9,6 +9,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.abs
 
 /** Portable, versioned JSON backup. Restore is atomic and validates the entire file first. */
@@ -16,7 +19,7 @@ object BackupRestoreManager {
   private const val FORMAT = "alaziy-grocery-backup"
   private const val BACKUP_VERSION = 1
 
-  suspend fun exportToUri(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
+  suspend fun buildBackupEnvelope(context: Context): JSONObject = withContext(Dispatchers.IO) {
     val db = AppDatabase.getDatabase(context)
     val payload = db.withTransaction { JSONObject().apply {
       put("customers", JSONArray().apply { db.customerDao().getCustomersSnapshot().forEach { c ->
@@ -38,10 +41,29 @@ object BackupRestoreManager {
         put(JSONObject().apply { put("id", t.id); put("partyType", t.partyType); put("partyId", t.partyId); put("partyName", t.partyName); put("type", t.type); put("amount", t.amount); put("description", t.description); put("date", t.date) })
       } })
     } }
-    val envelope = JSONObject().apply {
+    JSONObject().apply {
       put("format", FORMAT); put("version", BACKUP_VERSION); put("createdAt", System.currentTimeMillis())
       put("payload", payload); put("sha256", sha256(payload.toString()))
     }
+  }
+
+  suspend fun exportToAppDownloadsFolder(context: Context): SavedDownloadResult = withContext(Dispatchers.IO) {
+    val envelope = buildBackupEnvelope(context)
+    val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val fileName = "alaziy_backup_$stamp.json"
+    val bytes = envelope.toString(2).toByteArray(Charsets.UTF_8)
+    AppDownloadsFolderManager.saveBytes(
+      context = context,
+      subfolder = AppDownloadsFolderManager.SUB_BACKUPS,
+      fileName = fileName,
+      mimeType = "application/json",
+      bytes = bytes,
+      overwriteExisting = false
+    )
+  }
+
+  suspend fun exportToUri(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
+    val envelope = buildBackupEnvelope(context)
     val output = context.contentResolver.openOutputStream(uri, "w") ?: error("تعذر فتح ملف النسخة الاحتياطية للكتابة")
     output.bufferedWriter(Charsets.UTF_8).use { it.write(envelope.toString(2)) }
     "تم إنشاء النسخة الاحتياطية بنجاح"
