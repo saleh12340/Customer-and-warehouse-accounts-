@@ -17,15 +17,27 @@ interface TransactionDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun restoreTransactions(items: List<TransactionEntity>)
 
-  @Query("SELECT * FROM transactions WHERE partyType = :partyType AND partyId = :partyId ORDER BY date DESC")
+  @Query("SELECT * FROM transactions WHERE partyType = :partyType AND partyId = :partyId ORDER BY date DESC, id DESC")
   fun getTransactionsForParty(partyType: String, partyId: Long): Flow<List<TransactionEntity>>
+
+  @Query("SELECT * FROM transactions WHERE partyType = :partyType AND partyId = :partyId ORDER BY date DESC, id DESC")
+  suspend fun getTransactionsForPartySnapshot(partyType: String, partyId: Long): List<TransactionEntity>
+
+  @Query("SELECT * FROM transactions WHERE id = :id")
+  suspend fun getTransactionById(id: Long): TransactionEntity?
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertTransaction(transaction: TransactionEntity): Long
+
+  @Update
+  suspend fun updateTransaction(transaction: TransactionEntity)
 
   @Delete
   suspend fun deleteTransaction(transaction: TransactionEntity)
 
   @Query("DELETE FROM transactions WHERE partyType = :partyType AND partyId = :partyId AND description = :description")
   suspend fun deleteByDescription(partyType: String, partyId: Long, description: String): Int
+
+  @Query("DELETE FROM transactions WHERE partyType = :partyType AND partyId = :partyId")
+  suspend fun deleteByParty(partyType: String, partyId: Long): Int
 }

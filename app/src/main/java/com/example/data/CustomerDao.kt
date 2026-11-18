@@ -8,8 +8,11 @@ interface CustomerDao {
   @Query("SELECT * FROM customers ORDER BY name ASC")
   fun getAllCustomers(): Flow<List<CustomerEntity>>
 
-  @Query("SELECT * FROM customers")
+  @Query("SELECT * FROM customers ORDER BY id DESC")
   suspend fun getCustomersSnapshot(): List<CustomerEntity>
+
+  @Query("SELECT * FROM customers WHERE LOWER(TRIM(name)) = LOWER(TRIM(:name)) LIMIT 1")
+  suspend fun getCustomerByName(name: String): CustomerEntity?
 
   @Query("DELETE FROM customers")
   suspend fun clearCustomers()

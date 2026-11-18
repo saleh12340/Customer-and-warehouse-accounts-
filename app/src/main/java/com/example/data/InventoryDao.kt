@@ -8,8 +8,11 @@ interface InventoryDao {
   @Query("SELECT * FROM inventory_items ORDER BY name ASC")
   fun getAllItems(): Flow<List<InventoryItemEntity>>
 
-  @Query("SELECT * FROM inventory_items")
+  @Query("SELECT * FROM inventory_items ORDER BY name ASC")
   suspend fun getItemsSnapshot(): List<InventoryItemEntity>
+
+  @Query("SELECT * FROM inventory_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(:name)) LIMIT 1")
+  suspend fun getItemByName(name: String): InventoryItemEntity?
 
   @Query("DELETE FROM inventory_items")
   suspend fun clearItems()

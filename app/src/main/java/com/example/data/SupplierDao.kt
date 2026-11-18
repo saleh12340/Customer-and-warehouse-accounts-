@@ -8,8 +8,11 @@ interface SupplierDao {
   @Query("SELECT * FROM suppliers ORDER BY name ASC")
   fun getAllSuppliers(): Flow<List<SupplierEntity>>
 
-  @Query("SELECT * FROM suppliers")
+  @Query("SELECT * FROM suppliers ORDER BY id DESC")
   suspend fun getSuppliersSnapshot(): List<SupplierEntity>
+
+  @Query("SELECT * FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(TRIM(:name)) LIMIT 1")
+  suspend fun getSupplierByName(name: String): SupplierEntity?
 
   @Query("DELETE FROM suppliers")
   suspend fun clearSuppliers()

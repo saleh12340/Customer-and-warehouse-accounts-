@@ -14,8 +14,11 @@ interface InvoiceDao {
   @Query("SELECT * FROM invoices ORDER BY date DESC")
   fun getAllInvoices(): Flow<List<InvoiceEntity>>
 
-  @Query("SELECT * FROM invoices")
+  @Query("SELECT * FROM invoices ORDER BY date DESC, id DESC")
   suspend fun getInvoicesSnapshot(): List<InvoiceEntity>
+
+  @Query("SELECT COUNT(*) FROM invoices WHERE partyId = :partyId AND ((:isPurchase = 1 AND type = 'PURCHASE') OR (:isPurchase = 0 AND type != 'PURCHASE'))")
+  suspend fun countInvoicesForParty(partyId: Long, isPurchase: Boolean): Int
 
   @Query("SELECT * FROM invoice_items")
   suspend fun getInvoiceItemsSnapshot(): List<InvoiceItemEntity>
