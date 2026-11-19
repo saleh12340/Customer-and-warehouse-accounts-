@@ -75,13 +75,13 @@ class MainActivity : ComponentActivity() {
     registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
       val contactUri = result.data?.data ?: return@registerForActivityResult
       val projection = arrayOf(
-        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+        ContactsContract.Contacts.DISPLAY_NAME,
         ContactsContract.CommonDataKinds.Phone.NUMBER
       )
       try {
         contentResolver.query(contactUri, projection, null, null, null)?.use { cursor ->
           if (cursor.moveToFirst()) {
-            val name = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)).orEmpty()
+            val name = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME)).orEmpty()
             val phone = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)).orEmpty()
             bridge.onContactPicked(name, phone)
           } else {
