@@ -1721,7 +1721,9 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
       itemName: i.itemName,
       quantity: i.quantity,
       unitPrice: i.unitPrice,
-      totalPrice: i.totalPrice
+      totalPrice: i.totalPrice,
+      stockQuantity: i.stockQuantity > 0 ? i.stockQuantity : i.quantity,
+      unitName: i.unitLabel || '', unitLabel: i.unitLabel || '', unitFactor: i.unitFactor || 1
     }));
 
     batchEntryRows = [createBlankBatchRow()];
@@ -2025,12 +2027,13 @@ function onBatchRowUnitPriceInput(idx, val) {
   if (totalEl) totalEl.value = row.total;
 }
 
-function appendItemLineToCart(itemId, itemName, qty, unitPrice, totalPrice) {
+function appendItemLineToCart(itemId, itemName, qty, unitPrice, totalPrice, unitName = '', unitFactor = 1) {
   const normalizedUnit = Math.round((totalPrice / qty) * 10000) / 10000;
   const cleanName = itemName.trim();
   const existingIdx = cartItems.findIndex(x =>
     x.itemId === itemId &&
     x.itemName.trim().toLowerCase() === cleanName.toLowerCase() &&
+    (x.unitName || '') === unitName && (x.unitFactor || 1) === unitFactor &&
     Math.abs(x.unitPrice - normalizedUnit) < 0.0001
   );
   if (existingIdx >= 0) {
@@ -2042,7 +2045,8 @@ function appendItemLineToCart(itemId, itemName, qty, unitPrice, totalPrice) {
       itemName: cleanName,
       quantity: qty,
       unitPrice: normalizedUnit,
-      totalPrice: Math.round(totalPrice * 100) / 100
+      totalPrice: Math.round(totalPrice * 100) / 100,
+      unitName, unitFactor, stockQuantity: qty * unitFactor
     });
   }
 }
@@ -2084,7 +2088,9 @@ function addBatchItemsToCart() {
     const matched = inventoryData.find(x => (x.name || '').trim().toLowerCase() === name.toLowerCase());
     const resolvedId = r.itemId > 0 ? r.itemId : (matched ? matched.id : 0);
 
-    pendingLines.push({ itemId: resolvedId, itemName: name, qty, unitPrice, totalPrice });
+    const unitFactor = resolvedId > 0 ? (r.unitFactor || 1) : 1;
+    const unitName = resolvedId > 0 ? (r.unitName || (matched ? parseInventoryUnitConfig(matched.unit).base : 'حبة')) : '';
+    pendingLines.push({ itemId: resolvedId, itemName: name, qty, unitPrice, totalPrice, unitName, unitFactor });
   }
 
   if (errorMsg) {
@@ -2097,7 +2103,7 @@ function addBatchItemsToCart() {
   }
 
   pendingLines.forEach(line => {
-    appendItemLineToCart(line.itemId, line.itemName, line.qty, line.unitPrice, line.totalPrice);
+    appendItemLineToCart(line.itemId, line.itemName, line.qty, line.unitPrice, line.totalPrice, line.unitName, line.unitFactor);
   });
 
   invoiceDirty = true;
@@ -2258,6 +2264,7 @@ function updateCartQty(idx, newQtyVal) {
   const qty = parseInt(newQtyVal, 10);
   if (!Number.isFinite(qty) || qty <= 0) return;
   cartItems[idx].quantity = qty;
+  cartItems[idx].stockQuantity = qty * (cartItems[idx].unitFactor || 1);
   cartItems[idx].totalPrice = Math.round(qty * cartItems[idx].unitPrice * 100) / 100;
   invoiceDirty = true;
   if (document.getElementById('inv-type').value === 'CASH') {
@@ -2326,7 +2333,7 @@ function renderCart() {
     tbody.innerHTML = cartItems.map((item, idx) => `
       <tr>
         <td><input type="number" class="qty-inline-input" style="width:66px; color:var(--success-green);" min="0" step="0.01" value="${item.totalPrice}" onchange="updateCartLineTotal(${idx}, this.value)"></td>
-        <td><input type="number" class="qty-inline-input" min="1" value="${item.quantity}" onchange="updateCartQty(${idx}, this.value)"></td>
+        <td><input type="number" class="qty-inline-input" min="1" value="${item.quantity}" onchange="updateCartQty(${idx}, this.value)"><small class="cart-unit-label">${escapeHtml(item.unitName || '')}</small></td>
         <td><input type="text" class="inline-name-input" value="${escapeHtml(item.itemName)}" onchange="updateCartItemName(${idx}, this.value)"></td>
         <td><input type="number" class="qty-inline-input" style="width:60px; color:var(--dark-header); background:#F5F8FF;" min="0" step="0.01" value="${item.unitPrice}" onchange="updateCartUnitPrice(${idx}, this.value)"></td>
         <td><button type="button" class="tbl-action-btn del" onclick="removeCartItem(${idx})">حذف</button></td>
