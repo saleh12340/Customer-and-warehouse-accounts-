@@ -1457,6 +1457,22 @@ window.onInvoicesData = function (jsonStr) {
   }
 };
 
+function exportPurchaseInvoicesToInventory() {
+  if (!window.Android || invoiceFilter !== 'PURCHASE') return;
+  const pending = invoicesData.filter(inv => inv.type === 'PURCHASE').length;
+  if (pending === 0) {
+    showToast('لا توجد فواتير شراء لترحيلها', 'info');
+    return;
+  }
+  if (!window.confirm('سيتم فحص جميع فواتير الشراء وترحيل الأصناف غير المرتبطة بالمخزن فقط. الأصناف المضافة سابقاً لن تتكرر. هل تريد المتابعة؟')) return;
+  const button = document.querySelector('#purchase-bulk-export-row button');
+  if (button) button.disabled = true;
+  const reqId = nextReqId(() => {
+    if (button) button.disabled = false;
+  });
+  window.Android.exportPurchaseInvoicesToInventory(reqId);
+}
+
 function setInvoiceFilter(filter, btn) {
   invoiceFilter = filter;
   document.querySelectorAll('#invoice-filter-tabs .pill').forEach(p => p.classList.remove('active'));
@@ -1468,6 +1484,9 @@ function renderInvoicesList() {
   const container = document.getElementById('invoices-list');
   const summary = document.getElementById('invoices-summary-strip');
   const query = (document.getElementById('invoices-search').value || '').trim().toLowerCase();
+
+  const bulkExportRow = document.getElementById('purchase-bulk-export-row');
+  if (bulkExportRow) bulkExportRow.classList.toggle('hidden', invoiceFilter !== 'PURCHASE' || !invoicesData.some(inv => inv.type === 'PURCHASE'));
 
   const filtered = invoicesData.filter(inv => {
     const matchText = !query ||
