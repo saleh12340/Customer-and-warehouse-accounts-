@@ -1,5 +1,36 @@
 'use strict';
 
+function toEnglishDigits(value) {
+  return String(value ?? '').replace(/[٠-٩۰-۹]/g, ch => {
+    const code = ch.charCodeAt(0);
+    return String(code >= 0x06F0 ? code - 0x06F0 : code - 0x0660);
+  });
+}
+
+function enforceEnglishNumericFields(root) {
+  const scope = root || document;
+  scope.querySelectorAll('input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"]').forEach(el => {
+    el.setAttribute('lang', 'en');
+    el.setAttribute('dir', 'ltr');
+    if (el.type === 'number' && !el.hasAttribute('inputmode')) el.setAttribute('inputmode', 'decimal');
+    const normalized = toEnglishDigits(el.value);
+    if (normalized !== el.value) el.value = normalized;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => enforceEnglishNumericFields());
+document.addEventListener('input', event => {
+  const el = event.target;
+  if (!el || !el.matches || !el.matches('input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"]')) return;
+  const normalized = toEnglishDigits(el.value);
+  if (normalized !== el.value) {
+    const start = el.selectionStart;
+    el.value = normalized;
+    if (typeof start === 'number' && el.type !== 'number') el.setSelectionRange(start, start);
+  }
+});
+
+
 let currentView = 'dashboard';
 let appCurrency = 'ر.ي';
 let storeName = 'بقالة العزي للمواد الغذائية';
@@ -1385,7 +1416,7 @@ function openCreateInvoice(presetType, presetPartyId) {
   editingInvoiceId = 0;
   invoiceDirty = true;
   cartItems = [];
-  batchEntryRows = [createBlankBatchRow(), createBlankBatchRow()];
+  batchEntryRows = [createBlankBatchRow()];
   document.getElementById('invoice-screen-title').textContent = 'إصدار فاتورة جديدة';
   document.getElementById('btn-save-invoice').textContent = 'حفظ الفاتورة';
   document.getElementById('invoice-saved-badge').classList.add('hidden');
@@ -1414,6 +1445,7 @@ function openCreateInvoice(presetType, presetPartyId) {
     }, 120);
   }
   renderBatchEntryRows();
+  enforceEnglishNumericFields(document.getElementById('view-create-invoice'));
   renderCart();
   switchView('create-invoice');
 }
@@ -1432,7 +1464,7 @@ window.onNextInvoiceNumber = function (jsonStr) {
 function openEditInvoice(invoiceId) {
   editingInvoiceId = invoiceId;
   invoiceDirty = false;
-  batchEntryRows = [createBlankBatchRow(), createBlankBatchRow()];
+  batchEntryRows = [createBlankBatchRow()];
   if (window.Android) {
     window.Android.getCustomers();
     window.Android.getSuppliers();
@@ -1595,7 +1627,7 @@ function renderBatchEntryRows() {
   if (!batchEntryRows || batchEntryRows.length === 0) {
     batchEntryRows = [createBlankBatchRow()];
   }
-  container.innerHTML = batchEntryRows.map((row, idx) => `
+  container.innerHTML = batchEntryRows.slice(0, 1).map((row, idx) => `
     <div class="ruled-input-row grid-invoice-batch-row">
       <input type="number" id="batch-total-${idx}" class="ruled-cell cell-num" placeholder="الإجمالي" step="0.01" min="0"
         value="${escapeHtml(row.total)}" oninput="onBatchRowTotalInput(${idx}, this.value)">
@@ -1612,7 +1644,7 @@ function renderBatchEntryRows() {
 }
 
 function addBatchRow() {
-  batchEntryRows.push(createBlankBatchRow());
+  batchEntryRows = [createBlankBatchRow()];
   renderBatchEntryRows();
   const lastIdx = batchEntryRows.length - 1;
   setTimeout(() => {
@@ -1622,11 +1654,7 @@ function addBatchRow() {
 }
 
 function removeBatchRow(idx) {
-  if (batchEntryRows.length <= 1) {
-    batchEntryRows[0] = createBlankBatchRow();
-  } else {
-    batchEntryRows.splice(idx, 1);
-  }
+  batchEntryRows = [createBlankBatchRow()];
   renderBatchEntryRows();
 }
 
@@ -1784,7 +1812,7 @@ function addBatchItemsToCart() {
   });
 
   invoiceDirty = true;
-  batchEntryRows = [createBlankBatchRow(), createBlankBatchRow()];
+  batchEntryRows = [createBlankBatchRow()];
   renderBatchEntryRows();
 
   if (document.getElementById('inv-type').value === 'CASH') {
