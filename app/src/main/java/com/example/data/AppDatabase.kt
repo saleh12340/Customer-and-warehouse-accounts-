@@ -47,6 +47,14 @@ abstract class AppDatabase : RoomDatabase() {
       }
     }
 
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE invoice_items ADD COLUMN stockQuantity INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE invoice_items ADD COLUMN unitLabel TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE invoice_items ADD COLUMN unitFactor INTEGER NOT NULL DEFAULT 1")
+      }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
       return INSTANCE ?: synchronized(this) {
         INSTANCE ?: Room.databaseBuilder(
