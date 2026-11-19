@@ -1568,3 +1568,19 @@ nav.bottom-nav button.active::before {
   .quick-stock-pick-row { grid-template-columns: minmax(0, 1fr) 46px 54px; gap: 4px; padding: 5px; }
   .quick-stock-pick-qty { width: 46px; }
 }
+
+@media (max-width: 380px) {
+  #view-create-invoice .grid-inv-meta-4 {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+  }
+  #view-create-invoice .grid-inv-meta-4 .ruled-cell {
+    min-width: 0;
+    height: 36px;
+    min-height: 36px;
+    font-size: 10.5px;
+    padding-inline: 3px;
+  }
+  #view-create-invoice .grid-invoice-batch-row {
+    grid-template-columns: minmax(0, .95fr) minmax(0, .55fr) minmax(0, 1.55fr) minmax(0, .85fr) 24px;
+  }
+}
