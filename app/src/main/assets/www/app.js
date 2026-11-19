@@ -71,6 +71,7 @@ if (typeof MutationObserver !== 'undefined' && document.documentElement) {
 }
 
 let currentView = 'dashboard';
+let viewHistory = [];
 let appCurrency = 'ر.ي';
 let storeName = 'بقالة العزي للمواد الغذائية';
 
@@ -93,6 +94,8 @@ let settingsData = {
 
 let customerFilter = 'ALL';
 let inventoryFilter = 'ALL';
+let inventoryCategoryFilter = 'ALL';
+let inventorySort = 'NAME';
 let invoiceFilter = 'ALL';
 let reportRange = 'ALL';
 
@@ -287,7 +290,15 @@ const SUB_VIEW_PARENTS = {
   'about': 'dashboard'
 };
 
-function switchView(viewName) {
+function switchView(viewName, trackHistory = true) {
+  if (viewName === currentView) {
+    loadViewData(viewName);
+    return;
+  }
+  if (trackHistory && currentView) {
+    viewHistory.push(currentView);
+    if (viewHistory.length > 40) viewHistory.shift();
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
 
@@ -299,7 +310,7 @@ function switchView(viewName) {
 
   const backBtn = document.getElementById('header-back-btn');
   if (backBtn) {
-    backBtn.classList.toggle('hidden', !SUB_VIEW_PARENTS[viewName]);
+    backBtn.classList.toggle('hidden', !(SUB_VIEW_PARENTS[viewName] || viewHistory.length > 0));
   }
 
   currentView = viewName;
@@ -309,17 +320,31 @@ function switchView(viewName) {
   loadViewData(viewName);
 }
 
-function handleBackAction() {
+function navigateToPreviousView() {
   if (currentView === 'thermal-preview') {
-    returnFromThermalPreview();
-    return;
+    const dest = viewHistory.pop() || thermalReturnView || 'create-invoice';
+    switchView(dest, false);
+    return true;
+  }
+  if (viewHistory.length > 0) {
+    const previous = viewHistory.pop();
+    switchView(previous, false);
+    return true;
   }
   const parent = SUB_VIEW_PARENTS[currentView];
   if (parent) {
-    switchView(parent);
-  } else if (currentView !== 'dashboard') {
-    switchView('dashboard');
+    switchView(parent, false);
+    return true;
   }
+  if (currentView !== 'dashboard') {
+    switchView('dashboard', false);
+    return true;
+  }
+  return false;
+}
+
+function handleBackAction() {
+  navigateToPreviousView();
 }
 
 window.handleAndroidBack = function () {
@@ -328,20 +353,7 @@ window.handleAndroidBack = function () {
     toggleMenu(false);
     return 'HANDLED';
   }
-  if (currentView === 'thermal-preview') {
-    returnFromThermalPreview();
-    return 'HANDLED';
-  }
-  const parent = SUB_VIEW_PARENTS[currentView];
-  if (parent) {
-    switchView(parent);
-    return 'HANDLED';
-  }
-  if (currentView !== 'dashboard') {
-    switchView('dashboard');
-    return 'HANDLED';
-  }
-  return 'EXIT';
+  return navigateToPreviousView() ? 'HANDLED' : 'EXIT';
 };
 
 function loadViewData(view) {
@@ -1101,16 +1113,44 @@ function shareSupplierWhatsApp() {
 window.onInventoryData = function (jsonStr) {
   try {
     inventoryData = JSON.parse(jsonStr);
-    if (currentView === 'inventory') {
-      renderInventoryList();
-    }
-    if (currentView === 'create-invoice') {
-      populateItemDropdown();
-    }
+    populateInventoryCategoryFilter();
+    populateInventoryCategorySuggestions();
+    if (currentView === 'inventory') renderInventoryList();
+    if (currentView === 'create-invoice') populateItemDropdown();
   } catch (e) {
     console.error(e);
   }
 };
+
+function populateInventoryCategoryFilter() {
+  const select = document.getElementById('inventory-category-filter');
+  if (!select) return;
+  const current = inventoryCategoryFilter;
+  const categories = [...new Set(inventoryData.map(i => (i.category || 'عام').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'ar'));
+  select.innerHTML = '<option value="ALL">كل الفئات</option>' +
+    categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  select.value = categories.includes(current) ? current : 'ALL';
+  inventoryCategoryFilter = select.value;
+}
+
+function populateInventoryCategorySuggestions() {
+  const list = document.getElementById('inventory-categories');
+  if (!list) return;
+  const categories = [...new Set(inventoryData.map(i => (i.category || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'ar'));
+  list.innerHTML = categories.map(c => `<option value="${escapeHtml(c)}"></option>`).join('');
+}
+
+function setInventoryCategory(value) {
+  inventoryCategoryFilter = value || 'ALL';
+  renderInventoryList();
+}
+
+function setInventorySort(value) {
+  inventorySort = value || 'NAME';
+  renderInventoryList();
+}
 
 function setInventoryFilter(filter, btn) {
   inventoryFilter = filter;
@@ -1132,17 +1172,28 @@ function renderInventoryList() {
 
   const filtered = inventoryData.filter(i => {
     const name = (i.name || '').toLowerCase();
-    const category = (i.category || '').toLowerCase();
+    const category = (i.category || 'عام').toLowerCase();
     const matchText = !query || name.includes(query) || category.includes(query);
     if (!matchText) return false;
+    if (inventoryCategoryFilter !== 'ALL' && (i.category || 'عام') !== inventoryCategoryFilter) return false;
     if (inventoryFilter === 'LOW') return Number(i.quantity) > 0 && Number(i.quantity) <= 10;
     if (inventoryFilter === 'OUT') return Number(i.quantity) <= 0;
     return true;
   });
 
+  filtered.sort((a, b) => {
+    if (inventorySort === 'QTY_ASC') return Number(a.quantity) - Number(b.quantity);
+    if (inventorySort === 'QTY_DESC') return Number(b.quantity) - Number(a.quantity);
+    if (inventorySort === 'VALUE_DESC') return (Number(b.quantity) * Number(b.purchasePrice)) - (Number(a.quantity) * Number(a.purchasePrice));
+    return (a.name || '').localeCompare(b.name || '', 'ar');
+  });
+
   const totalCost = filtered.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.purchasePrice)), 0);
+  const totalRetail = filtered.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.sellingPrice)), 0);
   const totalUnits = filtered.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
-  summary.innerHTML = `<span>الأصناف: ${filtered.length}</span><span>الوحدات: ${fmtMoney(totalUnits)}</span><span>قيمة الشراء: ${fmtMoney(totalCost)} ${escapeHtml(appCurrency)}</span>`;
+  const lowCount = filtered.filter(i => Number(i.quantity) > 0 && Number(i.quantity) <= 10).length;
+  const outCount = filtered.filter(i => Number(i.quantity) <= 0).length;
+  summary.innerHTML = `<span>الأصناف: ${filtered.length}</span><span>الوحدات: ${fmtMoney(totalUnits)}</span><span>قيمة الشراء: ${fmtMoney(totalCost)} ${escapeHtml(appCurrency)}</span><span>قيمة البيع: ${fmtMoney(totalRetail)} ${escapeHtml(appCurrency)}</span><span>منخفض: ${lowCount}</span><span>نافذ: ${outCount}</span>`;
 
   if (filtered.length === 0) {
     container.innerHTML = '<div class="empty-state">لا توجد أصناف مطابقة للبحث</div>';
@@ -1180,6 +1231,57 @@ function renderInventoryList() {
       </article>
     `;
   }).join('');
+}
+
+function toggleInventoryQuickAdd(forceState) {
+  const panel = document.getElementById('inventory-quick-add');
+  if (!panel) return;
+  const show = typeof forceState === 'boolean' ? forceState : panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !show);
+  if (show) {
+    const name = document.getElementById('inventory-quick-name');
+    if (name) name.focus();
+  }
+}
+
+function submitInventoryQuickAdd() {
+  const name = (document.getElementById('inventory-quick-name').value || '').trim();
+  const category = (document.getElementById('inventory-quick-category').value || '').trim() || 'مواد غذائية';
+  const unit = (document.getElementById('inventory-quick-unit').value || '').trim() || 'حبة';
+  const quantityRaw = document.getElementById('inventory-quick-qty').value;
+  const buyRaw = document.getElementById('inventory-quick-buy').value;
+  const sellRaw = document.getElementById('inventory-quick-sell').value;
+  const quantity = quantityRaw === '' ? 0 : Number(quantityRaw);
+  const purchasePrice = buyRaw === '' ? 0 : Number(buyRaw);
+  const sellingPrice = sellRaw === '' ? 0 : Number(sellRaw);
+  if (!name) {
+    showToast('أدخل اسم الصنف', 'error');
+    document.getElementById('inventory-quick-name').focus();
+    return;
+  }
+  if (inventoryData.some(i => (i.name || '').trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    showToast('هذا الصنف موجود مسبقاً؛ استخدم تعديل الصنف الموجود', 'error');
+    return;
+  }
+  if (!Number.isInteger(quantity) || quantity < 0 || !Number.isFinite(purchasePrice) || purchasePrice < 0 ||
+      !Number.isFinite(sellingPrice) || sellingPrice < 0) {
+    showToast('تحقق من الكمية وأسعار الشراء والبيع', 'error');
+    return;
+  }
+  if (!window.Android) return;
+  const reqId = nextReqId((created) => {
+    if (!created || !created.id) return;
+    ['name','qty','buy','sell','category','unit'].forEach(key => {
+      const el = document.getElementById('inventory-quick-' + key);
+      if (el) el.value = '';
+    });
+    toggleInventoryQuickAdd(false);
+    showToast('تمت إضافة الصنف إلى المخزن ✓', 'success');
+    renderInventoryList();
+  });
+  window.Android.saveInventoryItem(JSON.stringify({
+    id: 0, name, category, unit, quantity, purchasePrice, sellingPrice
+  }), reqId);
 }
 
 function openInventoryHistory(itemId) {
@@ -1309,6 +1411,13 @@ function submitInventoryForm() {
 
   if (!name) {
     showToast('الرجاء إدخال اسم الصنف', 'error');
+    document.getElementById('inv-item-form-name').focus();
+    return;
+  }
+  const duplicate = inventoryData.find(i => i.id !== editingInventoryId && (i.name || '').trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+  if (duplicate) {
+    showToast('هذا الصنف مسجل مسبقاً؛ افتح الصنف الموجود للتعديل', 'error');
+    document.getElementById('inv-item-form-name').focus();
     return;
   }
   if (!Number.isFinite(quantity) || quantity < 0 || !Number.isFinite(purchasePrice) || purchasePrice < 0 || !Number.isFinite(sellingPrice) || sellingPrice < 0) {
