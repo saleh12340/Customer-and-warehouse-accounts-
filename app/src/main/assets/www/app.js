@@ -1578,8 +1578,60 @@ function openCreateInvoiceForParty(type, partyId) {
   openCreateInvoice(type, partyId);
 }
 
+function parseInventoryUnitConfig(raw) {
+  const legacy = String(raw || '').trim() || 'حبة';
+  try {
+    const v = JSON.parse(legacy);
+    if (v && typeof v === 'object' && v.base) return {
+      base: String(v.base), packName: String(v.packName || ''),
+      packSize: Math.max(1, parseInt(v.packSize, 10) || 1),
+      cartonName: String(v.cartonName || ''),
+      cartonPacks: Math.max(1, parseInt(v.cartonPacks, 10) || 1)
+    };
+  } catch (_) {}
+  return { base: legacy, packName: '', packSize: 1, cartonName: '', cartonPacks: 1 };
+}
+function serializeInventoryUnitConfig(prefix) {
+  const get = s => (document.getElementById(prefix + s)?.value || '').trim();
+  const base = get('-unit') || 'حبة', packName = get('-pack-name'), packSize = parseInt(get('-pack-size'), 10) || 0;
+  const cartonName = get('-carton-name'), cartonPacks = parseInt(get('-carton-packs'), 10) || 0;
+  if ((packName && packSize < 1) || (cartonName && cartonPacks < 1) || (cartonName && !packName)) {
+    showToast('أدخل أعداد العبوات بشكل صحيح', 'error'); return null;
+  }
+  return JSON.stringify({ base, packName, packSize: packName ? packSize : 1, cartonName, cartonPacks: cartonName ? cartonPacks : 1 });
+}
+function fillInventoryUnitConfig(prefix, raw) {
+  const v = parseInventoryUnitConfig(raw);
+  const values = { '-unit': v.base, '-pack-name': v.packName, '-pack-size': v.packName ? v.packSize : '',
+    '-carton-name': v.cartonName, '-carton-packs': v.cartonName ? v.cartonPacks : '' };
+  Object.entries(values).forEach(([s, value]) => { const el = document.getElementById(prefix + s); if (el) el.value = value; });
+  updateInventoryUnitPreview(prefix);
+}
+function updateInventoryUnitPreview(prefix) {
+  const get = s => (document.getElementById(prefix + s)?.value || '').trim();
+  const base = get('-unit') || 'حبة', pack = get('-pack-name'), packSize = parseInt(get('-pack-size'), 10) || 0;
+  const carton = get('-carton-name'), cartonPacks = parseInt(get('-carton-packs'), 10) || 0;
+  const el = document.getElementById(prefix + '-unit-preview'); if (!el) return;
+  const parts = [];
+  if (pack && packSize > 0) parts.push('1 ' + pack + ' = ' + packSize + ' ' + base);
+  if (carton && cartonPacks > 0) {
+    const factor = (pack && packSize > 0) ? packSize * cartonPacks : cartonPacks;
+    parts.push('1 ' + carton + ' = ' + cartonPacks + ' ' + (pack || base) + ' = ' + factor + ' ' + base);
+  }
+  el.textContent = parts.join(' | ') || ('الوحدة الأساسية: ' + base);
+}
+function getInventoryUnitOptions(item) {
+  if (!item) return [{ name: 'حبة', factor: 1 }];
+  const v = parseInventoryUnitConfig(item.unit), options = [{ name: v.base, factor: 1 }];
+  if (v.packName && v.packSize > 1) options.push({ name: v.packName, factor: v.packSize });
+  if (v.cartonName && v.cartonPacks > 0) {
+    const factor = v.packName ? v.packSize * v.cartonPacks : v.cartonPacks;
+    if (factor > 1) options.push({ name: v.cartonName, factor });
+  }
+  return options;
+}
 function createBlankBatchRow() {
-  return { itemId: 0, itemName: '', qty: '1', unitPrice: '', total: '' };
+  return { itemId: 0, itemName: '', qty: '1', unitPrice: '', total: '', unitName: '', unitFactor: 1 };
 }
 
 function openCreateInvoice(presetType, presetPartyId) {
