@@ -25,7 +25,8 @@ class AndroidBridge(
   private val webView: WebView,
   private val onRequestBackupExport: () -> Unit = {},
   private val onRequestBackupImport: () -> Unit = {},
-  private val onRequestLinkFolder: () -> Unit = {}
+  private val onRequestLinkFolder: () -> Unit = {},
+  private val onRequestPickContact: () -> Unit = {}
 ) {
   private val database = AppDatabase.getDatabase(activity)
   private val engine = GroceryAccountingEngine(database)
@@ -56,6 +57,19 @@ class AndroidBridge(
     getSuppliers()
     getInventory()
     getInvoices()
+  }
+
+  @JavascriptInterface
+  fun pickCustomerContact() {
+    activity.runOnUiThread { onRequestPickContact() }
+  }
+
+  /** Called only after the user explicitly selects one phone contact in Android's picker. */
+  fun onContactPicked(name: String, phone: String) {
+    callJs(
+      "onCustomerContactPicked",
+      JSONObject().put("name", name).put("phone", phone).toString()
+    )
   }
 
   // ---------------- Dashboard ----------------
