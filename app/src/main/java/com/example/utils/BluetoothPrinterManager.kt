@@ -201,7 +201,7 @@ object BluetoothPrinterManager {
         paint = boldPaint,
         width = (nameW - 6f).toInt(),
         alignment = Layout.Alignment.ALIGN_NORMAL,
-        maxLines = 3
+        maxLines = 200
       )
       val rowH = maxOf(if (isWide) 32 else 25, nameLayout.height + 6)
       Triple(item, nameLayout, rowH)
@@ -373,7 +373,7 @@ object BluetoothPrinterManager {
     y = boxBottom + 5f
 
     if (tx.description.isNotBlank()) {
-      y += drawRtl(canvas, "البيان: ${tx.description}", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL, maxLines = 3) + 4f
+      y += drawRtl(canvas, "البيان: ${tx.description}", pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL, maxLines = 200) + 4f
     }
 
     canvas.drawLine(pad, y, width - pad, y, ruleLine)
@@ -431,7 +431,7 @@ object BluetoothPrinterManager {
     val measured = visible.map { entry ->
       val tx = entry.transaction
       val lineText = "${df.format(Date(tx.date))} ${tx.description}".trim()
-      val layout = buildRtlLayout(lineText, boldPaint, (descW - 6f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 2)
+      val layout = buildRtlLayout(lineText, boldPaint, (descW - 6f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 20)
       val rowH = maxOf(if (isWide) 30 else 24, layout.height + 6)
       Triple(entry, layout, rowH)
     }
@@ -710,7 +710,7 @@ object BluetoothPrinterManager {
     paint: TextPaint,
     width: Int,
     alignment: Layout.Alignment,
-    maxLines: Int = 2
+    maxLines: Int = 20
   ): StaticLayout {
     return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
       .setAlignment(alignment)
