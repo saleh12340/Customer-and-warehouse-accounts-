@@ -155,7 +155,7 @@
           </div>
           <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="cust-form-address" class="ruled-cell" placeholder="الحي / الشارع...">
-            <input type="number" id="cust-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="cust-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
           </div>
 
           <div class="btn-row" style="margin-top:8px;">
@@ -187,7 +187,7 @@
             <span>التاريخ والوقت</span>
           </div>
           <div class="ruled-input-row grid-tx-entry">
-            <input type="number" id="tx-amount" class="ruled-cell cell-num" placeholder="المبلغ" step="0.01" min="0">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="tx-amount" class="ruled-cell cell-num" placeholder="المبلغ" step="0.01" min="0">
             <input type="text" id="tx-desc" class="ruled-cell" placeholder="بيان الحركة / سداد / دين...">
             <input type="datetime-local" id="tx-date" class="ruled-cell cell-num">
           </div>
@@ -275,7 +275,7 @@
           </div>
           <div class="ruled-input-row grid-cust-name-first">
             <input type="text" id="supp-form-company" class="ruled-cell" placeholder="اسم الشركة أو الموزع...">
-            <input type="number" id="supp-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="supp-form-balance" class="ruled-cell cell-num" placeholder="0" step="0.01">
           </div>
 
           <div class="btn-row" style="margin-top:8px;">
@@ -306,7 +306,7 @@
             <span>التاريخ والوقت</span>
           </div>
           <div class="ruled-input-row grid-tx-entry">
-            <input type="number" id="supp-tx-amount" class="ruled-cell cell-num" placeholder="المبلغ" step="0.01" min="0">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="supp-tx-amount" class="ruled-cell cell-num" placeholder="المبلغ" step="0.01" min="0">
             <input type="text" id="supp-tx-desc" class="ruled-cell" placeholder="بيان حركة المورد / سداد...">
             <input type="datetime-local" id="supp-tx-date" class="ruled-cell cell-num">
           </div>
@@ -387,10 +387,10 @@
             <span>شراء الواحدة</span>
           </div>
           <div class="ruled-input-row grid-inv-4">
-            <input type="number" id="inv-item-form-total-buy" class="ruled-cell cell-num" placeholder="الإجمالي" min="0" step="0.01" oninput="syncInventoryBuyFromTotal()">
-            <input type="number" id="inv-item-form-qty" class="ruled-cell cell-num" placeholder="الكمية" min="0" oninput="syncInventoryUnitFromBuyTotal()">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-total-buy" class="ruled-cell cell-num" placeholder="الإجمالي" min="0" step="0.01" oninput="syncInventoryBuyFromTotal()">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-qty" class="ruled-cell cell-num" placeholder="الكمية" min="0" oninput="syncInventoryUnitFromBuyTotal()">
             <input type="text" id="inv-item-form-name" class="ruled-cell" placeholder="اسم الصنف...">
-            <input type="number" id="inv-item-form-buy" class="ruled-cell cell-num cell-auto" placeholder="آلي / يدوي" min="0" step="0.01" oninput="updateMarginPreview()">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-buy" class="ruled-cell cell-num cell-auto" placeholder="آلي / يدوي" min="0" step="0.01" oninput="updateMarginPreview()">
           </div>
 
           <div class="ruled-grid-labels grid-inv-3" style="margin-top:6px;">
@@ -399,7 +399,7 @@
             <span>الفئة</span>
           </div>
           <div class="ruled-input-row grid-inv-3">
-            <input type="number" id="inv-item-form-sell" class="ruled-cell cell-num" placeholder="سعر البيع" min="0" step="0.01" oninput="updateMarginPreview()">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-sell" class="ruled-cell cell-num" placeholder="سعر البيع" min="0" step="0.01" oninput="updateMarginPreview()">
             <input type="text" id="inv-item-form-unit" class="ruled-cell" placeholder="حبة / كرتون">
             <input type="text" id="inv-item-form-category" class="ruled-cell" placeholder="مواد غذائية">
           </div>
@@ -462,8 +462,7 @@
           <div id="invoice-batch-rows" class="batch-rows-stack"></div>
 
           <div class="btn-row" style="margin-top:5px;">
-            <button type="button" class="btn btn-success btn-compact" style="flex:2;" onclick="addBatchItemsToCart()">+ إضافة الأصناف إلى الفاتورة</button>
-            <button type="button" class="btn btn-outline-primary btn-compact" style="flex:1;" onclick="addBatchRow()">+ صف إضافي</button>
+            <button type="button" class="btn btn-success btn-compact" style="flex:1;" onclick="addBatchItemsToCart()">إضافة الصنف إلى الفاتورة</button>
           </div>
 
           <!-- Collapsible Multi-Item Stock Picker -->
@@ -489,9 +488,9 @@
             </div>
             <div class="ruled-input-row grid-quick-stock">
               <input type="text" id="quick-stock-name" class="ruled-cell" placeholder="اسم الصنف...">
-              <input type="number" id="quick-stock-qty" class="ruled-cell cell-num" placeholder="الكمية" min="1">
-              <input type="number" id="quick-stock-buy" class="ruled-cell cell-num" placeholder="الشراء" min="0" step="0.01">
-              <input type="number" id="quick-stock-sell" class="ruled-cell cell-num" placeholder="البيع" min="0" step="0.01">
+              <input type="number" lang="en" dir="ltr" inputmode="decimal" id="quick-stock-qty" class="ruled-cell cell-num" placeholder="الكمية" min="1">
+              <input type="number" lang="en" dir="ltr" inputmode="decimal" id="quick-stock-buy" class="ruled-cell cell-num" placeholder="الشراء" min="0" step="0.01">
+              <input type="number" lang="en" dir="ltr" inputmode="decimal" id="quick-stock-sell" class="ruled-cell cell-num" placeholder="البيع" min="0" step="0.01">
             </div>
             <div class="btn-row" style="margin-top:6px;">
               <button type="button" class="btn btn-primary btn-sm" style="flex:1;" onclick="submitQuickAddStock()">حفظ للمخزن</button>
@@ -513,7 +512,7 @@
               <option value="CREDIT">بيع آجل</option>
               <option value="PURCHASE">شراء</option>
             </select>
-            <input type="text" id="inv-number" class="ruled-cell cell-num" placeholder="رقم الفاتورة" oninput="markInvoiceDirty()">
+            <input type="text" id="inv-number" lang="en" dir="ltr" inputmode="numeric" class="ruled-cell cell-num" placeholder="رقم الفاتورة" oninput="markInvoiceDirty()">
             <input type="datetime-local" id="inv-date" class="ruled-cell cell-num" onchange="markInvoiceDirty()">
           </div>
           <label id="party-label" class="hidden">العميل</label>
@@ -547,7 +546,7 @@
           <div class="totals-row-ruled">
             <div class="total-highlight" id="inv-total-display">الإجمالي: 0 ر.ي</div>
             <div class="paid-input-wrap">
-              <input type="number" id="inv-paid" class="ruled-cell cell-num paid-box" placeholder="المبلغ الواصل" min="0" step="0.01" oninput="updateInvoiceTotals()">
+              <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-paid" class="ruled-cell cell-num paid-box" placeholder="المبلغ الواصل" min="0" step="0.01" oninput="updateInvoiceTotals()">
               <button type="button" class="btn btn-outline btn-sm" onclick="payFullInvoice()">كامل</button>
             </div>
           </div>
@@ -569,8 +568,8 @@
             <span>سعر الصرف</span>
           </div>
           <div class="ruled-input-row grid-cust-name-first">
-            <input type="number" id="calc-tendered" class="ruled-cell cell-num" placeholder="المبلغ المستلم" oninput="computeExchangeChange()">
-            <input type="number" id="calc-rate" class="ruled-cell cell-num" placeholder="سعر الصرف (مثلاً 140)" value="140" oninput="computeExchangeChange()">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="calc-tendered" class="ruled-cell cell-num" placeholder="المبلغ المستلم" oninput="computeExchangeChange()">
+            <input type="number" lang="en" dir="ltr" inputmode="decimal" id="calc-rate" class="ruled-cell cell-num" placeholder="سعر الصرف (مثلاً 140)" value="140" oninput="computeExchangeChange()">
           </div>
           <div id="calc-result-text" class="calc-result">أدخل المبلغ المستلم لحساب الباقي أو التحويل</div>
         </div>
