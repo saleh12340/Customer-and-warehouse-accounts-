@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.ContactsContract
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -70,6 +71,28 @@ class MainActivity : ComponentActivity() {
       }
     }
 
+  private val pickCustomerContactLauncher =
+    registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+      val contactUri = result.data?.data ?: return@registerForActivityResult
+      val projection = arrayOf(
+        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+        ContactsContract.CommonDataKinds.Phone.NUMBER
+      )
+      try {
+        contentResolver.query(contactUri, projection, null, null, null)?.use { cursor ->
+          if (cursor.moveToFirst()) {
+            val name = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)).orEmpty()
+            val phone = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)).orEmpty()
+            bridge.onContactPicked(name, phone)
+          } else {
+            Toast.makeText(this, "تعذر قراءة جهة الاتصال المحددة", Toast.LENGTH_SHORT).show()
+          }
+        } ?: Toast.makeText(this, "تعذر فتح جهة الاتصال المحددة", Toast.LENGTH_SHORT).show()
+      } catch (e: Exception) {
+        Toast.makeText(this, "تعذر استيراد جهة الاتصال: ${e.message ?: ""}", Toast.LENGTH_SHORT).show()
+      }
+    }
+
   private val linkFolderLauncher =
     registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
       if (uri == null) return@registerForActivityResult
@@ -105,6 +128,11 @@ class MainActivity : ComponentActivity() {
       },
       onRequestLinkFolder = {
         linkFolderLauncher.launch(AppDownloadsFolderManager.buildSuggestedDownloadsInitialUri())
+      },
+      onRequestPickContact = {
+        pickCustomerContactLauncher.launch(
+          Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+        )
       }
     )
 
