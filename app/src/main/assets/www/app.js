@@ -1641,6 +1641,7 @@ function renderBatchEntryRows() {
       <button type="button" class="row-remove-cell" onclick="removeBatchRow(${idx})" aria-label="حذف صف">×</button>
     </div>
   `).join('');
+  enforceEnglishNumericFields(container);
 }
 
 function addBatchRow() {
