@@ -891,7 +891,10 @@ class AndroidBridge(
               itemName = itemObj.optString("itemName", ""),
               quantity = qty,
               unitPrice = unitPrice,
-              totalPrice = qty.toDouble() * unitPrice
+              totalPrice = qty.toDouble() * unitPrice,
+              stockQuantity = itemObj.optInt("stockQuantity", 0),
+              unitLabel = itemObj.optString("unitLabel", ""),
+              unitFactor = itemObj.optInt("unitFactor", 1)
             )
           )
         }
