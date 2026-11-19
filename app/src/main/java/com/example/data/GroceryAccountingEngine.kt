@@ -431,10 +431,12 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         require(line.quantity > 0) { "كمية غير صحيحة للصنف: $cleanName" }
         require(line.unitPrice.isFinite() && line.unitPrice >= 0.0) { "سعر شراء غير صحيح للصنف: $cleanName" }
 
+        val baseQuantity = line.stockQuantity.takeIf { it > 0 } ?: Math.multiplyExact(line.quantity, line.unitFactor.coerceAtLeast(1))
+        val baseUnitPrice = GroceryViewModel.roundMoney(line.unitPrice / line.unitFactor.coerceAtLeast(1))
         val existing = inventoryDao.getItemByName(cleanName)
         val targetId = if (existing != null) {
-          val newQuantity = Math.addExact(existing.quantity, line.quantity)
-          inventoryDao.updateItem(existing.copy(quantity = newQuantity, purchasePrice = line.unitPrice))
+          val newQuantity = Math.addExact(existing.quantity, baseQuantity)
+          inventoryDao.updateItem(existing.copy(quantity = newQuantity, purchasePrice = baseUnitPrice))
           existing.id
         } else {
           createdItems++
@@ -442,8 +444,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
             InventoryItemEntity(
               name = cleanName,
               category = "عام",
-              quantity = line.quantity,
-              purchasePrice = line.unitPrice,
+              quantity = baseQuantity,
+              purchasePrice = baseUnitPrice,
               sellingPrice = 0.0,
               unit = "حبة"
             )
@@ -476,13 +478,14 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val movements = matchingLines.mapNotNull { line ->
       val inv = invoiceMap[line.invoiceId] ?: return@mapNotNull null
       val isPurchase = inv.type == "PURCHASE"
-      if (isPurchase) totalPurchased += line.quantity else totalSold += line.quantity
+      val baseQuantity = line.stockQuantity.takeIf { it > 0 } ?: Math.multiplyExact(line.quantity, line.unitFactor.coerceAtLeast(1))
+      if (isPurchase) totalPurchased += baseQuantity else totalSold += baseQuantity
       StockMovementEntry(
         invoiceId = inv.id,
         invoiceNumber = inv.invoiceNumber,
         invoiceType = inv.type,
         partyName = inv.partyName,
-        deltaQty = if (isPurchase) line.quantity else -line.quantity,
+        deltaQty = if (isPurchase) baseQuantity else -baseQuantity,
         unitPrice = line.unitPrice,
         totalPrice = line.totalPrice,
         date = inv.date
@@ -528,7 +531,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       require(it.unitFactor > 0 && it.unitFactor <= 1_000_000) { "معامل الوحدة غير صحيح" }
       require(it.stockQuantity >= 0 && it.stockQuantity <= 10_000_000) { "كمية المخزون المحولة غير صحيحة" }
       val computedTotal = GroceryViewModel.roundMoney(it.quantity.toDouble() * safeUnit)
-      val convertedStock = if (it.stockQuantity > 0) it.stockQuantity else Math.multiplyExact(it.quantity, it.unitFactor)
+      val convertedStock = Math.multiplyExact(it.quantity, it.unitFactor)
+      require(convertedStock in 1..10_000_000) { "كمية المخزون المحولة غير صحيحة للصنف: ${it.itemName}" }
       it.copy(id = 0L, itemName = it.itemName.trim(), unitPrice = safeUnit, totalPrice = computedTotal, stockQuantity = convertedStock)
     }
     val validation = GroceryViewModel.validateInvoiceInput(invoiceNumber, type, normalizedItems, safePaidInput)
