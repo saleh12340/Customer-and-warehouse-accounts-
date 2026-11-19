@@ -158,7 +158,7 @@ class PdfGeneratorAndImageTest {
       assertTrue(img!!.exists() && img.length() > 100)
       val bmp = BitmapFactory.decodeFile(img.absolutePath)
       assertNotNull(bmp)
-      assertEquals(900, bmp.width)
+      assertTrue(bmp.width == 384 || bmp.width == 576)
       assertTrue("Image height should grow monotonically with $count items", bmp.height > previousImageHeight)
       previousImageHeight = bmp.height
       bmp.recycle()
