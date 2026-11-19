@@ -72,7 +72,7 @@ object PdfGenerator {
       val measured = measureItemsForTest(items, context)
       val pagesItems = planPages(measured)
       val lastPageItemsH = pagesItems.last().sumOf { it.rowH.toDouble() }.toFloat()
-      val lastPageStartY = if (pagesItems.size == 1) 185f + 34f else 108f + 34f
+      val lastPageStartY = if (pagesItems.size == 1) 202f + 34f else 108f + 34f
       val summaryHeight = if (partyBalanceAfter != null && invoice.partyId > 0) 136f else 92f
       val summaryNeedsExtraPage = (lastPageStartY + lastPageItemsH + summaryHeight) > BOTTOM_LIMIT
       val totalPagesCount = pagesItems.size + if (summaryNeedsExtraPage) 1 else 0
@@ -98,7 +98,13 @@ object PdfGenerator {
           y += drawRtl(canvas, "$typeAr   |   رقم الفاتورة: ${invoice.invoiceNumber}", MARGIN, y, CONTENT_WIDTH, totalPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
           y += drawRtl(canvas, "التاريخ: $date", MARGIN, y, CONTENT_WIDTH, bodyPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
           val partyLabel = if (invoice.type.equals("PURCHASE", true)) "المورد" else "العميل"
-          y += drawRtl(canvas, "$partyLabel: ${invoice.partyName}", MARGIN, y, CONTENT_WIDTH, totalPaint, Layout.Alignment.ALIGN_NORMAL) + 10f
+          y += drawRtl(canvas, "$partyLabel: ${invoice.partyName}", MARGIN, y, CONTENT_WIDTH, totalPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+          val statusLabel = when (invoice.status.uppercase(Locale.US)) {
+            "PAID" -> "مدفوعة بالكامل"
+            "PARTIAL" -> "مدفوعة جزئياً"
+            else -> if (invoice.type.equals("PURCHASE", true)) "متبقي للمورد" else "متبقي على العميل"
+          }
+          y += drawRtl(canvas, "حالة الفاتورة: $statusLabel", MARGIN, y, CONTENT_WIDTH, bodyPaint, Layout.Alignment.ALIGN_NORMAL) + 8f
         } else {
           y += drawRtl(canvas, "${settings.storeName} - تابع فاتورة ${invoice.invoiceNumber}", MARGIN, y, CONTENT_WIDTH, totalPaint, Layout.Alignment.ALIGN_NORMAL) + 12f
         }
@@ -183,7 +189,7 @@ object PdfGenerator {
   internal fun planPages(measured: List<MeasuredItem>): List<List<MeasuredItem>> {
     val pagesItems = mutableListOf<List<MeasuredItem>>()
     var currentList = mutableListOf<MeasuredItem>()
-    var currentPageY = 185f + 34f
+    var currentPageY = 202f + 34f
     for (entry in measured) {
       if (currentList.isNotEmpty() && currentPageY + entry.rowH > BOTTOM_LIMIT) {
         pagesItems.add(currentList)
