@@ -26,10 +26,10 @@ object InvoiceImageGenerator {
   private const val MARGIN = 36f
 
   fun invoiceTypeArabic(type: String): String = when (type.uppercase()) {
-    "CASH" -> "بيع نقدي"
-    "CREDIT" -> "بيع آجل"
-    "SALE" -> "فاتورة مبيعات"
-    "PURCHASE" -> "فاتورة مشتريات"
+    "CASH" -> "فاتورة بيع نقدي"
+    "CREDIT" -> "فاتورة بيع آجل"
+    "SALE" -> "فاتورة بيع"
+    "PURCHASE" -> "فاتورة شراء"
     else -> type
   }
 
