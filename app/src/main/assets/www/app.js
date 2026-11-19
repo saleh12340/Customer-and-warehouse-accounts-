@@ -1118,7 +1118,10 @@ window.onInventoryData = function (jsonStr) {
     populateInventoryCategoryFilter();
     populateInventoryCategorySuggestions();
     if (currentView === 'inventory') renderInventoryList();
-    if (currentView === 'create-invoice') populateItemDropdown();
+    if (currentView === 'create-invoice') {
+      populateItemDropdown();
+      renderBatchEntryRows();
+    }
   } catch (e) {
     console.error(e);
   }
@@ -1622,6 +1625,14 @@ function updateInventoryUnitPreview(prefix) {
   }
   el.textContent = parts.join(' | ') || ('الوحدة الأساسية: ' + base);
 }
+document.addEventListener('input', event => {
+  const id = event.target && event.target.id ? event.target.id : '';
+  if (id.startsWith('inv-item-form-')) updateInventoryUnitPreview('inv-item-form');
+  if (id.startsWith('inventory-quick-') && ['inventory-quick-unit','inventory-quick-pack-name','inventory-quick-pack-size','inventory-quick-carton-name','inventory-quick-carton-packs'].includes(id)) {
+    updateInventoryUnitPreview('inventory-quick');
+  }
+});
+
 function getInventoryUnitOptions(item) {
   if (!item) return [{ name: 'حبة', factor: 1 }];
   const v = parseInventoryUnitConfig(item.unit), options = [{ name: v.base, factor: 1 }];
