@@ -326,10 +326,12 @@ function navigateToPreviousView() {
     switchView(dest, false);
     return true;
   }
-  if (viewHistory.length > 0) {
+  while (viewHistory.length > 0) {
     const previous = viewHistory.pop();
-    switchView(previous, false);
-    return true;
+    if (previous !== currentView) {
+      switchView(previous, false);
+      return true;
+    }
   }
   const parent = SUB_VIEW_PARENTS[currentView];
   if (parent) {
@@ -1427,7 +1429,7 @@ function submitInventoryForm() {
   if (!window.Android) return;
 
   const payload = { id: editingInventoryId, name, category, unit, quantity, purchasePrice, sellingPrice };
-  const reqId = nextReqId(() => switchView('inventory'));
+  const reqId = nextReqId(() => switchView('inventory', false));
   window.Android.saveInventoryItem(JSON.stringify(payload), reqId);
 }
 
@@ -2384,7 +2386,7 @@ function saveInvoiceAction(followUpAction) {
       // A normal successful save returns to the invoice register; failures stay on this form.
       editingInvoiceId = 0;
       invoiceDirty = false;
-      switchView('invoices');
+      switchView('invoices', false);
     }
   });
   window.Android.saveInvoice(JSON.stringify(payload), reqId);
@@ -2406,7 +2408,7 @@ function runInvoiceFollowUp(invoiceId, action) {
   const closeAfterSuccess = nextReqId(() => {
     editingInvoiceId = 0;
     invoiceDirty = false;
-    switchView('invoices');
+    switchView('invoices', false);
   });
   if (action === 'PDF') {
     window.Android.generateAndOpenPdf(invoiceId, closeAfterSuccess);
@@ -2529,12 +2531,15 @@ function saveActiveThermalImageToFolder() {
 
 function returnFromThermalPreview() {
   const dest = thermalReturnView || 'create-invoice';
+  if (viewHistory.length && viewHistory[viewHistory.length - 1] === dest) viewHistory.pop();
   if (dest === 'customer-detail' && activeCustomerId) {
-    openCustomerDetail(activeCustomerId);
+    switchView(dest, false);
+    window.Android && window.Android.getCustomerDetail(activeCustomerId);
   } else if (dest === 'supplier-detail' && activeSupplierId) {
-    openSupplierDetail(activeSupplierId);
+    switchView(dest, false);
+    window.Android && window.Android.getSupplierDetail(activeSupplierId);
   } else {
-    switchView(dest);
+    switchView(dest, false);
   }
 }
 
