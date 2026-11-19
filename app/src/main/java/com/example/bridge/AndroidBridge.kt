@@ -886,8 +886,9 @@ class AndroidBridge(
           invoiceDateMillis = dateOpt
         )
 
+        // Refresh lists only. getInvoiceDetails() invokes the edit-form callback and
+        // can reopen the invoice screen after a successful save due to async timing.
         refreshCoreViews()
-        getInvoiceDetails(savedId)
         notifyResult(
           reqId,
           true,
