@@ -1891,6 +1891,7 @@ function renderBatchEntryRows() {
         value="${escapeHtml(row.total)}" oninput="onBatchRowTotalInput(${idx}, this.value)">
       <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="1" min="1"
         value="${escapeHtml(row.qty)}" oninput="onBatchRowQtyInput(${idx}, this.value)">
+      <select id="batch-unit-${idx}" class="ruled-cell batch-unit-select" onchange="onBatchRowUnitChange(${idx}, this.value)"></select>
       <input type="text" id="batch-name-${idx}" class="ruled-cell" list="inv-items-datalist"
         placeholder="اسم الصنف (${idx + 1})..." value="${escapeHtml(row.itemName)}"
         oninput="onBatchRowNameInput(${idx}, this.value)" onchange="onBatchRowNameInput(${idx}, this.value)">
@@ -1899,7 +1900,33 @@ function renderBatchEntryRows() {
       <button type="button" class="row-remove-cell" onclick="removeBatchRow(${idx})" aria-label="حذف صف">×</button>
     </div>
   `).join('');
+  batchEntryRows.forEach((row, idx) => updateBatchUnitOptions(idx));
   enforceEnglishNumericFields(container);
+}
+
+function updateBatchUnitOptions(idx) {
+  const row = batchEntryRows[idx], select = document.getElementById('batch-unit-' + idx);
+  if (!row || !select) return;
+  const item = inventoryData.find(x => x.id === row.itemId) ||
+    inventoryData.find(x => (x.name || '').trim().toLowerCase() === (row.itemName || '').trim().toLowerCase());
+  const options = getInventoryUnitOptions(item);
+  select.innerHTML = options.map(o => '<option value="' + escapeHtml(o.name) + '">' + escapeHtml(o.name) + '</option>').join('');
+  const selected = options.find(o => o.name === row.unitName && o.factor === row.unitFactor) || options[0];
+  row.unitName = selected.name; row.unitFactor = selected.factor; select.value = selected.name;
+}
+
+function onBatchRowUnitChange(idx, name) {
+  const row = batchEntryRows[idx]; if (!row) return;
+  const item = inventoryData.find(x => x.id === row.itemId);
+  const option = getInventoryUnitOptions(item).find(o => o.name === name); if (!option) return;
+  row.unitName = option.name; row.unitFactor = option.factor;
+  const basePrice = item ? ((document.getElementById('inv-type').value === 'PURCHASE') ? item.purchasePrice : item.sellingPrice) : 0;
+  if (basePrice > 0) {
+    row.unitPrice = String(basePrice * option.factor);
+    const qty = parseInt(row.qty, 10) || 1; row.total = String(Math.round(qty * Number(row.unitPrice) * 100) / 100);
+    const p = document.getElementById('batch-price-' + idx), t = document.getElementById('batch-total-' + idx);
+    if (p) p.value = row.unitPrice; if (t) t.value = row.total;
+  }
 }
 
 function addBatchRow() {
@@ -1926,7 +1953,10 @@ function onBatchRowNameInput(idx, val) {
   const invType = document.getElementById('inv-type').value;
   if (matched) {
     row.itemId = matched.id;
-    const suggestedPrice = invType === 'PURCHASE' ? matched.purchasePrice : matched.sellingPrice;
+    const options = getInventoryUnitOptions(matched);
+    const selected = options.find(o => o.name === row.unitName && o.factor === row.unitFactor) || options[0];
+    row.unitName = selected.name; row.unitFactor = selected.factor; updateBatchUnitOptions(idx);
+    const suggestedPrice = (invType === 'PURCHASE' ? matched.purchasePrice : matched.sellingPrice) * row.unitFactor;
     if (suggestedPrice > 0) {
       row.unitPrice = String(suggestedPrice);
       const qty = parseInt(row.qty, 10) || 1;
@@ -1937,7 +1967,7 @@ function onBatchRowNameInput(idx, val) {
       if (totalEl) totalEl.value = row.total;
     }
   } else {
-    row.itemId = 0;
+    row.itemId = 0; row.unitName = 'حبة'; row.unitFactor = 1; updateBatchUnitOptions(idx);
   }
 }
 
