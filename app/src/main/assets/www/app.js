@@ -1055,50 +1055,58 @@ function filterInventory() {
 function renderInventoryList() {
   const container = document.getElementById('inventory-list');
   const summary = document.getElementById('inventory-summary-strip');
-  const query = (document.getElementById('inventory-search').value || '').trim().toLowerCase();
+  const searchEl = document.getElementById('inventory-search');
+  if (!container || !summary || !searchEl) return;
+  const query = (searchEl.value || '').trim().toLowerCase();
 
   const filtered = inventoryData.filter(i => {
-    const matchText = !query || i.name.toLowerCase().includes(query) || (i.category || '').toLowerCase().includes(query);
+    const name = (i.name || '').toLowerCase();
+    const category = (i.category || '').toLowerCase();
+    const matchText = !query || name.includes(query) || category.includes(query);
     if (!matchText) return false;
-    if (inventoryFilter === 'LOW') return i.quantity <= 10;
-    if (inventoryFilter === 'OUT') return i.quantity <= 0;
+    if (inventoryFilter === 'LOW') return Number(i.quantity) > 0 && Number(i.quantity) <= 10;
+    if (inventoryFilter === 'OUT') return Number(i.quantity) <= 0;
     return true;
   });
 
-  const totalCost = filtered.reduce((sum, i) => sum + (i.quantity * i.purchasePrice), 0);
-  summary.innerHTML = `<span>الأصناف: ${filtered.length}</span><span>التكلفة: ${fmtMoney(totalCost)} ${escapeHtml(appCurrency)}</span>`;
+  const totalCost = filtered.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.purchasePrice)), 0);
+  const totalUnits = filtered.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
+  summary.innerHTML = `<span>الأصناف: ${filtered.length}</span><span>الوحدات: ${fmtMoney(totalUnits)}</span><span>قيمة الشراء: ${fmtMoney(totalCost)} ${escapeHtml(appCurrency)}</span>`;
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-state">لا توجد أصناف مطابقة</div>';
+    container.innerHTML = '<div class="empty-state">لا توجد أصناف مطابقة للبحث</div>';
     return;
   }
 
   container.innerHTML = filtered.map(i => {
-    const badge = i.quantity <= 0
+    const qty = Number(i.quantity) || 0;
+    const badge = qty <= 0
       ? '<span class="badge badge-red">نافذ</span>'
-      : (i.quantity <= 10 ? '<span class="badge badge-amber">منخفض</span>' : '<span class="badge badge-green">متوفر</span>');
+      : (qty <= 10 ? '<span class="badge badge-amber">منخفض</span>' : '<span class="badge badge-green">متوفر</span>');
     const isConfirming = pendingDeleteInventoryId === i.id;
     const actionsHtml = isConfirming
-      ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteInventory(${i.id})">تأكيد</button>
-         <button type="button" class="tbl-action-btn" onclick="askDeleteInventory(0)">لا</button>`
-      : `<button type="button" class="tbl-action-btn" onclick="openInventoryHistory(${i.id})">حركات</button>
+      ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteInventory(${i.id})">تأكيد الحذف</button>
+         <button type="button" class="tbl-action-btn" onclick="askDeleteInventory(0)">تراجع</button>`
+      : `<button type="button" class="tbl-action-btn" onclick="openInventoryHistory(${i.id})">الحركات</button>
          <button type="button" class="tbl-action-btn" onclick="openInventoryForm(${i.id})">تعديل</button>
          <button type="button" class="tbl-action-btn del" onclick="askDeleteInventory(${i.id})">حذف</button>`;
 
     return `
-      <div class="card compact-card">
-        <div class="card-title-row" style="margin-bottom:3px;">
-          <div style="min-width:0; flex:1;">
-            <strong>${escapeHtml(i.name)}</strong> ${badge}
-            <div class="muted-text">${escapeHtml(i.category || 'عام')} • ${escapeHtml(i.unit || 'حبة')}</div>
-          </div>
-          <strong class="cell-num" style="font-size:14px;">الكمية: ${i.quantity}</strong>
+      <article class="inventory-row">
+        <div class="inventory-row-main">
+          <div class="inventory-item-title"><strong>${escapeHtml(i.name)}</strong>${badge}</div>
+          <span class="inventory-item-sub">${escapeHtml(i.category || 'عام')} · ${escapeHtml(i.unit || 'حبة')}</span>
         </div>
-        <div class="card-title-row" style="margin-bottom:0;">
-          <span class="muted-text cell-num">شراء: ${fmtMoney(i.purchasePrice)} | بيع: ${fmtMoney(i.sellingPrice)} ${escapeHtml(appCurrency)}</span>
-          <div class="btn-row-compact">${actionsHtml}</div>
+        <div class="inventory-row-qty">
+          <span class="inventory-meta-label">الرصيد</span>
+          <strong class="${qty <= 0 ? 'text-danger' : (qty <= 10 ? 'text-primary' : 'text-success')}">${fmtMoney(qty)}</strong>
         </div>
-      </div>
+        <div class="inventory-row-prices">
+          <span>شراء <b>${fmtMoney(i.purchasePrice)}</b></span>
+          <span>بيع <b>${fmtMoney(i.sellingPrice)}</b></span>
+        </div>
+        <div class="inventory-row-actions">${actionsHtml}</div>
+      </article>
     `;
   }).join('');
 }
@@ -1802,25 +1810,57 @@ function toggleMultiStockPicker(forceState) {
 function renderMultiStockPicker() {
   const container = document.getElementById('multi-stock-list');
   if (!container) return;
-  const query = (document.getElementById('multi-stock-search').value || '').trim().toLowerCase();
+  const searchEl = document.getElementById('multi-stock-search');
+  const query = (searchEl ? searchEl.value : '').trim().toLowerCase();
   const type = document.getElementById('inv-type').value;
-  const list = inventoryData.filter(i => !query || (i.name || '').toLowerCase().includes(query));
+  const list = inventoryData.filter(i => !query || (i.name || '').toLowerCase().includes(query) || (i.category || '').toLowerCase().includes(query));
 
   if (list.length === 0) {
-    container.innerHTML = '<div class="muted-text" style="text-align:center;">لا توجد أصناف في المخزن بعد</div>';
+    container.innerHTML = '<div class="muted-text" style="text-align:center;padding:10px;">لا توجد أصناف مطابقة. يمكنك إضافة صنف جديد للمخزن.</div>';
     return;
   }
   container.innerHTML = list.map(i => {
-    const price = type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice;
+    const price = Number(type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice) || 0;
+    const qty = Number(i.quantity) || 0;
+    const stockClass = qty <= 0 ? 'text-danger' : (qty <= 10 ? 'text-primary' : 'text-success');
     return `
-      <div class="multi-stock-item">
-        <input type="checkbox" class="multi-stock-check" data-id="${i.id}" data-name="${escapeHtml(i.name)}" data-price="${price}">
-        <span style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(i.name)} <small class="muted-text">(${i.quantity})</small></span>
-        <input type="number" class="qty-inline-input" id="mstock-qty-${i.id}" min="1" value="1">
-        <span class="cell-num" style="font-weight:700; color:var(--dark-header);">${fmtMoney(price)}</span>
+      <div class="quick-stock-pick-row">
+        <div class="quick-stock-pick-info">
+          <strong>${escapeHtml(i.name)}</strong>
+          <span class="muted-text">${escapeHtml(i.category || 'عام')} · <b class="${stockClass}">المخزون ${fmtMoney(qty)}</b> · ${fmtMoney(price)} ${escapeHtml(appCurrency)}</span>
+        </div>
+        <input type="number" class="qty-inline-input quick-stock-pick-qty" id="mstock-qty-${i.id}" min="1" step="1" value="1" aria-label="الكمية">
+        <button type="button" class="btn btn-primary btn-sm quick-stock-pick-add" onclick="addInventoryItemQuick(${i.id})">إضافة</button>
       </div>
     `;
   }).join('');
+}
+
+function addInventoryItemQuick(itemId) {
+  const item = inventoryData.find(x => Number(x.id) === Number(itemId));
+  if (!item) {
+    showToast('تعذر العثور على الصنف؛ حدّث قائمة المخزن وحاول مجدداً', 'error');
+    return;
+  }
+  const qtyEl = document.getElementById(`mstock-qty-${itemId}`);
+  const qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
+  if (!Number.isFinite(qty) || qty <= 0) {
+    showToast('أدخل كمية صحيحة للصنف', 'error');
+    if (qtyEl) qtyEl.focus();
+    return;
+  }
+  const type = document.getElementById('inv-type').value;
+  const unitPrice = Math.max(0, Number(type === 'PURCHASE' ? item.purchasePrice : item.sellingPrice) || 0);
+  const total = Math.round(qty * unitPrice * 100) / 100;
+  appendItemLineToCart(item.id, item.name, qty, unitPrice, total);
+  invoiceDirty = true;
+  if (type === 'CASH') {
+    const subtotal = cartItems.reduce((sum, line) => sum + line.totalPrice, 0);
+    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
+  }
+  renderCart();
+  if (qtyEl) qtyEl.value = '1';
+  showToast(`تمت إضافة ${item.name} إلى الفاتورة ✓`, 'success');
 }
 
 function applyMultiStockSelection() {
