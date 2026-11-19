@@ -373,7 +373,7 @@ select.ruled-cell,
 }
 
 .grid-invoice-batch-row {
-  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.58fr) minmax(0, 1.68fr) minmax(0, 0.92fr) 28px;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 0.52fr) minmax(0, 0.72fr) minmax(0, 1.45fr) minmax(0, 0.82fr) 25px;
 }
 
 .grid-inv-meta {
@@ -407,6 +407,24 @@ select.ruled-cell,
 .grid-inv-3 {
   grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
 }
+
+.grid-unit-config {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+}
+.unit-config-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 7px;
+  padding: 7px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-soft, #f7f9fc);
+  font-size: 11px;
+}
+.unit-config-panel small { color: var(--text-secondary); line-height: 1.45; }
+.batch-unit-select { min-width: 0; font-size: 10px; padding-inline: 2px; }
+.cart-unit-label { display: block; color: var(--text-secondary); font-size: 10px; text-align: center; }
 
 .grid-set-store-first {
   grid-template-columns: minmax(0, 2fr) minmax(0, 0.75fr);
