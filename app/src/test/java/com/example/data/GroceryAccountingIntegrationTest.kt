@@ -85,6 +85,47 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
+  fun bulkPurchaseInvoiceExportLinksOnlyUnlinkedRowsAndNeverDuplicatesStock() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد الجملة", "771234567", "", 0.0)
+    val existingItemId = engine.saveInventoryItem(0L, "سكر", "مواد غذائية", 5, 100.0, 130.0, "كيس")
+
+    val invoiceId = engine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "PUR-BULK-001",
+      type = "PURCHASE",
+      partyId = supplierId,
+      partyName = "مورد الجملة",
+      rawItems = listOf(
+        InvoiceItemEntity(0L, 0L, existingItemId, "سكر", 2, 110.0, 220.0),
+        InvoiceItemEntity(0L, 0L, 0L, "أرز", 4, 200.0, 800.0),
+        InvoiceItemEntity(0L, 0L, 0L, "سكر", 3, 115.0, 345.0)
+      ),
+      paidAmount = 1365.0
+    )
+
+    // The linked sugar row was already added during invoice save; only unlinked rows are imported.
+    assertEquals(7, db.inventoryDao().getItemById(existingItemId)!!.quantity)
+    val firstExport = engine.exportUnlinkedPurchaseItemsToInventory()
+    assertEquals(2, firstExport.first)
+    assertEquals(1, firstExport.second)
+    assertEquals(10, db.inventoryDao().getItemById(existingItemId)!!.quantity)
+    val rice = db.inventoryDao().getItemByName("أرز")!!
+    assertEquals(4, rice.quantity)
+
+    // A repeated export is a no-op because invoice rows were linked atomically.
+    val secondExport = engine.exportUnlinkedPurchaseItemsToInventory()
+    assertEquals(0, secondExport.first)
+    assertEquals(0, secondExport.second)
+    assertEquals(10, db.inventoryDao().getItemById(existingItemId)!!.quantity)
+    assertEquals(4, db.inventoryDao().getItemById(rice.id)!!.quantity)
+
+    // Linked imported rows remain part of the invoice and are reversed correctly on deletion.
+    engine.deleteInvoice(invoiceId)
+    assertEquals(5, db.inventoryDao().getItemById(existingItemId)!!.quantity)
+    assertEquals(0, db.inventoryDao().getItemById(rice.id)!!.quantity)
+  }
+
+  @Test
   fun customerAndSupplierTransactionsComputeRunningBalanceAndReverseOnEditDelete() = runBlocking {
     val custId = engine.saveCustomer(0L, "سليمان", "0777000111", "", 500.0)
     val tx1 = engine.addCustomerTransaction(custId, 1500.0, isDebit = true, description = "بضاعة آجل", dateMillis = 1000L)
