@@ -1599,3 +1599,23 @@ input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"] {
   text-align: left;
   font-variant-numeric: lining-nums tabular-nums;
 }
+
+
+/* Force Latin glyphs in numeric controls, including dynamically-created WebView fields. */
+input[data-numeric-input],
+input[inputmode="numeric"],
+input[inputmode="decimal"],
+input[type="tel"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  text-align: left;
+  font-family: Arial, Roboto, sans-serif !important;
+  font-variant-numeric: lining-nums tabular-nums !important;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+}
+#invoice-mode-badge { white-space: nowrap; }
+#view-create-invoice.invoice-mode-purchase { border-top: 3px solid #b7791f; }
+#view-create-invoice.invoice-mode-sale { border-top: 3px solid #1672c4; }
