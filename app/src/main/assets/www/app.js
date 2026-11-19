@@ -1585,8 +1585,9 @@ function updateInvoiceModeUI() {
 function onInvoiceTypeChange() {
   const type = document.getElementById('inv-type').value;
   const label = document.getElementById('party-label');
-  if (lastInvoiceType && lastInvoiceType !== type) {
+  if (lastInvoiceType && (lastInvoiceType === 'PURCHASE') !== (type === 'PURCHASE')) {
     // Customer and supplier IDs belong to separate tables; do not carry them across modes.
+    // Cash/credit sales share the same customer list, so keep that selection.
     document.getElementById('inv-party').value = '0';
   }
   lastInvoiceType = type;
