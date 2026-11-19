@@ -441,10 +441,10 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
           inventoryDao.insertItem(
             InventoryItemEntity(
               name = cleanName,
-              category = "مواد غذائية",
+              category = "عام",
               quantity = line.quantity,
               purchasePrice = line.unitPrice,
-              sellingPrice = line.unitPrice,
+              sellingPrice = 0.0,
               unit = "حبة"
             )
           )
