@@ -1,6 +1,7 @@
 package com.example
 
 import android.Manifest
+import android.app.AlertDialog
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -180,9 +181,17 @@ class MainActivity : ComponentActivity() {
           "(function(){ return window.handleAndroidBack ? window.handleAndroidBack() : 'EXIT'; })()"
         ) { result ->
           val cleaned = result?.trim('"')
-          if (cleaned != "HANDLED") {
-            isEnabled = false
-            onBackPressedDispatcher.onBackPressed()
+          if (cleaned == "EXIT") {
+            AlertDialog.Builder(this@MainActivity)
+              .setTitle("تأكيد الخروج")
+              .setMessage("هل تريد الخروج من تطبيق العزي؟")
+              .setPositiveButton("خروج") { _, _ -> finish() }
+              .setNegativeButton("البقاء في التطبيق", null)
+              .setCancelable(true)
+              .show()
+          } else if (cleaned != "HANDLED") {
+            // Fail safe: do not silently close the app on an unexpected WebView response.
+            Toast.makeText(this@MainActivity, "تعذر الرجوع داخل التطبيق", Toast.LENGTH_SHORT).show()
           }
         }
       }
