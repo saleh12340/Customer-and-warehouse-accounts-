@@ -1,6 +1,6 @@
 'use strict';
 
-const NUMERIC_FIELD_SELECTOR = 'input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"], input[type="tel"], input[data-numeric-input]';
+const NUMERIC_FIELD_SELECTOR = 'input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"], input[type="tel"], input[type="date"], input[type="datetime-local"], input[type="time"], input[data-numeric-input]';
 
 function toEnglishDigits(value) {
   return String(value ?? '')
