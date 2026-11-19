@@ -2289,12 +2289,21 @@ function runInvoiceFollowUp(invoiceId, action) {
     const btn = document.getElementById('btn-thermal-print-now');
     if (btn) btn.disabled = true;
     window.Android.previewThermalInvoice(invoiceId, nextReqId());
-  } else if (action === 'PDF') {
-    window.Android.generateAndOpenPdf(invoiceId, nextReqId());
+    return;
+  }
+
+  // Close the editor only after the PDF/share action itself succeeds.
+  const closeAfterSuccess = nextReqId(() => {
+    editingInvoiceId = 0;
+    invoiceDirty = false;
+    switchView('invoices');
+  });
+  if (action === 'PDF') {
+    window.Android.generateAndOpenPdf(invoiceId, closeAfterSuccess);
   } else if (action === 'WA_IMAGE') {
-    window.Android.shareInvoiceImage(invoiceId, nextReqId());
+    window.Android.shareInvoiceImage(invoiceId, closeAfterSuccess);
   } else if (action === 'WA_PDF') {
-    window.Android.shareInvoicePdf(invoiceId, nextReqId());
+    window.Android.shareInvoicePdf(invoiceId, closeAfterSuccess);
   }
 }
 
