@@ -1584,3 +1584,18 @@ nav.bottom-nav button.active::before {
     grid-template-columns: minmax(0, .95fr) minmax(0, .55fr) minmax(0, 1.55fr) minmax(0, .85fr) 24px;
   }
 }
+
+/* Single-line invoice entry and Latin numeral consistency */
+#view-create-invoice .batch-rows-stack { gap: 0; }
+#view-create-invoice .grid-invoice-batch-row { grid-template-columns: minmax(0,1fr) minmax(0,.58fr) minmax(0,1.68fr) minmax(0,.92fr) 0; }
+#view-create-invoice .grid-invoice-batch-row .row-remove-cell { display: none; }
+#view-create-invoice .grid-invoice-batch-row input[type="number"],
+#view-create-invoice input[inputmode="numeric"],
+#view-create-invoice input[inputmode="decimal"],
+#view-create-invoice .cell-num { direction: ltr; text-align: center; font-family: Arial, sans-serif; font-variant-numeric: lining-nums tabular-nums; }
+#view-create-invoice .grid-invoice-batch-row .ruled-cell { min-width: 0; }
+input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"] {
+  direction: ltr;
+  text-align: left;
+  font-variant-numeric: lining-nums tabular-nums;
+}
