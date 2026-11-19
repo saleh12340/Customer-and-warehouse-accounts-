@@ -2494,7 +2494,12 @@ function saveInvoiceAction(followUpAction) {
     type,
     partyId,
     partyName,
-    items: cartItems,
+    items: cartItems.map(item => ({
+      ...item,
+      unitLabel: item.unitName || item.unitLabel || '',
+      unitFactor: item.unitFactor || 1,
+      stockQuantity: item.quantity * (item.unitFactor || 1)
+    })),
     paidAmount: paid,
     date: dateMillis
   };
