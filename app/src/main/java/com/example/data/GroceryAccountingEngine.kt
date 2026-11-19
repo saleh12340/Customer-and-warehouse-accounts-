@@ -409,6 +409,55 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     }
   }
 
+  /**
+   * Imports only purchase invoice rows that are not linked to inventory yet.
+   * Existing linked rows were already applied to stock when their invoice was saved.
+   * All stock updates and row links are committed atomically, preventing repeat imports.
+   */
+  suspend fun exportUnlinkedPurchaseItemsToInventory(): Pair<Int, Int> {
+    return database.withTransaction {
+      val purchaseIds = invoiceDao.getInvoicesSnapshot()
+        .filter { it.type == "PURCHASE" }
+        .map { it.id }
+        .toSet()
+      val pendingLines = invoiceDao.getInvoiceItemsSnapshot()
+        .filter { it.invoiceId in purchaseIds && it.itemId <= 0L }
+      var importedLines = 0
+      var createdItems = 0
+
+      for (line in pendingLines) {
+        val cleanName = line.itemName.trim()
+        require(cleanName.isNotEmpty()) { "يوجد صنف بلا اسم في إحدى فواتير الشراء" }
+        require(line.quantity > 0) { "كمية غير صحيحة للصنف: $cleanName" }
+        require(line.unitPrice.isFinite() && line.unitPrice >= 0.0) { "سعر شراء غير صحيح للصنف: $cleanName" }
+
+        val existing = inventoryDao.getItemByName(cleanName)
+        val targetId = if (existing != null) {
+          val newQuantity = Math.addExact(existing.quantity, line.quantity)
+          inventoryDao.updateItem(existing.copy(quantity = newQuantity, purchasePrice = line.unitPrice))
+          existing.id
+        } else {
+          createdItems++
+          inventoryDao.insertItem(
+            InventoryItemEntity(
+              name = cleanName,
+              category = "مواد غذائية",
+              quantity = line.quantity,
+              purchasePrice = line.unitPrice,
+              sellingPrice = line.unitPrice,
+              unit = "حبة"
+            )
+          )
+        }
+        check(invoiceDao.linkInvoiceItemToInventory(line.id, targetId) == 1) {
+          "تعذر ربط الصنف $cleanName بالمخزن؛ أعد المحاولة"
+        }
+        importedLines++
+      }
+      importedLines to createdItems
+    }
+  }
+
   suspend fun deleteInventoryItem(itemId: Long) {
     database.withTransaction {
       val item = inventoryDao.getItemById(itemId) ?: error("الصنف غير موجود")
