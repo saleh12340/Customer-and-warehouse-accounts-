@@ -1,35 +1,74 @@
 'use strict';
 
+const NUMERIC_FIELD_SELECTOR = 'input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"], input[type="tel"], input[data-numeric-input]';
+
 function toEnglishDigits(value) {
-  return String(value ?? '').replace(/[٠-٩۰-۹]/g, ch => {
-    const code = ch.charCodeAt(0);
-    return String(code >= 0x06F0 ? code - 0x06F0 : code - 0x0660);
-  });
+  return String(value ?? '')
+    .replace(/[٠-٩۰-۹]/g, ch => {
+      const code = ch.charCodeAt(0);
+      return String(code >= 0x06F0 ? code - 0x06F0 : code - 0x0660);
+    })
+    .replace(/\u066B/g, '.')
+    .replace(/\u066C/g, '');
+}
+
+function normalizeNumericField(el) {
+  if (!el || !el.matches || !el.matches(NUMERIC_FIELD_SELECTOR)) return;
+  const wasNumber = el.type === 'number';
+  const step = el.getAttribute('step') || '1';
+  if (wasNumber) {
+    // Numeric text controls avoid locale-dependent digit glyphs in Android WebView.
+    el.type = 'text';
+    el.setAttribute('data-numeric-input', 'true');
+    el.setAttribute('inputmode', step === '1' ? 'numeric' : 'decimal');
+    el.setAttribute('autocomplete', 'off');
+  }
+  el.setAttribute('lang', 'en-US');
+  el.setAttribute('dir', 'ltr');
+  el.style.direction = 'ltr';
+  el.style.unicodeBidi = 'isolate';
+  el.style.fontFamily = 'Arial, Roboto, sans-serif';
+  el.style.fontVariantNumeric = 'lining-nums tabular-nums';
+  const normalized = toEnglishDigits(el.value);
+  if (normalized !== el.value) el.value = normalized;
 }
 
 function enforceEnglishNumericFields(root) {
   const scope = root || document;
-  scope.querySelectorAll('input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"]').forEach(el => {
-    el.setAttribute('lang', 'en');
-    el.setAttribute('dir', 'ltr');
-    if (el.type === 'number' && !el.hasAttribute('inputmode')) el.setAttribute('inputmode', 'decimal');
-    const normalized = toEnglishDigits(el.value);
-    if (normalized !== el.value) el.value = normalized;
-  });
+  if (scope.matches && scope.matches(NUMERIC_FIELD_SELECTOR)) normalizeNumericField(scope);
+  if (scope.querySelectorAll) scope.querySelectorAll(NUMERIC_FIELD_SELECTOR).forEach(normalizeNumericField);
+}
+
+function normalizeNumericEvent(event) {
+  const el = event.target;
+  if (!el || !el.matches || !el.matches(NUMERIC_FIELD_SELECTOR)) return;
+  normalizeNumericField(el);
+  const normalized = toEnglishDigits(el.value);
+  if (normalized !== el.value) {
+    let start = null;
+    try { start = el.selectionStart; } catch (_) {}
+    el.value = normalized;
+    if (typeof start === 'number') {
+      try { el.setSelectionRange(start, start); } catch (_) {}
+    }
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => enforceEnglishNumericFields());
-document.addEventListener('input', event => {
-  const el = event.target;
-  if (!el || !el.matches || !el.matches('input[type="number"], input[inputmode="numeric"], input[inputmode="decimal"]')) return;
-  const normalized = toEnglishDigits(el.value);
-  if (normalized !== el.value) {
-    const start = el.selectionStart;
-    el.value = normalized;
-    if (typeof start === 'number' && el.type !== 'number') el.setSelectionRange(start, start);
-  }
-});
+document.addEventListener('input', normalizeNumericEvent, true);
+document.addEventListener('change', normalizeNumericEvent, true);
+document.addEventListener('compositionend', normalizeNumericEvent, true);
 
+// Apply the policy to every newly-rendered numeric field in every screen.
+if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+  const numericObserver = new MutationObserver(records => {
+    records.forEach(record => record.addedNodes.forEach(node => {
+      if (node.nodeType === 1) enforceEnglishNumericFields(node);
+    }));
+  });
+  numericObserver.observe(document.documentElement, { childList: true, subtree: true });
+  enforceEnglishNumericFields();
+}
 
 let currentView = 'dashboard';
 let appCurrency = 'ر.ي';
@@ -87,6 +126,7 @@ let activePreviewState = {
 };
 let thermalReturnView = 'create-invoice';
 let batchEntryRows = [];
+let lastInvoiceType = '';
 
 let reqSeq = 1;
 const pendingCallbacks = {};
@@ -208,10 +248,10 @@ function fromDateTimeLocalValue(val) {
 
 function invoiceTypeAr(type) {
   switch ((type || '').toUpperCase()) {
-    case 'CASH': return 'بيع نقدي';
-    case 'CREDIT': return 'بيع آجل';
-    case 'SALE': return 'مبيعات';
-    case 'PURCHASE': return 'مشتريات';
+    case 'CASH': return 'فاتورة بيع نقدي';
+    case 'CREDIT': return 'فاتورة بيع آجل';
+    case 'SALE': return 'فاتورة بيع';
+    case 'PURCHASE': return 'فاتورة شراء';
     default: return type || '';
   }
 }
@@ -1421,6 +1461,8 @@ function openCreateInvoice(presetType, presetPartyId) {
   document.getElementById('btn-save-invoice').textContent = 'حفظ الفاتورة';
   document.getElementById('invoice-saved-badge').classList.add('hidden');
   document.getElementById('inv-type').value = presetType || 'CASH';
+  lastInvoiceType = document.getElementById('inv-type').value;
+  document.getElementById('inv-party').value = '0';
   document.getElementById('inv-paid').value = '';
   const invDateEl = document.getElementById('inv-date');
   if (invDateEl) invDateEl.value = toDateTimeLocalValue(Date.now());
@@ -1485,6 +1527,7 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
     document.getElementById('invoice-saved-badge').classList.remove('hidden');
     document.getElementById('inv-number').value = inv.invoiceNumber;
     document.getElementById('inv-type').value = inv.type === 'SALE' ? 'CASH' : inv.type;
+    lastInvoiceType = document.getElementById('inv-type').value;
     const invDateEl = document.getElementById('inv-date');
     if (invDateEl) invDateEl.value = toDateTimeLocalValue(inv.date);
     onInvoiceTypeChange();
@@ -1513,9 +1556,40 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
   }
 };
 
+function updateInvoiceModeUI() {
+  const type = document.getElementById('inv-type').value;
+  const modeLabel = type === 'PURCHASE' ? 'فاتورة شراء'
+    : (type === 'CREDIT' ? 'فاتورة بيع آجل' : 'فاتورة بيع نقدي');
+  const prefix = editingInvoiceId > 0 ? 'تعديل' : 'إصدار';
+  const title = document.getElementById('invoice-screen-title');
+  if (title) title.textContent = `${prefix} ${modeLabel}`;
+  const badge = document.getElementById('invoice-mode-badge');
+  if (badge) {
+    badge.textContent = modeLabel;
+    badge.className = 'badge ' + (type === 'PURCHASE' ? 'badge-amber' : (type === 'CREDIT' ? 'badge-red' : 'badge-green'));
+  }
+  const screen = document.getElementById('view-create-invoice');
+  if (screen) {
+    screen.classList.toggle('invoice-mode-purchase', type === 'PURCHASE');
+    screen.classList.toggle('invoice-mode-sale', type !== 'PURCHASE');
+  }
+  const saveButton = document.getElementById('btn-save-invoice');
+  if (saveButton) saveButton.textContent = editingInvoiceId > 0 ? 'حفظ التعديل' : (type === 'PURCHASE' ? 'حفظ فاتورة الشراء' : 'حفظ فاتورة البيع');
+  const paidInput = document.getElementById('inv-paid');
+  if (paidInput) paidInput.placeholder = type === 'PURCHASE' ? 'المدفوع للمورد' : 'المبلغ المستلم';
+  const payFullButton = document.querySelector('#inv-paid + button');
+  if (payFullButton) payFullButton.textContent = type === 'PURCHASE' ? 'سداد كامل' : 'استلام كامل';
+  updateInvoiceTotals();
+}
+
 function onInvoiceTypeChange() {
   const type = document.getElementById('inv-type').value;
   const label = document.getElementById('party-label');
+  if (lastInvoiceType && lastInvoiceType !== type) {
+    // Customer and supplier IDs belong to separate tables; do not carry them across modes.
+    document.getElementById('inv-party').value = '0';
+  }
+  lastInvoiceType = type;
   if (type === 'PURCHASE') {
     label.textContent = 'المورد *';
     populateSuppliersDropdown();
@@ -1526,6 +1600,7 @@ function onInvoiceTypeChange() {
   populateItemDropdown();
   updatePaymentModeButtons();
   updatePartyBalanceChip();
+  updateInvoiceModeUI();
   invoiceDirty = true;
 }
 
@@ -2095,8 +2170,9 @@ function updateInvoiceTotals() {
   const rawPaid = document.getElementById('inv-paid').value;
   const paid = rawPaid === '' ? 0 : (parseFloat(rawPaid) || 0);
   const remaining = Math.max(0, subtotal - paid);
-  document.getElementById('inv-total-display').textContent = `الإجمالي: ${fmtMoney(subtotal)} ${appCurrency}`;
-  document.getElementById('inv-remaining-display').textContent = `المتبقي من الفاتورة: ${fmtMoney(remaining)} ${appCurrency}`;
+  const isPurchase = document.getElementById('inv-type').value === 'PURCHASE';
+  document.getElementById('inv-total-display').textContent = `إجمالي فاتورة ${isPurchase ? 'الشراء' : 'البيع'}: ${fmtMoney(subtotal)} ${appCurrency}`;
+  document.getElementById('inv-remaining-display').textContent = `${isPurchase ? 'المتبقي للمورد' : 'المتبقي على العميل'}: ${fmtMoney(remaining)} ${appCurrency}`;
 
   const pill = document.getElementById('inv-status-pill');
   if (subtotal <= 0) {
@@ -2190,11 +2266,15 @@ function saveInvoiceAction(followUpAction) {
     const savedId = (data && data.invoiceId) ? data.invoiceId : editingInvoiceId;
     editingInvoiceId = savedId;
     invoiceDirty = false;
-    document.getElementById('invoice-screen-title').textContent = 'تعديل الفاتورة';
-    document.getElementById('btn-save-invoice').textContent = 'حفظ التعديل';
     document.getElementById('invoice-saved-badge').classList.remove('hidden');
+    updateInvoiceModeUI();
     if (followUpAction && followUpAction !== 'NONE' && savedId > 0) {
       runInvoiceFollowUp(savedId, followUpAction);
+    } else {
+      // A normal successful save returns to the invoice register; failures stay on this form.
+      editingInvoiceId = 0;
+      invoiceDirty = false;
+      switchView('invoices');
     }
   });
   window.Android.saveInvoice(JSON.stringify(payload), reqId);
