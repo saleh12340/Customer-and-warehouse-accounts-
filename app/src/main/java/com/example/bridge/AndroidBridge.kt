@@ -850,6 +850,9 @@ class AndroidBridge(
               put("quantity", item.quantity)
               put("unitPrice", item.unitPrice)
               put("totalPrice", item.totalPrice)
+              put("stockQuantity", item.stockQuantity)
+              put("unitLabel", item.unitLabel)
+              put("unitFactor", item.unitFactor)
             })
           }
         })
