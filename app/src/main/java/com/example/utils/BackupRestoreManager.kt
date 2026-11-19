@@ -88,6 +88,9 @@ object BackupRestoreManager {
               put("quantity", i.quantity)
               put("unitPrice", i.unitPrice)
               put("totalPrice", i.totalPrice)
+              put("stockQuantity", i.stockQuantity)
+              put("unitLabel", i.unitLabel)
+              put("unitFactor", i.unitFactor)
             })
           }
         })
