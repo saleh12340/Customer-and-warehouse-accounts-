@@ -88,6 +88,26 @@ window.onActionResult = function (reqId, success, message, dataJson) {
   }
 };
 
+window.onCustomerContactPicked = function (jsonStr) {
+  try {
+    const contact = JSON.parse(jsonStr || '{}');
+    const name = String(contact.name || '').trim();
+    const phone = String(contact.phone || '').trim();
+    if (!name && !phone) {
+      showToast('جهة الاتصال المحددة لا تحتوي على اسم أو رقم هاتف', 'error');
+      return;
+    }
+    const nameInput = document.getElementById('cust-form-name');
+    const phoneInput = document.getElementById('cust-form-phone');
+    if (nameInput) nameInput.value = name;
+    if (phoneInput) phoneInput.value = phone;
+    showToast('تم استيراد بيانات جهة الاتصال؛ راجعها ثم احفظ العميل', 'success');
+  } catch (e) {
+    showToast('تعذر قراءة بيانات جهة الاتصال', 'error');
+    console.error(e);
+  }
+};
+
 function showToast(message, type) {
   const el = document.getElementById('toast-banner');
   if (!el) return;
@@ -403,6 +423,19 @@ function renderCustomersList() {
       </div>
     `;
   }).join('');
+}
+
+function importCustomerContact() {
+  if (!window.Android || typeof window.Android.pickCustomerContact !== 'function') {
+    showToast('ميزة جهات الاتصال غير متاحة في هذه النسخة', 'error');
+    return;
+  }
+  const name = (document.getElementById('cust-form-name').value || '').trim();
+  const phone = (document.getElementById('cust-form-phone').value || '').trim();
+  if ((name || phone) && !window.confirm('سيتم استبدال الاسم ورقم الهاتف الحاليين ببيانات جهة الاتصال المختارة. هل تريد المتابعة؟')) {
+    return;
+  }
+  window.Android.pickCustomerContact();
 }
 
 function openCustomerForm(customerId) {
