@@ -202,7 +202,7 @@ object PdfGenerator {
     val bodyPaint = textPaint(context, 11f, Color.BLACK)
     val nameW = CONTENT_WIDTH - 110f - 95f - 65f
     return items.map { item ->
-      val layout = buildRtlLayout(item.itemName, bodyPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 4)
+      val layout = buildRtlLayout(item.itemName, bodyPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 20)
       val rowH = maxOf(28f, layout.height + 14f)
       MeasuredItem(item, layout, rowH)
     }
@@ -222,7 +222,7 @@ object PdfGenerator {
     val descW = CONTENT_WIDTH - 92f - 86f - 68f - 84f
     val measured = entries.map { entry ->
       val text = entry.transaction.description.ifBlank { "-" }
-      val layout = buildRtlLayout(text, bodyPaint, (descW - 10f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 3)
+      val layout = buildRtlLayout(text, bodyPaint, (descW - 10f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 20)
       val rowH = maxOf(26f, layout.height + 12f)
       MeasuredStatementRow(entry, layout, rowH)
     }
@@ -391,7 +391,7 @@ object PdfGenerator {
     val nameW = CONTENT_WIDTH - 100f - 85f - 85f - 62f
     val measured = items.map { item ->
       val label = "${item.name}${if (item.category.isNotBlank()) " (${item.category})" else ""}"
-      val layout = buildRtlLayout(label, bodyPaint, (nameW - 10f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 3)
+      val layout = buildRtlLayout(label, bodyPaint, (nameW - 10f).toInt(), Layout.Alignment.ALIGN_NORMAL, maxLines = 20)
       val rowH = maxOf(26f, layout.height + 12f)
       MeasuredInventoryRow(item, layout, rowH)
     }
@@ -651,7 +651,7 @@ object PdfGenerator {
     paint: TextPaint,
     width: Int,
     alignment: Layout.Alignment,
-    maxLines: Int = 2
+    maxLines: Int = 20
   ): StaticLayout {
     return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
       .setAlignment(alignment)
