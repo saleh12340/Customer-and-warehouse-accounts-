@@ -443,7 +443,7 @@
           <h2 id="invoice-screen-title">إصدار فاتورة جديدة</h2>
           <div class="btn-row-compact">
             <span id="invoice-saved-badge" class="badge badge-green hidden">محفوظة ✓</span>
-            <button type="button" class="link-btn" onclick="toggleMultiStockPicker()">اختيار متعدد</button>
+            <button type="button" class="link-btn" onclick="toggleMultiStockPicker()">اختيار سريع</button>
             <button type="button" class="link-btn" onclick="toggleQuickAddStock()">+ للمخزن</button>
           </div>
         </div>
@@ -469,14 +469,14 @@
           <!-- Collapsible Multi-Item Stock Picker -->
           <div id="multi-stock-picker-box" class="inline-subbox hidden">
             <div class="card-title-row" style="margin-bottom:2px;">
-              <strong style="font-size:12px;">تحديد عدة أصناف من المخزن دفعة واحدة</strong>
+              <strong style="font-size:12px;">اختر الصنف وأضفه مباشرة إلى الفاتورة</strong>
               <button type="button" class="link-btn" onclick="toggleMultiStockPicker(false)">إغلاق</button>
             </div>
             <div class="ruled-input-row ruled-search-row" style="margin-bottom:4px;">
               <input type="text" id="multi-stock-search" class="ruled-cell" placeholder="بحث في أصناف المخزن..." oninput="renderMultiStockPicker()">
             </div>
             <div id="multi-stock-list" class="multi-stock-list"></div>
-            <button type="button" class="btn btn-primary btn-sm" style="margin-top:6px; width:100%;" onclick="applyMultiStockSelection()">إضافة الأصناف المحددة للفاتورة</button>
+            <div class="quick-picker-hint">تُضاف الكمية المحددة فور الضغط على «إضافة»، ويمكن تكرار ذلك لأصناف متعددة.</div>
           </div>
 
           <!-- Inline Quick-Add Inventory Sub-Form -->
