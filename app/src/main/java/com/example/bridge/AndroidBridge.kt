@@ -755,6 +755,24 @@ class AndroidBridge(
   // ---------------- Invoices & Document Actions ----------------
 
   @JavascriptInterface
+  fun exportPurchaseInvoicesToInventory(reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val (lineCount, createdCount) = engine.exportUnlinkedPurchaseItemsToInventory()
+        refreshCoreViews()
+        val message = if (lineCount == 0) {
+          "كل أصناف فواتير الشراء مرتبطة بالمخزن بالفعل"
+        } else {
+          "تم ترحيل $lineCount صنفاً من فواتير الشراء إلى المخزن، منها $createdCount صنف جديد ✓"
+        }
+        notifyResult(reqId, true, message, JSONObject().put("importedLines", lineCount).put("createdItems", createdCount).toString())
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر ترحيل فواتير الشراء إلى المخزن")
+      }
+    }
+  }
+
+  @JavascriptInterface
   fun getInvoices() {
     scope.launch(Dispatchers.IO) {
       val list = database.invoiceDao().getInvoicesSnapshot()
