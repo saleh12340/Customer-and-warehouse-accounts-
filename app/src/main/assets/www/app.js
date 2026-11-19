@@ -81,10 +81,10 @@ window.onActionResult = function (reqId, success, message, dataJson) {
   showToast(message || (success ? 'تمت العملية بنجاح' : 'تعذر تنفيذ العملية'), success ? 'success' : 'error');
   const cb = pendingCallbacks[reqId];
   if (cb) {
+    // Always release one-shot callbacks, including failed operations.
+    // Run success continuations only after the native layer confirms success.
     delete pendingCallbacks[reqId];
-    if (success) {
-      cb(parsed);
-    }
+    if (success) cb(parsed);
   }
 };
 
