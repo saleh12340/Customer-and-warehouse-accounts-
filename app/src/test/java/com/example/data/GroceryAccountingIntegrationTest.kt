@@ -126,6 +126,43 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
+  fun purchaseCartonsConvertToBaseStockAndReverseExactly() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد العبوات", "770000123", "الجملة", 0.0)
+    val itemId = engine.saveInventoryItem(
+      0L, "مشروب", "مواد", 10, 50.0, 65.0,
+      """{"base":"حبة","packName":"باكت","packSize":24,"cartonName":"كرتون","cartonPacks":6}"""
+    )
+    val invoiceId = engine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "PACK-144",
+      type = "PURCHASE",
+      partyId = supplierId,
+      partyName = "مورد العبوات",
+      rawItems = listOf(
+        InvoiceItemEntity(
+          id = 0L, invoiceId = 0L, itemId = itemId, itemName = "مشروب",
+          quantity = 2, unitPrice = 7200.0, totalPrice = 14400.0,
+          stockQuantity = 288, unitLabel = "كرتون", unitFactor = 144
+        )
+      ),
+      paidAmount = 14400.0
+    )
+    assertEquals(298, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(50.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.001)
+    val savedLine = db.invoiceDao().getInvoiceWithItems(invoiceId)!!.items.single()
+    assertEquals(288, savedLine.stockQuantity)
+    assertEquals("كرتون", savedLine.unitLabel)
+    assertEquals(144, savedLine.unitFactor)
+
+    val history = engine.getInventoryMovementHistory(itemId)!!
+    assertEquals(288, history.totalPurchased)
+    assertEquals(288, history.movements.single().deltaQty)
+
+    engine.deleteInvoice(invoiceId)
+    assertEquals(10, db.inventoryDao().getItemById(itemId)!!.quantity)
+  }
+
+  @Test
   fun customerAndSupplierTransactionsComputeRunningBalanceAndReverseOnEditDelete() = runBlocking {
     val custId = engine.saveCustomer(0L, "سليمان", "0777000111", "", 500.0)
     val tx1 = engine.addCustomerTransaction(custId, 1500.0, isDebit = true, description = "بضاعة آجل", dateMillis = 1000L)
@@ -305,7 +342,7 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
-  fun roomMigration1To2PreservesAllDataAndDeduplicatesInvoiceNumbers() = runBlocking {
+  fun roomMigration1To3PreservesAllDataAndDeduplicatesInvoiceNumbers() = runBlocking {
     val dbName = "migration_test_1_2.db"
     val dbFile = context.getDatabasePath(dbName)
     dbFile.parentFile?.mkdirs()
@@ -337,7 +374,7 @@ class GroceryAccountingIntegrationTest {
     }
 
     val migratedDb = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-      .addMigrations(AppDatabase.MIGRATION_1_2)
+      .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
       .allowMainThreadQueries()
       .build()
     try {
@@ -354,6 +391,7 @@ class GroceryAccountingIntegrationTest {
       assertEquals(1, inventory.size)
       assertEquals(2, invoices.size)
       assertEquals(2, invoiceItems.size)
+      assertTrue(invoiceItems.all { it.stockQuantity == 0 && it.unitFactor == 1 && it.unitLabel.isEmpty() })
       assertEquals(1, txs.size)
 
       // Duplicate invoiceNumber row id=2 must be deduplicated cleanly to DUP-101-DUP-2
