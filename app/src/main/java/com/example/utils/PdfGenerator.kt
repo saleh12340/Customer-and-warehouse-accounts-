@@ -209,7 +209,7 @@ object PdfGenerator {
     val bodyPaint = textPaint(context, 11f, Color.BLACK)
     val nameW = CONTENT_WIDTH - 110f - 95f - 65f
     return items.map { item ->
-      val layout = buildRtlLayout(item.itemName, bodyPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 20)
+      val layout = buildRtlLayout(item.itemName + item.unitLabel.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty(), bodyPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 20)
       val rowH = maxOf(28f, layout.height + 14f)
       MeasuredItem(item, layout, rowH)
     }
