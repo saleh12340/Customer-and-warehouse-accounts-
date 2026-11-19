@@ -64,7 +64,7 @@ object InvoiceImageGenerator {
 
       // Pre-measure dynamic row heights so no text ever clips or overlaps
       val itemLayouts = items.map { item ->
-        val nameLayout = buildRtlLayout(item.itemName, tdPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 3)
+        val nameLayout = buildRtlLayout(item.itemName, tdPaint, nameW.toInt() - 12, Layout.Alignment.ALIGN_NORMAL, maxLines = 20)
         val rowH = maxOf(52, nameLayout.height + 20)
         Triple(item, nameLayout, rowH)
       }
@@ -204,7 +204,7 @@ object InvoiceImageGenerator {
     paint: TextPaint,
     width: Int,
     alignment: Layout.Alignment,
-    maxLines: Int = 2
+    maxLines: Int = 20
   ): StaticLayout {
     return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
       .setAlignment(alignment)
