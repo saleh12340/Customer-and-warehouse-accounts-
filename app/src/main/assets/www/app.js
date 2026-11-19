@@ -1804,7 +1804,11 @@ function toggleMultiStockPicker(forceState) {
   if (!box) return;
   const nextShow = typeof forceState === 'boolean' ? forceState : box.classList.contains('hidden');
   box.classList.toggle('hidden', !nextShow);
-  if (nextShow) renderMultiStockPicker();
+  if (nextShow) {
+    renderMultiStockPicker();
+    const search = document.getElementById('multi-stock-search');
+    if (search) setTimeout(() => search.focus(), 40);
+  }
 }
 
 function renderMultiStockPicker() {
