@@ -356,11 +356,23 @@
           <h2>إدارة المخزن</h2>
           <div class="btn-row-compact">
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="exportInventoryPdf()">جرد PDF</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="toggleInventoryQuickAdd()">إضافة سريعة</button>
             <button type="button" class="btn btn-primary btn-sm" onclick="openInventoryForm(0)">+ صنف جديد</button>
           </div>
         </div>
         <div class="ruled-input-row ruled-search-row">
           <input type="text" id="inventory-search" class="ruled-cell" placeholder="بحث عن صنف أو فئة..." oninput="filterInventory()">
+        </div>
+        <div class="inventory-filter-row">
+          <select id="inventory-category-filter" class="ruled-cell" onchange="setInventoryCategory(this.value)">
+            <option value="ALL">كل الفئات</option>
+          </select>
+          <select id="inventory-sort" class="ruled-cell" onchange="setInventorySort(this.value)">
+            <option value="NAME">ترتيب: الاسم</option>
+            <option value="QTY_ASC">الكمية: الأقل أولاً</option>
+            <option value="QTY_DESC">الكمية: الأعلى أولاً</option>
+            <option value="VALUE_DESC">القيمة: الأعلى أولاً</option>
+          </select>
         </div>
         <div class="pill-tabs" id="inventory-filter-tabs">
           <button type="button" class="pill active" onclick="setInventoryFilter('ALL', this)">الكل</button>
@@ -369,6 +381,30 @@
         </div>
         <div id="inventory-summary-strip" class="summary-strip"></div>
       </div>
+      <div id="inventory-quick-add" class="card compact-card hidden">
+        <div class="card-title-row"><strong>إضافة صنف جديد بسرعة</strong><span class="muted-text">يُحفظ مباشرة في المخزن</span></div>
+        <div class="ruled-grid-labels grid-quick-stock">
+          <span>اسم الصنف *</span><span>الرصيد</span><span>سعر الشراء</span><span>سعر البيع</span>
+        </div>
+        <div class="ruled-input-row grid-quick-stock">
+          <input type="text" id="inventory-quick-name" class="ruled-cell" placeholder="اسم الصنف">
+          <input type="number" lang="en" dir="ltr" inputmode="numeric" id="inventory-quick-qty" class="ruled-cell cell-num" placeholder="0" min="0" value="1">
+          <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inventory-quick-buy" class="ruled-cell cell-num" placeholder="شراء" min="0" step="0.01">
+          <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inventory-quick-sell" class="ruled-cell cell-num" placeholder="بيع" min="0" step="0.01">
+        </div>
+        <div class="ruled-grid-labels grid-quick-stock" style="margin-top:5px;">
+          <span>الفئة</span><span>الوحدة</span>
+        </div>
+        <div class="ruled-input-row grid-quick-stock">
+          <input type="text" id="inventory-quick-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
+          <input type="text" id="inventory-quick-unit" class="ruled-cell" placeholder="حبة / كرتون">
+        </div>
+        <div class="btn-row" style="margin-top:7px;">
+          <button type="button" class="btn btn-primary btn-sm" onclick="submitInventoryQuickAdd()">حفظ الصنف</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="toggleInventoryQuickAdd(false)">إلغاء</button>
+        </div>
+      </div>
+      <datalist id="inventory-categories"></datalist>
       <div id="inventory-history-card" class="card compact-card entry-dock-card hidden"></div>
       <div id="inventory-list"></div>
     </section>
@@ -382,7 +418,7 @@
         <div class="card compact-card">
           <div class="ruled-grid-labels grid-inv-4">
             <span>إجمالي الشراء</span>
-            <span>الكمية *</span>
+            <span>الرصيد الافتتاحي</span>
             <span>التفاصيل (اسم الصنف) *</span>
             <span>شراء الواحدة</span>
           </div>
@@ -401,7 +437,7 @@
           <div class="ruled-input-row grid-inv-3">
             <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-sell" class="ruled-cell cell-num" placeholder="سعر البيع" min="0" step="0.01" oninput="updateMarginPreview()">
             <input type="text" id="inv-item-form-unit" class="ruled-cell" placeholder="حبة / كرتون">
-            <input type="text" id="inv-item-form-category" class="ruled-cell" placeholder="مواد غذائية">
+            <input type="text" id="inv-item-form-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
           </div>
 
           <div id="inventory-margin-preview" class="info-pill">الربح المتوقع للوحدة: 0</div>
