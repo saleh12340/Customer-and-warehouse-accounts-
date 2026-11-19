@@ -1249,7 +1249,8 @@ function toggleInventoryQuickAdd(forceState) {
 function submitInventoryQuickAdd() {
   const name = (document.getElementById('inventory-quick-name').value || '').trim();
   const category = (document.getElementById('inventory-quick-category').value || '').trim() || 'مواد غذائية';
-  const unit = (document.getElementById('inventory-quick-unit').value || '').trim() || 'حبة';
+  const unit = serializeInventoryUnitConfig('inventory-quick');
+  if (!unit) return;
   const quantityRaw = document.getElementById('inventory-quick-qty').value;
   const buyRaw = document.getElementById('inventory-quick-buy').value;
   const sellRaw = document.getElementById('inventory-quick-sell').value;
@@ -1273,7 +1274,7 @@ function submitInventoryQuickAdd() {
   if (!window.Android) return;
   const reqId = nextReqId((created) => {
     if (!created || !created.id) return;
-    ['name','qty','buy','sell','category','unit'].forEach(key => {
+    ['name','qty','buy','sell','category','unit','pack-name','pack-size','carton-name','carton-packs'].forEach(key => {
       const el = document.getElementById('inventory-quick-' + key);
       if (el) el.value = '';
     });
@@ -1355,7 +1356,7 @@ function openInventoryForm(itemId) {
     if (item) {
       document.getElementById('inv-item-form-name').value = item.name || '';
       document.getElementById('inv-item-form-category').value = item.category || '';
-      document.getElementById('inv-item-form-unit').value = item.unit || '';
+      fillInventoryUnitConfig('inv-item-form', item.unit || 'حبة');
       document.getElementById('inv-item-form-qty').value = item.quantity;
       document.getElementById('inv-item-form-buy').value = item.purchasePrice;
       document.getElementById('inv-item-form-sell').value = item.sellingPrice;
@@ -1364,7 +1365,7 @@ function openInventoryForm(itemId) {
   } else {
     document.getElementById('inv-item-form-name').value = '';
     document.getElementById('inv-item-form-category').value = '';
-    document.getElementById('inv-item-form-unit').value = '';
+    fillInventoryUnitConfig('inv-item-form', 'حبة');
     document.getElementById('inv-item-form-qty').value = '';
     document.getElementById('inv-item-form-buy').value = '';
     document.getElementById('inv-item-form-sell').value = '';
@@ -1403,7 +1404,8 @@ function updateMarginPreview() {
 function submitInventoryForm() {
   const name = (document.getElementById('inv-item-form-name').value || '').trim();
   const category = (document.getElementById('inv-item-form-category').value || '').trim() || 'مواد غذائية';
-  const unit = (document.getElementById('inv-item-form-unit').value || '').trim() || 'حبة';
+  const unit = serializeInventoryUnitConfig('inv-item-form');
+  if (!unit) return;
   const rawQty = document.getElementById('inv-item-form-qty').value;
   const quantity = rawQty === '' ? 0 : parseInt(rawQty, 10);
   const rawBuy = document.getElementById('inv-item-form-buy').value;
@@ -2038,6 +2040,7 @@ function appendItemLineToCart(itemId, itemName, qty, unitPrice, totalPrice, unit
   );
   if (existingIdx >= 0) {
     cartItems[existingIdx].quantity += qty;
+    cartItems[existingIdx].stockQuantity = (cartItems[existingIdx].stockQuantity || 0) + qty * unitFactor;
     cartItems[existingIdx].totalPrice = Math.round(cartItems[existingIdx].quantity * normalizedUnit * 100) / 100;
   } else {
     cartItems.push({
@@ -2308,6 +2311,9 @@ function updateCartItemName(idx, newNameVal) {
   const matched = inventoryData.find(x => (x.name || '').trim().toLowerCase() === clean.toLowerCase());
   cartItems[idx].itemName = clean;
   cartItems[idx].itemId = matched ? matched.id : 0;
+  cartItems[idx].unitFactor = 1;
+  cartItems[idx].stockQuantity = cartItems[idx].quantity;
+  cartItems[idx].unitName = matched ? parseInventoryUnitConfig(matched.unit).base : '';
   invoiceDirty = true;
 }
 
