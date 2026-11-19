@@ -525,8 +525,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val safePaidInput = sanitizeMoney(paidAmount, "المبلغ المدفوع")
     val normalizedItems = rawItems.map {
       val safeUnit = sanitizeMoney(it.unitPrice, "سعر الوحدة")
+      require(it.unitFactor > 0 && it.unitFactor <= 1_000_000) { "معامل الوحدة غير صحيح" }
+      require(it.stockQuantity >= 0 && it.stockQuantity <= 10_000_000) { "كمية المخزون المحولة غير صحيحة" }
       val computedTotal = GroceryViewModel.roundMoney(it.quantity.toDouble() * safeUnit)
-      it.copy(id = 0L, itemName = it.itemName.trim(), unitPrice = safeUnit, totalPrice = computedTotal)
+      val convertedStock = if (it.stockQuantity > 0) it.stockQuantity else Math.multiplyExact(it.quantity, it.unitFactor)
+      it.copy(id = 0L, itemName = it.itemName.trim(), unitPrice = safeUnit, totalPrice = computedTotal, stockQuantity = convertedStock)
     }
     val validation = GroceryViewModel.validateInvoiceInput(invoiceNumber, type, normalizedItems, safePaidInput)
     require(validation.isValid) { validation.message }
@@ -595,8 +598,16 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       val newStockSign = if (normalizedType == "PURCHASE") 1 else -1
       for (item in normalizedItems) {
         if (item.itemId > 0L) {
-          check(inventoryDao.adjustQuantity(item.itemId, newStockSign * item.quantity) == 1) {
+          val stockDelta = item.stockQuantity.takeIf { it > 0 } ?: item.quantity
+          check(inventoryDao.adjustQuantity(item.itemId, newStockSign * stockDelta) == 1) {
             "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
+          }
+          if (normalizedType == "PURCHASE") {
+            val stockItem = inventoryDao.getItemById(item.itemId)
+              ?: error("الصنف غير موجود: ${item.itemName}")
+            val factor = item.unitFactor.coerceAtLeast(1)
+            val baseUnitPrice = GroceryViewModel.roundMoney(item.unitPrice / factor)
+            inventoryDao.updateItem(stockItem.copy(purchasePrice = baseUnitPrice))
           }
         }
       }
@@ -649,7 +660,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val oldStockSign = if (oldInvoice.type == "PURCHASE") -1 else 1
     for (oldItem in previous.items) {
       if (oldItem.itemId > 0L) {
-        check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldItem.quantity) == 1) {
+        val stockQuantity = oldItem.stockQuantity.takeIf { it > 0 } ?: oldItem.quantity
+        check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * stockQuantity) == 1) {
           "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}"
         }
       }
@@ -715,7 +727,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
 
     val cogs = soldLines.sumOf { line ->
       val unitCost = purchaseCostMap[line.itemId] ?: line.unitPrice
-      line.quantity.toDouble() * unitCost
+      (line.stockQuantity.takeIf { it > 0 } ?: line.quantity).toDouble() * unitCost
     }
     val grossProfit = periodSales - cogs
 
@@ -724,7 +736,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       .map { (name, lines) ->
         TopSoldItemReport(
           itemName = name,
-          totalQuantity = lines.sumOf { it.quantity },
+          totalQuantity = lines.sumOf { it.stockQuantity.takeIf { q -> q > 0 } ?: it.quantity },
           totalRevenue = lines.sumOf { it.totalPrice }
         )
       }
