@@ -45,6 +45,13 @@ class PdfGeneratorAndImageTest {
     }
 
   @Test
+  fun invoiceTypesHaveUnambiguousSaleAndPurchaseLabels() {
+    assertEquals("فاتورة بيع نقدي", InvoiceImageGenerator.invoiceTypeArabic("CASH"))
+    assertEquals("فاتورة بيع آجل", InvoiceImageGenerator.invoiceTypeArabic("CREDIT"))
+    assertEquals("فاتورة شراء", InvoiceImageGenerator.invoiceTypeArabic("PURCHASE"))
+  }
+
+  @Test
   fun plansSingleAndMultiPagePdfPaginationAndResolvesSavedFiles() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val shortMeasured = PdfGenerator.measureItemsForTest(sampleItems(3))
