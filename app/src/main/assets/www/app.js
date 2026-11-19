@@ -666,8 +666,15 @@ function submitCustomerTx(isDebit) {
   }
   if (!window.Android || !activeCustomerId) return;
 
+  const isNewCustomerTransaction = editingCustomerTxId <= 0;
+  const customerIdForShare = activeCustomerId;
   const reqId = nextReqId(() => {
     cancelEditCustomerTx();
+    if (isNewCustomerTransaction && customerIdForShare > 0 &&
+        window.Android && window.Android.shareCustomerWhatsApp &&
+        window.confirm('تم تسجيل العملية بنجاح. هل تريد فتح محادثة العميل في واتساب ومشاركة كشف حسابه الآن؟')) {
+      window.Android.shareCustomerWhatsApp(customerIdForShare, nextReqId());
+    }
   });
   if (editingCustomerTxId > 0) {
     if (window.Android.updateCustomerTransactionWithDate) {
@@ -988,7 +995,16 @@ function submitSupplierTx(isCredit) {
     return;
   }
   if (!window.Android || !activeSupplierId) return;
-  const reqId = nextReqId(() => cancelEditSupplierTx());
+  const isNewSupplierTransaction = editingSupplierTxId <= 0;
+  const supplierIdForShare = activeSupplierId;
+  const reqId = nextReqId(() => {
+    cancelEditSupplierTx();
+    if (isNewSupplierTransaction && supplierIdForShare > 0 &&
+        window.Android && window.Android.shareSupplierWhatsApp &&
+        window.confirm('تم تسجيل العملية بنجاح. هل تريد فتح محادثة المورد في واتساب ومشاركة كشف حسابه الآن؟')) {
+      window.Android.shareSupplierWhatsApp(supplierIdForShare, nextReqId());
+    }
+  });
   if (editingSupplierTxId > 0) {
     if (window.Android.updateSupplierTransactionWithDate) {
       window.Android.updateSupplierTransactionWithDate(editingSupplierTxId, activeSupplierId, amount, isCredit, desc, dateMillis, reqId);
