@@ -1222,7 +1222,7 @@ function renderInventoryList() {
       <article class="inventory-row">
         <div class="inventory-row-main">
           <div class="inventory-item-title"><strong>${escapeHtml(i.name)}</strong>${badge}</div>
-          <span class="inventory-item-sub">${escapeHtml(i.category || 'عام')} · ${escapeHtml(i.unit || 'حبة')}</span>
+          <span class="inventory-item-sub">${escapeHtml(i.category || 'عام')} · ${escapeHtml(parseInventoryUnitConfig(i.unit).base || 'حبة')}</span>
         </div>
         <div class="inventory-row-qty">
           <span class="inventory-meta-label">الرصيد</span>
