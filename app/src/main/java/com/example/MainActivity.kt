@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
 
   private lateinit var webView: WebView
   private lateinit var bridge: AndroidBridge
+  private var exitConfirmationShowing = false
 
   private val bluetoothPermissionLauncher =
     registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -181,12 +182,14 @@ class MainActivity : ComponentActivity() {
           "(function(){ return window.handleAndroidBack ? window.handleAndroidBack() : 'EXIT'; })()"
         ) { result ->
           val cleaned = result?.trim('"')
-          if (cleaned == "EXIT") {
+          if (cleaned == "EXIT" && !exitConfirmationShowing) {
+            exitConfirmationShowing = true
             AlertDialog.Builder(this@MainActivity)
               .setTitle("تأكيد الخروج")
               .setMessage("هل تريد الخروج من تطبيق العزي؟")
               .setPositiveButton("خروج") { _, _ -> finish() }
               .setNegativeButton("البقاء في التطبيق", null)
+              .setOnDismissListener { exitConfirmationShowing = false }
               .setCancelable(true)
               .show()
           } else if (cleaned != "HANDLED") {
