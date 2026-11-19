@@ -197,7 +197,7 @@ object BluetoothPrinterManager {
 
     val measuredItems = items.map { item ->
       val nameLayout = buildRtlLayout(
-        text = item.itemName,
+        text = item.itemName + item.unitLabel.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty(),
         paint = boldPaint,
         width = (nameW - 6f).toInt(),
         alignment = Layout.Alignment.ALIGN_NORMAL,
