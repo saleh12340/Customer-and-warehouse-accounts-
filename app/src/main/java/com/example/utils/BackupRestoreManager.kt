@@ -269,7 +269,10 @@ object BackupRestoreManager {
           o.getString("itemName"),
           o.getInt("quantity").also { require(it in 1..10_000_000) { "كمية صنف فاتورة غير صحيحة" } },
           o.getDouble("unitPrice").boundedMoney("سعر الوحدة", allowNegative = false),
-          o.getDouble("totalPrice").boundedMoney("إجمالي الصنف", allowNegative = false)
+          o.getDouble("totalPrice").boundedMoney("إجمالي الصنف", allowNegative = false),
+          o.optInt("stockQuantity", 0).also { require(it in 0..10_000_000) { "كمية المخزون المحولة غير صحيحة" } },
+          o.optString("unitLabel", ""),
+          o.optInt("unitFactor", 1).also { require(it in 1..1_000_000) { "معامل الوحدة غير صحيح" } }
         )
       }
     } catch (e: IllegalArgumentException) {
