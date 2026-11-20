@@ -72,6 +72,7 @@ if (typeof MutationObserver !== 'undefined' && document.documentElement) {
 
 let currentView = 'dashboard';
 let noteEditorId = 0;
+let noteEditorDirty = false;
 let noteRightRows = [{ qty: '', detail: '' }];
 let noteLeftRows = [{ qty: '', detail: '' }];
 let savedNotes = [];
@@ -2736,6 +2737,7 @@ function updateNoteCell(side, index, field, value) {
   const rows = noteRowsFor(side);
   if (!rows[index]) return;
   rows[index][field] = value;
+  noteEditorDirty = true;
   if (index === rows.length - 1 && rows[index].qty.trim() && rows[index].detail.trim()) {
     rows.push({ qty: '', detail: '' });
     const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
@@ -2744,6 +2746,7 @@ function updateNoteCell(side, index, field, value) {
 }
 function startNewNote() {
   noteEditorId = 0;
+  noteEditorDirty = false;
   noteRightRows = [{ qty: '', detail: '' }];
   noteLeftRows = [{ qty: '', detail: '' }];
   renderNoteEditor();
@@ -2788,6 +2791,7 @@ window.onNotesData = function (jsonStr) {
 function openSavedNote(id) {
   const note = savedNotes.find(n => Number(n.id) === Number(id)); if (!note) return;
   noteEditorId = Number(note.id);
+  noteEditorDirty = false;
   noteRightRows = (note.rightRows || []).map(r => ({ qty: r.qty || '', detail: r.detail || '' }));
   noteLeftRows = (note.leftRows || []).map(r => ({ qty: r.qty || '', detail: r.detail || '' }));
   if (!noteRightRows.length) noteRightRows = [{ qty: '', detail: '' }];
@@ -2806,6 +2810,7 @@ function removeSavedNote(id) {
 }
 function requireSavedNote() {
   if (!noteEditorId) { showToast('احفظ الملاحظة أولاً'); return false; }
+  if (noteEditorDirty) { showToast('احفظ التعديلات أولاً قبل الطباعة أو المشاركة'); return false; }
   return true;
 }
 function printCurrentNote() { if (window.Android && requireSavedNote()) window.Android.printNote(noteEditorId, nextReqId()); }
