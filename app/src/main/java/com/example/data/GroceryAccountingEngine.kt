@@ -597,10 +597,45 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         targetInvoiceId = invoiceDao.insertInvoice(created)
       }
 
-      invoiceDao.insertItems(normalizedItems.map { it.copy(invoiceId = targetInvoiceId) })
+      // Resolve every free-typed purchase line to a real inventory item inside
+      // this same Room transaction. A purchase must never be left pending for a
+      // separate "export to stock" action.
+      val persistedItems = normalizedItems.map { item ->
+        if (normalizedType != "PURCHASE") {
+          item
+        } else {
+          val factor = item.unitFactor.coerceAtLeast(1)
+          val baseUnitPrice = GroceryViewModel.roundMoney(item.unitPrice / factor)
+          val resolvedItemId = if (item.itemId > 0L) {
+            check(inventoryDao.getItemById(item.itemId) != null) {
+              "الصنف غير موجود في المخزن: ${item.itemName}"
+            }
+            item.itemId
+          } else {
+            val existing = inventoryDao.getItemByName(item.itemName)
+            if (existing != null) {
+              existing.id
+            } else {
+              inventoryDao.insertItem(
+                InventoryItemEntity(
+                  name = item.itemName,
+                  category = "عام",
+                  quantity = 0,
+                  purchasePrice = baseUnitPrice,
+                  sellingPrice = 0.0,
+                  unit = "حبة"
+                )
+              )
+            }
+          }
+          item.copy(itemId = resolvedItemId)
+        }
+      }
+
+      invoiceDao.insertItems(persistedItems.map { it.copy(invoiceId = targetInvoiceId) })
 
       val newStockSign = if (normalizedType == "PURCHASE") 1 else -1
-      for (item in normalizedItems) {
+      for (item in persistedItems) {
         if (item.itemId > 0L) {
           val stockDelta = item.stockQuantity.takeIf { it > 0 } ?: item.quantity
           check(inventoryDao.adjustQuantity(item.itemId, newStockSign * stockDelta) == 1) {
