@@ -514,14 +514,20 @@ window.onDashboardData = function (jsonStr) {
           ? '<span class="badge badge-green">مدفوع</span>'
           : (inv.status === 'PARTIAL' ? '<span class="badge badge-amber">جزئي</span>' : '<span class="badge badge-red">آجل</span>');
         return `
-          <div class="list-item" onclick="openEditInvoice(${inv.id})">
-            <div>
-              <strong>#${escapeHtml(inv.invoiceNumber)}</strong> ${badge}
-              <div class="muted-text">${escapeHtml(inv.partyName)} • ${escapeHtml(invoiceTypeAr(inv.type))}</div>
+          <div class="card compact-card" style="margin-bottom:5px; padding:8px;">
+            <div class="list-item" style="border:0; padding:2px 0;" onclick="openEditInvoice(${inv.id})">
+              <div>
+                <strong>#${escapeHtml(inv.invoiceNumber)}</strong> ${badge}
+                <div class="muted-text">${escapeHtml(inv.partyName)} • ${escapeHtml(invoiceTypeAr(inv.type))}</div>
+              </div>
+              <div class="list-item-actions">
+                <strong>${fmtMoney(inv.totalAmount)} ${escapeHtml(appCurrency)}</strong>
+                <span class="muted-text" style="font-size:11px;">${fmtShortDate(inv.date)}</span>
+              </div>
             </div>
-            <div class="list-item-actions">
-              <strong>${fmtMoney(inv.totalAmount)} ${escapeHtml(appCurrency)}</strong>
-              <span class="muted-text" style="font-size:11px;">${fmtShortDate(inv.date)}</span>
+            <div class="btn-row-compact" style="margin-top:5px;">
+              <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openEditInvoice(${inv.id})">تعديل</button>
+              <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteInvoiceWithConfirmation(${inv.id})">حذف</button>
             </div>
           </div>
         `;
@@ -792,14 +798,20 @@ function renderCustomerInvoices() {
     return;
   }
   container.innerHTML = invoices.map(inv => `
-    <div class="list-item" onclick="openEditInvoice(${inv.id})">
-      <div>
-        <strong>#${escapeHtml(inv.invoiceNumber)}</strong>
-        <div class="muted-text">${escapeHtml(invoiceTypeAr(inv.type))} • ${fmtShortDate(inv.date)}</div>
+    <div class="card compact-card" style="margin-bottom:5px; padding:7px;">
+      <div class="list-item" style="border:0; padding:2px 0;" onclick="openEditInvoice(${inv.id})">
+        <div>
+          <strong>#${escapeHtml(inv.invoiceNumber)}</strong>
+          <div class="muted-text">${escapeHtml(invoiceTypeAr(inv.type))} • ${fmtShortDate(inv.date)}</div>
+        </div>
+        <div class="list-item-actions">
+          <strong>${fmtMoney(inv.totalAmount)} ${escapeHtml(appCurrency)}</strong>
+          <span class="muted-text">متبقي: ${fmtMoney(inv.remainingAmount)}</span>
+        </div>
       </div>
-      <div class="list-item-actions">
-        <strong>${fmtMoney(inv.totalAmount)} ${escapeHtml(appCurrency)}</strong>
-        <span class="muted-text">متبقي: ${fmtMoney(inv.remainingAmount)}</span>
+      <div class="btn-row-compact" style="margin-top:4px;">
+        <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openEditInvoice(${inv.id})">تعديل</button>
+        <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteInvoiceWithConfirmation(${inv.id})">حذف</button>
       </div>
     </div>
   `).join('');
@@ -1125,14 +1137,20 @@ function renderSupplierInvoices() {
     return;
   }
   container.innerHTML = list.map(inv => `
-    <div class="list-item" onclick="openEditInvoice(${inv.id})">
-      <div>
-        <strong>#${escapeHtml(inv.invoiceNumber)}</strong>
-        <div class="muted-text">${fmtShortDate(inv.date)}</div>
+    <div class="card compact-card" style="margin-bottom:5px; padding:7px;">
+      <div class="list-item" style="border:0; padding:2px 0;" onclick="openEditInvoice(${inv.id})">
+        <div>
+          <strong>#${escapeHtml(inv.invoiceNumber)}</strong>
+          <div class="muted-text">${fmtShortDate(inv.date)}</div>
+        </div>
+        <div class="list-item-actions">
+          <strong>${fmtMoney(inv.totalAmount)} ${escapeHtml(appCurrency)}</strong>
+          <span class="muted-text">متبقي: ${fmtMoney(inv.remainingAmount)}</span>
+        </div>
       </div>
-      <div class="list-item-actions">
-        <strong>${fmtMoney(inv.totalAmount)} ${escapeHtml(appCurrency)}</strong>
-        <span class="muted-text">متبقي: ${fmtMoney(inv.remainingAmount)}</span>
+      <div class="btn-row-compact" style="margin-top:4px;">
+        <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openEditInvoice(${inv.id})">تعديل</button>
+        <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteInvoiceWithConfirmation(${inv.id})">حذف</button>
       </div>
     </div>
   `).join('');
@@ -1419,17 +1437,18 @@ window.onInventoryHistoryData = function (jsonStr) {
     const movements = data.movements || [];
     const rowsHtml = movements.length === 0
       ? '<div class="muted-text" style="text-align:center; padding:6px;">لا توجد حركات فواتير مسجلة لهذا الصنف</div>'
-      : `<div class="table-wrap" style="margin-top:6px;"><table class="data-table ruled-table"><thead><tr><th>الفاتورة</th><th>الطرف</th><th>الكمية</th><th>السعر</th><th>التاريخ</th></tr></thead><tbody>` +
+      : `<div class="table-wrap" style="margin-top:6px;"><table class="data-table ruled-table"><thead><tr><th>الفاتورة</th><th>الطرف</th><th>الكمية</th><th>السعر</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody>` +
         movements.map(m => {
           const isAdd = m.deltaQty > 0;
           const cls = isAdd ? 'text-success' : 'text-danger';
           const qtyStr = isAdd ? `+${m.deltaQty}` : String(m.deltaQty);
-          return `<tr onclick="openEditInvoice(${m.invoiceId})">
-            <td><strong>#${escapeHtml(m.invoiceNumber)}</strong></td>
+          return `<tr>
+            <td onclick="openEditInvoice(${m.invoiceId})"><strong>#${escapeHtml(m.invoiceNumber)}</strong></td>
             <td>${escapeHtml(m.partyName)}</td>
             <td class="num-cell ${cls}" style="font-weight:800;">${qtyStr}</td>
             <td class="num-cell">${fmtMoney(m.unitPrice)}</td>
             <td class="num-cell" style="font-size:10.5px;">${fmtShortDate(m.date)}</td>
+            <td style="white-space:nowrap;"><button type="button" class="tbl-action-btn" onclick="openEditInvoice(${m.invoiceId})">تعديل</button><button type="button" class="tbl-action-btn del" onclick="deleteInvoiceWithConfirmation(${m.invoiceId})">حذف</button></td>
           </tr>`;
         }).join('') +
         `</tbody></table></div>`;
@@ -1660,6 +1679,25 @@ function confirmDeleteInvoice(id) {
   if (!window.Android) return;
   const reqId = nextReqId(() => { pendingDeleteInvoiceId = 0; });
   window.Android.deleteInvoice(id, reqId);
+}
+
+// Reuse invoice edit/delete actions anywhere an invoice is referenced.
+// The native engine reverses the invoice's stock and account effects atomically.
+function deleteInvoiceWithConfirmation(id) {
+  if (!window.Android || !Number(id)) return;
+  if (!window.confirm('هل تريد حذف هذه الفاتورة نهائياً؟ سيتم عكس أثرها على المخزون ورصيد العميل أو المورد.')) return;
+  const view = currentView;
+  const customerId = activeCustomerId;
+  const supplierId = activeSupplierId;
+  const reqId = nextReqId(() => {
+    if (view === 'customer-detail' && customerId && window.Android.getCustomerDetail) {
+      window.Android.getCustomerDetail(customerId);
+    } else if (view === 'supplier-detail' && supplierId && window.Android.getSupplierDetail) {
+      window.Android.getSupplierDetail(supplierId);
+    }
+    pendingDeleteInvoiceId = 0;
+  });
+  window.Android.deleteInvoice(Number(id), reqId);
 }
 
 function quickThermalPreview(id) {
@@ -2823,6 +2861,7 @@ function noteRowMarkup(side, index) {
       value="${escapeHtml(row.qty)}" oninput="updateNoteCell('${side}',${index},'qty',this.value)"></td>
     <td><input class="note-cell note-detail" type="text" aria-label="التفاصيل" placeholder="اسم الصنف أو التفاصيل"
       value="${escapeHtml(row.detail)}" oninput="updateNoteCell('${side}',${index},'detail',this.value)"></td>
+    <td class="note-row-action"><button type="button" class="row-remove-cell" aria-label="حذف الصف" title="حذف الصف" onclick="removeNoteRow('${side}',${index})">×</button></td>
   </tr>`;
 }
 function renderNoteRows(side) {
@@ -2848,6 +2887,19 @@ function updateNoteCell(side, index, field, value) {
     const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
     if (body) body.insertAdjacentHTML('beforeend', noteRowMarkup(side, rows.length - 1));
   }
+}
+function removeNoteRow(side, index) {
+  const rows = noteRowsFor(side);
+  if (!rows[index]) return;
+  const row = rows[index];
+  if ((String(row.qty || '').trim() || String(row.detail || '').trim()) &&
+      !window.confirm('هل تريد حذف هذا الصف من الملاحظة؟ احفظ الملاحظة لتثبيت التغيير.')) return;
+  rows.splice(index, 1);
+  if (!rows.length) rows.push({ qty: '', detail: '' });
+  noteEditorDirty = true;
+  renderNoteRows(side);
+  const status = document.getElementById('note-editor-status');
+  if (status) status.textContent = noteEditorId ? 'تعديل ملاحظة محفوظة — توجد تغييرات غير محفوظة' : 'ملاحظة جديدة غير محفوظة';
 }
 function startNewNote() {
   noteEditorId = 0;
