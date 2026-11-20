@@ -71,6 +71,10 @@ if (typeof MutationObserver !== 'undefined' && document.documentElement) {
 }
 
 let currentView = 'dashboard';
+let noteEditorId = 0;
+let noteRightRows = [{ qty: '', detail: '' }];
+let noteLeftRows = [{ qty: '', detail: '' }];
+let savedNotes = [];
 let viewHistory = [];
 let appCurrency = 'ر.ي';
 let storeName = 'بقالة العزي للمواد الغذائية';
@@ -370,6 +374,8 @@ function loadViewData(view) {
     window.Android.getInventory();
   } else if (view === 'invoices') {
     window.Android.getInvoices();
+  } else if (view === 'notes') {
+    window.Android.getNotes();
   } else if (view === 'reports') {
     loadReports();
   } else if (view === 'settings') {
@@ -2692,6 +2698,108 @@ function returnFromThermalPreview() {
     switchView(dest, false);
   }
 }
+
+
+// ---------------- Two-panel Notes ----------------
+function noteRowsFor(side) { return side === 'right' ? noteRightRows : noteLeftRows; }
+function noteRowMarkup(side, index) {
+  const row = noteRowsFor(side)[index] || { qty: '', detail: '' };
+  return `<tr>
+    <td><input class="note-cell note-qty" type="text" inputmode="decimal" dir="ltr" aria-label="الكمية"
+      value="${escapeHtml(row.qty)}" oninput="updateNoteCell('${side}',${index},'qty',this.value)"></td>
+    <td><input class="note-cell note-detail" type="text" aria-label="التفاصيل" placeholder="اسم الصنف أو التفاصيل"
+      value="${escapeHtml(row.detail)}" oninput="updateNoteCell('${side}',${index},'detail',this.value)"></td>
+  </tr>`;
+}
+function renderNoteRows(side) {
+  const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
+  if (!body) return;
+  const rows = noteRowsFor(side);
+  if (!rows.length) rows.push({ qty: '', detail: '' });
+  body.innerHTML = rows.map((_, index) => noteRowMarkup(side, index)).join('');
+}
+function renderNoteEditor() {
+  renderNoteRows('right'); renderNoteRows('left');
+  const status = document.getElementById('note-editor-status');
+  if (status) status.textContent = noteEditorId ? 'تعديل ملاحظة محفوظة' : 'ملاحظة جديدة غير محفوظة';
+}
+function updateNoteCell(side, index, field, value) {
+  const rows = noteRowsFor(side);
+  if (!rows[index]) return;
+  rows[index][field] = value;
+  if (index === rows.length - 1 && rows[index].qty.trim() && rows[index].detail.trim()) {
+    rows.push({ qty: '', detail: '' });
+    const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
+    if (body) body.insertAdjacentHTML('beforeend', noteRowMarkup(side, rows.length - 1));
+  }
+}
+function startNewNote() {
+  noteEditorId = 0;
+  noteRightRows = [{ qty: '', detail: '' }];
+  noteLeftRows = [{ qty: '', detail: '' }];
+  renderNoteEditor();
+  const scroll = document.getElementById('main-scroll'); if (scroll) scroll.scrollTop = 0;
+}
+function notePayloadRows(rows) {
+  return rows.filter(r => (r.qty || '').trim() || (r.detail || '').trim())
+    .map(r => ({ qty: (r.qty || '').trim(), detail: (r.detail || '').trim() }));
+}
+function saveCurrentNote() {
+  if (!window.Android) return;
+  const rightRows = notePayloadRows(noteRightRows), leftRows = notePayloadRows(noteLeftRows);
+  if (!rightRows.length && !leftRows.length) { showToast('أدخل كمية أو تفاصيل قبل الحفظ'); return; }
+  window.Android.saveNote(JSON.stringify({ id: noteEditorId, rightRows, leftRows }), nextReqId());
+}
+window.onNoteSaved = function (jsonStr) {
+  try { noteEditorId = Number(JSON.parse(jsonStr).id) || 0; renderNoteEditor(); }
+  catch (e) { console.error(e); }
+};
+window.onNotesData = function (jsonStr) {
+  try {
+    savedNotes = JSON.parse(jsonStr) || [];
+    const count = document.getElementById('notes-count');
+    if (count) count.textContent = String(savedNotes.length);
+    const list = document.getElementById('notes-history-list');
+    if (!list) return;
+    if (!savedNotes.length) { list.innerHTML = '<div class="empty-state">لا توجد ملاحظات محفوظة بعد</div>'; return; }
+    list.innerHTML = savedNotes.map(note => {
+      const right = note.rightRows || [], left = note.leftRows || [], total = right.length + left.length;
+      const first = [...right, ...left].find(r => r.detail || r.qty);
+      return `<div class="note-history-item">
+        <button type="button" class="note-history-open" onclick="openSavedNote(${Number(note.id)})">
+          <strong>ملاحظة #${Number(note.id)}</strong>
+          <span>${escapeHtml(fmtShortDate(note.updatedAt))} • ${total} صف</span>
+          <small>${escapeHtml(first ? [first.qty, first.detail].filter(Boolean).join(' - ') : 'ملاحظة فارغة')}</small>
+        </button>
+        <button type="button" class="tbl-action-btn del" onclick="removeSavedNote(${Number(note.id)})">حذف</button>
+      </div>`;
+    }).join('');
+  } catch (e) { console.error(e); }
+};
+function openSavedNote(id) {
+  const note = savedNotes.find(n => Number(n.id) === Number(id)); if (!note) return;
+  noteEditorId = Number(note.id);
+  noteRightRows = (note.rightRows || []).map(r => ({ qty: r.qty || '', detail: r.detail || '' }));
+  noteLeftRows = (note.leftRows || []).map(r => ({ qty: r.qty || '', detail: r.detail || '' }));
+  if (!noteRightRows.length) noteRightRows = [{ qty: '', detail: '' }];
+  if (!noteLeftRows.length) noteLeftRows = [{ qty: '', detail: '' }];
+  if (noteRightRows.at(-1).qty || noteRightRows.at(-1).detail) noteRightRows.push({ qty: '', detail: '' });
+  if (noteLeftRows.at(-1).qty || noteLeftRows.at(-1).detail) noteLeftRows.push({ qty: '', detail: '' });
+  renderNoteEditor();
+  const scroll = document.getElementById('main-scroll'); if (scroll) scroll.scrollTop = 0;
+}
+function removeSavedNote(id) {
+  if (!window.Android || !confirm('هل تريد حذف هذه الملاحظة نهائياً؟')) return;
+  window.Android.deleteNote(id, nextReqId());
+  if (Number(noteEditorId) === Number(id)) startNewNote();
+}
+function requireSavedNote() {
+  if (!noteEditorId) { showToast('احفظ الملاحظة أولاً'); return false; }
+  return true;
+}
+function printCurrentNote() { if (window.Android && requireSavedNote()) window.Android.printNote(noteEditorId, nextReqId()); }
+function exportCurrentNotePdf() { if (window.Android && requireSavedNote()) window.Android.exportNotePdf(noteEditorId, nextReqId()); }
+function shareCurrentNoteWhatsApp() { if (window.Android && requireSavedNote()) window.Android.shareNoteWhatsApp(noteEditorId, nextReqId()); }
 
 // ---------------- Reports ----------------
 
