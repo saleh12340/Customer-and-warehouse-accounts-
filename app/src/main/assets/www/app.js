@@ -2022,17 +2022,24 @@ function renderBatchEntryRows() {
     batchEntryRows = [createBlankBatchRow()];
   }
   container.innerHTML = batchEntryRows.slice(0, 1).map((row, idx) => `
-    <div class="ruled-input-row grid-invoice-batch-row">
-      <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="الكمية" min="1"
-        value="${escapeHtml(row.qty)}" oninput="onBatchRowQtyInput(${idx}, this.value)">
-      <input type="text" id="batch-name-${idx}" class="ruled-cell" list="inv-items-datalist"
-        placeholder="اسم الصنف..." value="${escapeHtml(row.itemName)}"
-        oninput="onBatchRowNameInput(${idx}, this.value)" onchange="onBatchRowNameInput(${idx}, this.value)">
-      <select id="batch-unit-${idx}" class="ruled-cell batch-unit-select" aria-label="الوحدة أو نوع الوحدة"
-        onchange="onBatchRowUnitChange(${idx}, this.value)"></select>
-      <input type="number" id="batch-price-${idx}" class="ruled-cell cell-num cell-auto" placeholder="سعر الوحدة" step="0.01" min="0"
-        value="${escapeHtml(row.unitPrice)}" oninput="onBatchRowUnitPriceInput(${idx}, this.value)">
-      <button type="button" class="row-remove-cell" onclick="removeBatchRow(${idx})" aria-label="حذف صف">×</button>
+    <div class="batch-entry-line">
+      <div class="ruled-input-row grid-invoice-batch-row">
+        <input type="number" id="batch-total-${idx}" class="ruled-cell cell-num batch-total-input" placeholder="الإجمالي" min="0" step="0.01"
+          value="${escapeHtml(row.total)}" oninput="onBatchRowTotalInput(${idx}, this.value)">
+        <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="الكمية" min="1"
+          value="${escapeHtml(row.qty)}" oninput="onBatchRowQtyInput(${idx}, this.value)">
+        <input type="text" id="batch-name-${idx}" class="ruled-cell" list="inv-items-datalist"
+          placeholder="اسم الصنف..." value="${escapeHtml(row.itemName)}"
+          oninput="onBatchRowNameInput(${idx}, this.value)" onchange="onBatchRowNameInput(${idx}, this.value)">
+        <select id="batch-unit-${idx}" class="ruled-cell batch-unit-select" aria-label="الوحدة أو نوع الوحدة"
+          onchange="onBatchRowUnitChange(${idx}, this.value)"></select>
+        <button type="button" class="row-remove-cell" onclick="removeBatchRow(${idx})" aria-label="حذف صف">×</button>
+      </div>
+      <div class="batch-derived-price">
+        <label for="batch-price-${idx}">سعر الوحدة المستنتج</label>
+        <input type="number" id="batch-price-${idx}" class="ruled-cell cell-num cell-auto" placeholder="يُحسب تلقائياً" step="0.0001" min="0"
+          value="${escapeHtml(row.unitPrice)}" readonly aria-readonly="true">
+      </div>
     </div>
   `).join('');
   batchEntryRows.forEach((row, idx) => updateBatchUnitOptions(idx));
