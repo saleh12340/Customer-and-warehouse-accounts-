@@ -612,12 +612,20 @@ function renderCustomersList() {
           <span class="${cls}" style="font-weight:800; font-size:13.5px;">${label} ${escapeHtml(appCurrency)}</span>
           <div class="btn-row-compact">
             <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openCustomerForm(${c.id})">تعديل</button>
+            <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteCustomerFromList(${c.id})">حذف</button>
             <span class="badge badge-blue">كشف الحساب</span>
           </div>
         </div>
       </div>
     `;
   }).join('');
+}
+
+function deleteCustomerFromList(customerId) {
+  const customer = customersData.find(x => Number(x.id) === Number(customerId));
+  if (!customer || !window.Android) return;
+  if (!window.confirm(`حذف العميل «${customer.name}»؟ لا يمكن الحذف إذا كان لديه رصيد أو فواتير محفوظة.`)) return;
+  window.Android.deleteCustomer(Number(customerId), nextReqId());
 }
 
 function importCustomerContact() {
@@ -979,12 +987,20 @@ function renderSuppliersList() {
           <span class="${cls}" style="font-weight:800; font-size:13.5px;">${balLabel} ${escapeHtml(appCurrency)}</span>
           <div class="btn-row-compact">
             <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openSupplierForm(${s.id})">تعديل</button>
+            <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteSupplierFromList(${s.id})">حذف</button>
             <span class="badge badge-blue">كشف المورد</span>
           </div>
         </div>
       </div>
     `;
   }).join('');
+}
+
+function deleteSupplierFromList(supplierId) {
+  const supplier = suppliersData.find(x => Number(x.id) === Number(supplierId));
+  if (!supplier || !window.Android) return;
+  if (!window.confirm(`حذف المورد «${supplier.name}»؟ لا يمكن الحذف إذا كانت عليه مستحقات أو فواتير مشتريات محفوظة.`)) return;
+  window.Android.deleteSupplier(Number(supplierId), nextReqId());
 }
 
 function openSupplierForm(supplierId) {
