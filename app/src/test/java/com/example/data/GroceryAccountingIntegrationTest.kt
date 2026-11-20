@@ -112,6 +112,9 @@ class GroceryAccountingIntegrationTest {
     val water = db.inventoryDao().getItemByName("مياه")!!
     assertEquals(288, water.quantity)
     assertEquals(50.0, water.purchasePrice, 0.01)
+    val waterUnitConfig = org.json.JSONObject(water.unit)
+    assertEquals("كرتون", waterUnitConfig.getString("packName"))
+    assertEquals(144, waterUnitConfig.getInt("packSize"))
 
     val savedLines = db.invoiceDao().getInvoiceWithItems(invoiceId)!!.items
     assertTrue(savedLines.all { it.itemId > 0L })
