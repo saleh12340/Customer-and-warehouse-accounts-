@@ -834,6 +834,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     database.withTransaction {
       invoiceDao.clearInvoiceItems()
       transactionDao.clearTransactions()
+      database.noteDao().clearNotes()
       invoiceDao.clearInvoices()
       inventoryDao.clearItems()
       customerDao.clearCustomers()
