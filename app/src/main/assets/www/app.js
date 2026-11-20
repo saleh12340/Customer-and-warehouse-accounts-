@@ -234,6 +234,7 @@ let lastInvoiceType = '';
 let reqSeq = 1;
 const pendingCallbacks = {};
 let toastTimer = null;
+let pendingInvoicePartyId = 0;
 
 function nextReqId(onSuccess) {
   const id = 'req_' + (reqSeq++);
@@ -1850,7 +1851,7 @@ function openCreateInvoice(presetType, presetPartyId) {
   if (invDateEl) invDateEl.value = toDateTimeLocalValue(Date.now());
   document.getElementById('quick-add-stock-box').classList.add('hidden');
   const multiBox = document.getElementById('multi-stock-picker-box');
-  if (multiBox) multiBox.classList.add('hidden');
+  if (multiBox) multiBox.classList.remove('hidden');
   document.getElementById('exchange-calc-box').classList.add('hidden');
 
   if (window.Android) {
@@ -2019,6 +2020,10 @@ function populatePartyDropdown() {
   }
   if (currentVal) {
     document.getElementById('inv-party').value = currentVal;
+  }
+  if (pendingInvoicePartyId > 0) {
+    document.getElementById('inv-party').value = String(pendingInvoicePartyId);
+    pendingInvoicePartyId = 0;
   }
   updatePartyBalanceChip();
 }
@@ -2396,14 +2401,11 @@ function submitQuickAddParty() {
     }
     toggleQuickAddParty(false);
     ['quick-party-name','quick-party-phone','quick-party-extra'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    pendingInvoicePartyId = Number(created.id) || 0;
     if (isSupplier) window.Android.getSuppliers(); else window.Android.getCustomers();
-    setTimeout(() => {
-      const select = document.getElementById('inv-party');
-      if (select) select.value = String(created.id);
-      updatePartyBalanceChip();
-      markInvoiceDirty();
-      showToast(isSupplier ? 'تمت إضافة المورد واختياره ✓' : 'تمت إضافة العميل واختياره ✓', 'success');
-    }, 220);
+    updatePartyBalanceChip();
+    markInvoiceDirty();
+    showToast(isSupplier ? 'تمت إضافة المورد واختياره ✓' : 'تمت إضافة العميل واختياره ✓', 'success');
   });
   if (isSupplier) window.Android.saveSupplier(JSON.stringify(payload), reqId);
   else window.Android.saveCustomer(JSON.stringify(payload), reqId);
