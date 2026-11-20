@@ -2477,30 +2477,23 @@ function renderMultiStockPicker() {
     const price = Number(type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice) || 0;
     const qty = Number(i.quantity) || 0;
     const stockClass = qty <= 0 ? 'text-danger' : (qty <= 10 ? 'text-primary' : 'text-success');
+    const cartLine = cartItems.find(line => Number(line.itemId) === Number(i.id) && !line.unitName);
+    const inCartQty = cartLine ? Number(cartLine.quantity) || 0 : 0;
     return `
-      <article class="quick-stock-pick-row">
+      <article class="quick-stock-pick-row" role="button" tabindex="0"
+        aria-label="إضافة ${escapeHtml(i.name)} إلى الفاتورة"
+        onclick="addInventoryItemQuick(${i.id})"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();addInventoryItemQuick(${i.id})}">
         <div class="quick-stock-pick-info">
           <strong>${escapeHtml(i.name)}</strong>
           <span class="muted-text">${escapeHtml(i.category || 'عام')}</span>
           <span class="muted-text"><b class="${stockClass}">المخزون: ${fmtMoney(qty)}</b></span>
           <span class="muted-text">السعر: <b>${fmtMoney(price)} ${escapeHtml(appCurrency)}</b></span>
         </div>
-        <div class="quick-stock-pick-controls">
-          <div class="quantity-stepper quantity-stepper-picker">
-            <button type="button" aria-label="تقليل الكمية" onclick="stepPickerQty(${i.id}, -1)">−</button>
-            <input type="number" class="qty-inline-input quick-stock-pick-qty" id="mstock-qty-${i.id}" min="1" step="1" value="1" aria-label="الكمية">
-            <button type="button" aria-label="زيادة الكمية" onclick="stepPickerQty(${i.id}, 1)">+</button>
-          </div>
-        </div>
-        <button type="button" class="btn btn-primary btn-sm quick-stock-pick-add" onclick="addInventoryItemQuick(${i.id})">إضافة للفاتورة</button>
+        <span class="quick-stock-pick-selected" aria-live="polite">${inCartQty > 0 ? `في الفاتورة: ${fmtMoney(inCartQty)}` : 'اضغط للإضافة'}</span>
       </article>
     `;
   }).join('');
-}
-
-function stepPickerQty(itemId, delta) {
-  const input = document.getElementById('mstock-qty-' + itemId);
-  if (input) input.value = String(Math.max(1, (parseInt(input.value, 10) || 1) + delta));
 }
 
 function addInventoryItemQuick(itemId) {
@@ -2509,25 +2502,17 @@ function addInventoryItemQuick(itemId) {
     showToast('تعذر العثور على الصنف؛ حدّث قائمة المخزن وحاول مجدداً', 'error');
     return;
   }
-  const qtyEl = document.getElementById(`mstock-qty-${itemId}`);
-  const qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
-  if (!Number.isFinite(qty) || qty <= 0) {
-    showToast('أدخل كمية صحيحة للصنف', 'error');
-    if (qtyEl) qtyEl.focus();
-    return;
-  }
   const type = document.getElementById('inv-type').value;
   const unitPrice = Math.max(0, Number(type === 'PURCHASE' ? item.purchasePrice : item.sellingPrice) || 0);
-  const total = Math.round(qty * unitPrice * 100) / 100;
-  appendItemLineToCart(item.id, item.name, qty, unitPrice, total);
+  appendItemLineToCart(item.id, item.name, 1, unitPrice, unitPrice);
   invoiceDirty = true;
   if (type === 'CASH') {
     const subtotal = cartItems.reduce((sum, line) => sum + line.totalPrice, 0);
     document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
   }
   renderCart();
-  if (qtyEl) qtyEl.value = '1';
-  showToast(`تمت إضافة ${item.name} إلى الفاتورة ✓`, 'success');
+  renderMultiStockPicker();
+  showToast(`تمت إضافة وحدة من ${item.name} ✓`, 'success');
 }
 
 function applyMultiStockSelection() {
