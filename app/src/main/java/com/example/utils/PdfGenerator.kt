@@ -45,16 +45,16 @@ object PdfGenerator {
       val date = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date(invoice.date))
 
       val invoiceAccent = if (invoice.type.equals("PURCHASE", true)) Color.rgb(0, 112, 105) else Color.rgb(15, 76, 156)
-      val titlePaint = textPaint(context, 19f, invoiceAccent, true)
-      val subPaint = textPaint(context, 10f, Color.rgb(90, 98, 106))
-      val bodyPaint = textPaint(context, 11f, Color.BLACK)
-      val smallPaint = textPaint(context, 9f, Color.DKGRAY)
-      val headerPaint = textPaint(context, 10f, Color.WHITE, true)
-      val totalPaint = textPaint(context, 11.5f, Color.BLACK, true)
-      val accentTotalPaint = textPaint(context, 12.5f, invoiceAccent, true)
+      val titlePaint = textPaint(context, 20f, invoiceAccent, true)
+      val subPaint = textPaint(context, 10.5f, Color.rgb(75, 82, 90))
+      val bodyPaint = textPaint(context, 12f, Color.BLACK)
+      val smallPaint = textPaint(context, 10f, Color.DKGRAY)
+      val headerPaint = textPaint(context, 11f, Color.WHITE, true)
+      val totalPaint = textPaint(context, 12.5f, Color.BLACK, true)
+      val accentTotalPaint = textPaint(context, 13.5f, invoiceAccent, true)
       val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(218, 222, 226)
-        strokeWidth = 0.8f
+        color = Color.rgb(185, 194, 204)
+        strokeWidth = 1.0f
       }
       val headerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = invoiceAccent }
       val summaryFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 252) }
@@ -129,6 +129,11 @@ object PdfGenerator {
           y += rowH - 5f
           canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, linePaint)
           y += 5f
+        }
+        // Ruled table: add clear vertical separators between all four columns.
+        val tableBottom = (y - 5f).coerceAtLeast(tableTop + 28f)
+        listOf(colTotalX + totalW, colPriceX + priceW, colQtyX + qtyW).forEach { x ->
+          canvas.drawLine(x, tableTop, x, tableBottom, linePaint)
         }
 
         val isLastItemPage = idx == pagesItems.lastIndex
