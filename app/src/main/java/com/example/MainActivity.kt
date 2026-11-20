@@ -4,12 +4,16 @@ import android.Manifest
 import android.app.AlertDialog
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputConnectionWrapper
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -119,7 +123,7 @@ class MainActivity : ComponentActivity() {
       setBackgroundColor(Color.parseColor("#0F4C9C"))
     }
 
-    webView = WebView(this)
+    webView = NotesAwareWebView(this)
     bridge = AndroidBridge(
       activity = this,
       webView = webView,
@@ -223,4 +227,31 @@ class MainActivity : ComponentActivity() {
       }
     }
   }
+  /**
+   * WebView's soft keyboard NEXT action is an IME editor action, not always a DOM Enter key.
+   * Forward it to the notes editor only for fields that explicitly request enterkeyhint=next.
+   */
+  private inner class NotesAwareWebView(context: Context) : WebView(context) {
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+      val base = super.onCreateInputConnection(outAttrs) ?: return null
+      val action = outAttrs.imeOptions and EditorInfo.IME_MASK_ACTION
+      if (action != EditorInfo.IME_ACTION_NEXT) return base
+
+      return object : InputConnectionWrapper(base, true) {
+        override fun performEditorAction(actionCode: Int): Boolean {
+          if (actionCode == EditorInfo.IME_ACTION_NEXT) {
+            post {
+              evaluateJavascript(
+                "window.handleNoteImeAction && window.handleNoteImeAction();",
+                null
+              )
+            }
+            return true
+          }
+          return super.performEditorAction(actionCode)
+        }
+      }
+    }
+  }
+
 }
