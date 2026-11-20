@@ -400,6 +400,10 @@ function switchView(viewName, trackHistory = true) {
     viewHistory.push(currentView);
     if (viewHistory.length > 40) viewHistory.shift();
   }
+  if (currentView === 'create-invoice') {
+    toggleMultiStockPicker(false);
+    toggleInvoiceCartFullscreen(false);
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
 
@@ -450,7 +454,32 @@ function handleBackAction() {
   navigateToPreviousView();
 }
 
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' && event.key !== 'BrowserBack') return;
+  const stockPicker = document.getElementById('multi-stock-picker-box');
+  if (stockPicker && !stockPicker.classList.contains('hidden')) {
+    event.preventDefault();
+    toggleMultiStockPicker(false);
+    return;
+  }
+  const cartPanel = document.getElementById('invoice-cart-panel');
+  if (cartPanel && cartPanel.classList.contains('is-fullscreen')) {
+    event.preventDefault();
+    toggleInvoiceCartFullscreen(false);
+  }
+});
+
 window.handleAndroidBack = function () {
+  const stockPicker = document.getElementById('multi-stock-picker-box');
+  if (stockPicker && !stockPicker.classList.contains('hidden')) {
+    toggleMultiStockPicker(false);
+    return 'HANDLED';
+  }
+  const cartPanel = document.getElementById('invoice-cart-panel');
+  if (cartPanel && cartPanel.classList.contains('is-fullscreen')) {
+    toggleInvoiceCartFullscreen(false);
+    return 'HANDLED';
+  }
   const menu = document.getElementById('side-menu');
   if (menu && !menu.classList.contains('hidden')) {
     toggleMenu(false);
@@ -1850,8 +1879,8 @@ function openCreateInvoice(presetType, presetPartyId) {
   const invDateEl = document.getElementById('inv-date');
   if (invDateEl) invDateEl.value = toDateTimeLocalValue(Date.now());
   document.getElementById('quick-add-stock-box').classList.add('hidden');
-  const multiBox = document.getElementById('multi-stock-picker-box');
-  if (multiBox) toggleMultiStockPicker(true);
+  toggleMultiStockPicker(false);
+  toggleInvoiceCartFullscreen(false);
   document.getElementById('exchange-calc-box').classList.add('hidden');
 
   if (window.Android) {
@@ -1909,8 +1938,8 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
     document.getElementById('btn-save-invoice').textContent = 'حفظ التعديل';
     document.getElementById('invoice-saved-badge').classList.remove('hidden');
     document.getElementById('inv-number').value = inv.invoiceNumber;
-    const stockPicker = document.getElementById('multi-stock-picker-box');
-    if (stockPicker) toggleMultiStockPicker(true);
+    toggleMultiStockPicker(false);
+    toggleInvoiceCartFullscreen(false);
     document.getElementById('inv-type').value = inv.type === 'SALE' ? 'CASH' : inv.type;
     lastInvoiceType = document.getElementById('inv-type').value;
     const invDateEl = document.getElementById('inv-date');
@@ -2362,7 +2391,10 @@ function toggleMultiStockPicker(forceState) {
   const box = document.getElementById('multi-stock-picker-box');
   if (!box) return;
   const nextShow = typeof forceState === 'boolean' ? forceState : box.classList.contains('hidden');
+  // Keep the fixed dialog as a direct body child so parent view stacking/overflow cannot clip it.
+  if (nextShow && box.parentElement !== document.body) document.body.appendChild(box);
   box.classList.toggle('hidden', !nextShow);
+  box.setAttribute('aria-hidden', nextShow ? 'false' : 'true');
   document.body.classList.toggle('stock-picker-open', nextShow);
   if (nextShow) {
     renderMultiStockPicker();
