@@ -3341,6 +3341,27 @@ function handleNoteCellKeydown(event, side, index, field) {
     }
   });
 }
+function handleNoteImeAction() {
+  const active = document.activeElement;
+  if (!active?.classList?.contains('note-cell')) return false;
+  const body = active.closest('tbody');
+  if (!body || (body.id !== 'note-right-rows' && body.id !== 'note-left-rows')) return false;
+  const side = body.id === 'note-right-rows' ? 'right' : 'left';
+  const row = active.closest('tr');
+  const index = row ? Array.prototype.indexOf.call(body.children, row) : -1;
+  const field = active.classList.contains('note-qty') ? 'qty' : 'detail';
+  if (index < 0) return false;
+  handleNoteCellKeydown({
+    key: 'Enter',
+    keyCode: 13,
+    which: 13,
+    isComposing: false,
+    shiftKey: false,
+    preventDefault() {},
+    stopPropagation() {}
+  }, side, index, field);
+  return true;
+}
 function renderNoteRows(side) {
   const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
   if (!body) return;
