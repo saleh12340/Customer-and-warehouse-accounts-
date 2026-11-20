@@ -346,6 +346,167 @@ class AndroidBridge(
     }
   }
 
+  // ---------------- Two-panel Notes ----------------
+
+  @JavascriptInterface
+  fun getNotes() {
+    scope.launch(Dispatchers.IO) {
+      val notes = database.noteDao().getNotesSnapshot()
+      val payload = JSONArray().apply {
+        notes.forEach { note ->
+          put(JSONObject().apply {
+            put("id", note.id)
+            put("createdAt", note.createdAt)
+            put("updatedAt", note.updatedAt)
+            put("rightRows", JSONArray(note.rightRowsJson))
+            put("leftRows", JSONArray(note.leftRowsJson))
+          })
+        }
+      }
+      callJs("onNotesData", payload.toString())
+    }
+  }
+
+  @JavascriptInterface
+  fun saveNote(jsonPayload: String, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val obj = JSONObject(jsonPayload)
+        val id = obj.optLong("id", 0L)
+        val rightRows = obj.optJSONArray("rightRows") ?: JSONArray()
+        val leftRows = obj.optJSONArray("leftRows") ?: JSONArray()
+        fun hasContent(rows: JSONArray): Boolean = (0 until rows.length()).any { index ->
+          val row = rows.optJSONObject(index) ?: JSONObject()
+          row.optString("qty").isNotBlank() || row.optString("detail").isNotBlank()
+        }
+        require(hasContent(rightRows) || hasContent(leftRows)) { "أدخل بيانات في أحد شقي الملاحظة على الأقل" }
+        require(rightRows.length() <= 500 && leftRows.length() <= 500) { "عدد صفوف الملاحظة تجاوز الحد المسموح" }
+        val now = System.currentTimeMillis()
+        val old = if (id > 0L) database.noteDao().getNoteById(id) else null
+        val note = NoteEntity(
+          id = old?.id ?: 0L,
+          createdAt = old?.createdAt ?: now,
+          updatedAt = now,
+          rightRowsJson = rightRows.toString(),
+          leftRowsJson = leftRows.toString()
+        )
+        val savedId = if (old == null) database.noteDao().insertNote(note) else {
+          database.noteDao().updateNote(note)
+          old.id
+        }
+        callJs("onNoteSaved", JSONObject().put("id", savedId).toString())
+        getNotes()
+        notifyResult(reqId, true, "تم حفظ الملاحظة بنجاح ✓")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر حفظ الملاحظة")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun deleteNote(noteId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        database.noteDao().deleteNoteById(noteId)
+        getNotes()
+        notifyResult(reqId, true, "تم حذف الملاحظة")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر حذف الملاحظة")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun exportNotePdf(noteId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val note = database.noteDao().getNoteById(noteId) ?: error("الملاحظة غير موجودة")
+        val file = NotePdfGenerator.generate(activity, note)
+        val saved = AppDownloadsFolderManager.saveFile(
+          context = activity,
+          subfolder = AppDownloadsFolderManager.SUB_PDFS,
+          sourceFile = file,
+          displayName = "note_${note.id}.pdf",
+          mimeType = "application/pdf",
+          overwriteExisting = true
+        )
+        val uri = PdfGenerator.getUriForFile(activity, file)
+        getAppFolderFiles()
+        activity.runOnUiThread {
+          val opened = WhatsAppHelper.openPdf(activity, uri)
+          notifyResult(reqId, true, if (opened) "تم حفظ وفتح ملف الملاحظة PDF ✓" else "تم حفظ ملف الملاحظة في ${saved.displayPath} ✓")
+        }
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر إنشاء ملف الملاحظة PDF")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun shareNoteWhatsApp(noteId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val note = database.noteDao().getNoteById(noteId) ?: error("احفظ الملاحظة أولاً")
+        val file = NotePdfGenerator.generate(activity, note)
+        val saved = AppDownloadsFolderManager.saveFile(
+          context = activity,
+          subfolder = AppDownloadsFolderManager.SUB_PDFS,
+          sourceFile = file,
+          displayName = "note_${note.id}.pdf",
+          mimeType = "application/pdf",
+          overwriteExisting = true
+        )
+        val uri = PdfGenerator.getUriForFile(activity, file)
+        getAppFolderFiles()
+        activity.runOnUiThread {
+          val ok = WhatsAppHelper.shareFile(
+            context = activity,
+            fileUri = uri,
+            mimeType = "application/pdf",
+            message = "ملاحظة من ${StorePreferences.getSettings(activity).storeName}",
+            preferWhatsApp = true
+          )
+          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة الملاحظة عبر واتساب ✓" else "تعذر فتح واتساب؛ تم حفظ الملف في ${saved.displayPath}")
+        }
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذرت مشاركة الملاحظة")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun printNote(noteId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val note = database.noteDao().getNoteById(noteId) ?: error("احفظ الملاحظة أولاً")
+        val details = mutableListOf<String>()
+        fun addRows(label: String, json: String) {
+          val rows = JSONArray(json)
+          details.add("--- $label ---")
+          for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val qty = row.optString("qty").trim()
+            val detail = row.optString("detail").trim()
+            if (qty.isNotBlank() || detail.isNotBlank()) details.add("$qty    $detail")
+          }
+        }
+        addRows("الشق الأول", note.rightRowsJson)
+        addRows("الشق الثاني", note.leftRowsJson)
+        val settings = StorePreferences.getSettings(activity)
+        val ok = BluetoothPrinterManager.printReceiptText(
+          title = "ملاحظة - ${settings.storeName}",
+          details = details,
+          footer = "تاريخ الملاحظة: ${SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US).format(Date(note.updatedAt))}",
+          paperWidthMm = settings.printerWidthMm,
+          context = activity
+        )
+        notifyResult(reqId, ok, if (ok) "تم إرسال الملاحظة إلى الطابعة الحرارية ✓" else "تعذرت الطباعة؛ تحقق من اتصال الطابعة")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذرت طباعة الملاحظة")
+      }
+    }
+  }
+
   // ---------------- Suppliers & Ledger ----------------
 
   @JavascriptInterface
