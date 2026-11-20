@@ -771,7 +771,8 @@ object BluetoothPrinterManager {
     partyBalanceAfter: Double?,
     paperWidthMm: Int
   ): SavedDownloadResult {
-    val bitmap = buildInvoiceReceiptBitmap(context, invoice, items, partyBalanceAfter, paperWidthMm)
+    // Saved/shared PNG is rendered at 3x; Bluetooth printing still uses native 384/576 dots.
+    val bitmap = buildInvoiceReceiptBitmap(context, invoice, items, partyBalanceAfter, paperWidthMm, renderScale = 3)
     val out = ByteArrayOutputStream()
     bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
     bitmap.recycle()
