@@ -3276,12 +3276,38 @@ function noteRowsFor(side) { return side === 'right' ? noteRightRows : noteLeftR
 function noteRowMarkup(side, index) {
   const row = noteRowsFor(side)[index] || { qty: '', detail: '' };
   return `<tr>
-    <td><input class="note-cell note-qty" type="text" inputmode="decimal" dir="ltr" aria-label="الكمية"
-      value="${escapeHtml(row.qty)}" oninput="updateNoteCell('${side}',${index},'qty',this.value)"></td>
-    <td><input class="note-cell note-detail" type="text" aria-label="التفاصيل" placeholder="اسم الصنف أو التفاصيل"
-      value="${escapeHtml(row.detail)}" oninput="updateNoteCell('${side}',${index},'detail',this.value)"></td>
+    <td><input class="note-cell note-qty" type="text" inputmode="decimal" enterkeyhint="next" dir="ltr" aria-label="الكمية"
+      value="${escapeHtml(row.qty)}" oninput="updateNoteCell('${side}',${index},'qty',this.value)"
+      onkeydown="handleNoteCellKeydown(event,'${side}',${index},'qty')"></td>
+    <td><input class="note-cell note-detail" type="text" enterkeyhint="next" aria-label="التفاصيل" placeholder="اسم الصنف أو التفاصيل"
+      value="${escapeHtml(row.detail)}" oninput="updateNoteCell('${side}',${index},'detail',this.value)"
+      onkeydown="handleNoteCellKeydown(event,'${side}',${index},'detail')"></td>
     <td class="note-row-action"><button type="button" class="row-remove-cell" aria-label="حذف الصف" title="حذف الصف" onclick="removeNoteRow('${side}',${index})">×</button></td>
   </tr>`;
+}
+function focusNoteCell(side, index, field) {
+  const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
+  const input = body?.querySelector(`tr:nth-child(${index + 1}) .note-${field}`);
+  if (!input) return;
+  input.focus();
+  const end = input.value.length;
+  try { input.setSelectionRange(end, end); } catch (_) {}
+}
+function handleNoteCellKeydown(event, side, index, field) {
+  if (event.key !== 'Enter' || event.isComposing) return;
+  event.preventDefault();
+  const rows = noteRowsFor(side);
+  if (field === 'qty') {
+    focusNoteCell(side, index, 'detail');
+    return;
+  }
+  let nextIndex = index + 1;
+  if (!rows[nextIndex]) {
+    rows.push({ qty: '', detail: '' });
+    const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
+    if (body) body.insertAdjacentHTML('beforeend', noteRowMarkup(side, nextIndex));
+  }
+  requestAnimationFrame(() => focusNoteCell(side, nextIndex, 'qty'));
 }
 function renderNoteRows(side) {
   const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
