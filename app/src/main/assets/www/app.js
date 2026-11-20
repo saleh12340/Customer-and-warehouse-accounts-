@@ -3282,32 +3282,64 @@ function noteRowMarkup(side, index) {
     <td><input class="note-cell note-detail" type="text" enterkeyhint="next" aria-label="التفاصيل" placeholder="اسم الصنف أو التفاصيل"
       value="${escapeHtml(row.detail)}" oninput="updateNoteCell('${side}',${index},'detail',this.value)"
       onkeydown="handleNoteCellKeydown(event,'${side}',${index},'detail')"></td>
-    <td class="note-row-action"><button type="button" class="row-remove-cell" aria-label="حذف الصف" title="حذف الصف" onclick="removeNoteRow('${side}',${index})">×</button></td>
+    <td class="note-row-action"><button type="button" class="row-remove-cell" tabindex="-1" aria-label="حذف الصف" title="حذف الصف" onclick="removeNoteRow('${side}',${index})">×</button></td>
   </tr>`;
 }
 function focusNoteCell(side, index, field) {
   const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
-  const input = body?.querySelector(`tr:nth-child(${index + 1}) .note-${field}`);
-  if (!input) return;
-  input.focus();
-  const end = input.value.length;
-  try { input.setSelectionRange(end, end); } catch (_) {}
+  const row = body?.children?.[index];
+  const input = row?.querySelector(`.note-${field}`);
+  if (!input) return false;
+  input.focus({ preventScroll: true });
+  try { input.setSelectionRange(input.value.length, input.value.length); } catch (_) {}
+  input.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  return document.activeElement === input;
+}
+function ensureNoteRow(side, index) {
+  const rows = noteRowsFor(side);
+  if (!rows[index]) {
+    while (rows.length <= index) rows.push({ qty: '', detail: '' });
+    const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
+    if (body) body.insertAdjacentHTML('beforeend', rows.slice(body.children.length).map((_, offset) => noteRowMarkup(side, body.children.length + offset)).join(''));
+  }
 }
 function handleNoteCellKeydown(event, side, index, field) {
-  if (event.key !== 'Enter' || event.isComposing) return;
+  const key = event.key;
+  const code = event.keyCode || event.which;
+  const isEnter = key === 'Enter' || key === 'NumpadEnter' || code === 13;
+  const isTab = key === 'Tab' || code === 9;
+  const isDown = key === 'ArrowDown' || code === 40;
+  const isUp = key === 'ArrowUp' || code === 38;
+  if ((!isEnter && !isTab && !isDown && !isUp) || event.isComposing) return;
+
+  // Keep navigation inside the active notes panel; never tab into row-delete buttons
+  // or unexpectedly jump from the second panel into another screen control.
   event.preventDefault();
+  event.stopPropagation();
   const rows = noteRowsFor(side);
-  if (field === 'qty') {
-    focusNoteCell(side, index, 'detail');
-    return;
+  let targetIndex = index;
+  let targetField = field;
+
+  if (isDown) targetIndex = index + 1;
+  else if (isUp) targetIndex = Math.max(0, index - 1);
+  else if (isEnter || (isTab && !event.shiftKey)) {
+    if (field === 'qty') targetField = 'detail';
+    else { targetIndex = index + 1; targetField = 'qty'; }
+  } else if (isTab && event.shiftKey) {
+    if (field === 'detail') targetField = 'qty';
+    else { targetIndex = Math.max(0, index - 1); targetField = 'detail'; }
   }
-  let nextIndex = index + 1;
-  if (!rows[nextIndex]) {
-    rows.push({ qty: '', detail: '' });
-    const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
-    if (body) body.insertAdjacentHTML('beforeend', noteRowMarkup(side, nextIndex));
+
+  if (targetIndex >= rows.length && (isEnter || isTab || isDown)) {
+    ensureNoteRow(side, targetIndex);
   }
-  requestAnimationFrame(() => focusNoteCell(side, nextIndex, 'qty'));
+  requestAnimationFrame(() => {
+    if (!focusNoteCell(side, targetIndex, targetField)) {
+      // Rebuild the panel only as a last resort if the IME changed the DOM mid-action.
+      renderNoteRows(side);
+      requestAnimationFrame(() => focusNoteCell(side, targetIndex, targetField));
+    }
+  });
 }
 function renderNoteRows(side) {
   const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
