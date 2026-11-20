@@ -2958,6 +2958,7 @@ window.onNotesData = function (jsonStr) {
       return `<div class="note-history-item">
         <button type="button" class="note-history-open" onclick="openSavedNote(${Number(note.id)})">
           <strong>ملاحظة #${Number(note.id)}</strong>
+          <span class="muted-text">فتح / تعديل</span>
           <span>${escapeHtml(fmtShortDate(note.updatedAt))} • ${total} صف</span>
           <small>${escapeHtml(first ? [first.qty, first.detail].filter(Boolean).join(' - ') : 'ملاحظة فارغة')}</small>
         </button>
