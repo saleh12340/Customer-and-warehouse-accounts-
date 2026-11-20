@@ -2791,8 +2791,10 @@ function openSavedNote(id) {
   noteLeftRows = (note.leftRows || []).map(r => ({ qty: r.qty || '', detail: r.detail || '' }));
   if (!noteRightRows.length) noteRightRows = [{ qty: '', detail: '' }];
   if (!noteLeftRows.length) noteLeftRows = [{ qty: '', detail: '' }];
-  if (noteRightRows.at(-1).qty || noteRightRows.at(-1).detail) noteRightRows.push({ qty: '', detail: '' });
-  if (noteLeftRows.at(-1).qty || noteLeftRows.at(-1).detail) noteLeftRows.push({ qty: '', detail: '' });
+  const lastRight = noteRightRows[noteRightRows.length - 1];
+  const lastLeft = noteLeftRows[noteLeftRows.length - 1];
+  if (lastRight.qty || lastRight.detail) noteRightRows.push({ qty: '', detail: '' });
+  if (lastLeft.qty || lastLeft.detail) noteLeftRows.push({ qty: '', detail: '' });
   renderNoteEditor();
   const scroll = document.getElementById('main-scroll'); if (scroll) scroll.scrollTop = 0;
 }
