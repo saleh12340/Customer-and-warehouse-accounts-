@@ -282,7 +282,8 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
           val oldStockSign = if (oldInvoice.type == "PURCHASE") -1 else 1
           previous.items.forEach { oldItem ->
             if (oldItem.itemId > 0L) {
-              check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldItem.quantity) == 1) {
+              val oldStockQuantity = oldItem.stockQuantity.takeIf { it > 0 } ?: oldItem.quantity
+              check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * oldStockQuantity) == 1) {
                 "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}. قد تكون الكمية قد استُهلكت"
               }
             }

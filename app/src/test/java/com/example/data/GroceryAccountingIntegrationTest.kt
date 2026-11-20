@@ -566,6 +566,8 @@ class GroceryAccountingIntegrationTest {
 
     val custId = appEngine.saveCustomer(0L, "عميل النسخ", "771234567", "صنعاء", 2000.0)
     val itemId = appEngine.saveInventoryItem(0L, "شاي كبوس", "مشروبات", 30, 800.0, 1000.0, "علبة")
+    // Record a manual stock adjustment so backup/restore also exercises the audit trail.
+    appEngine.saveInventoryItem(itemId, "شاي كبوس", "مشروبات", 31, 800.0, 1000.0, "علبة")
     appEngine.saveInvoice(
       invoiceId = 0L,
       invoiceNumber = "BKP-1",
@@ -578,6 +580,9 @@ class GroceryAccountingIntegrationTest {
 
     // 1. Valid backup including settings
     val validJson = BackupRestoreManager.buildBackupEnvelope(context).toString(2)
+    assertEquals(1, appDb.inventoryAdjustmentDao().getAllAdjustmentsSnapshot().size)
+    assertEquals(800.0, appDb.invoiceDao().getInvoiceItemsSnapshot().single().costPriceAtSale!!, 0.01)
+    assertEquals(1L, appDb.transactionDao().getTransactionsSnapshot().single().invoiceId)
 
     // Change store data & settings, then restore validJson -> safety backup must capture pre-restore state
     appEngine.resetAllDatabase()
@@ -591,6 +596,9 @@ class GroceryAccountingIntegrationTest {
 
     val restoreMsg = BackupRestoreManager.restoreFromJson(context, validJson, createSafetyBackup = true)
     assertTrue(restoreMsg.contains("1 عميل"))
+    assertEquals(1, appDb.inventoryAdjustmentDao().getAllAdjustmentsSnapshot().size)
+    assertEquals(800.0, appDb.invoiceDao().getInvoiceItemsSnapshot().single().costPriceAtSale!!, 0.01)
+    assertEquals(1L, appDb.transactionDao().getTransactionsSnapshot().single().invoiceId)
     assertEquals("بقالة العزي اختبار", com.example.utils.StorePreferences.getSettings(context).storeName)
     assertEquals(80, com.example.utils.StorePreferences.getSettings(context).printerWidthMm)
 
