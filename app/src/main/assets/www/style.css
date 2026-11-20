@@ -1619,8 +1619,8 @@ nav.bottom-nav button.active::before {
 
 /* Single-line invoice entry and Latin numeral consistency */
 #view-create-invoice .batch-rows-stack { gap: 0; }
-#view-create-invoice .grid-invoice-batch-row { grid-template-columns: minmax(0,1fr) minmax(0,.58fr) minmax(0,1.68fr) minmax(0,.92fr) 0; }
-#view-create-invoice .grid-invoice-batch-row .row-remove-cell { display: none; }
+#view-create-invoice .grid-invoice-batch-row { grid-template-columns: minmax(58px,.95fr) minmax(48px,.72fr) minmax(92px,1.5fr) minmax(48px,.72fr) 28px; }
+#view-create-invoice .grid-invoice-batch-row .row-remove-cell { display: grid; width:28px; min-width:28px; }
 #view-create-invoice .grid-invoice-batch-row input[type="number"],
 #view-create-invoice input[inputmode="numeric"],
 #view-create-invoice input[inputmode="decimal"],
