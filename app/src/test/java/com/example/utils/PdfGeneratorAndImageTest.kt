@@ -98,7 +98,7 @@ class PdfGeneratorAndImageTest {
     assertTrue(imgFile!!.exists())
     val decoded = BitmapFactory.decodeFile(imgFile.absolutePath)
     assertNotNull(decoded)
-    assertTrue(decoded.width == 384 || decoded.width == 576)
+    assertTrue(decoded.width == 1152 || decoded.width == 1728)
     decoded.recycle()
 
     val bmp58 = BluetoothPrinterManager.buildInvoiceReceiptBitmap(context, invoice, items, 27500.0, paperWidthMm = 58)
@@ -158,7 +158,7 @@ class PdfGeneratorAndImageTest {
       assertTrue(img!!.exists() && img.length() > 100)
       val bmp = BitmapFactory.decodeFile(img.absolutePath)
       assertNotNull(bmp)
-      assertTrue(bmp.width == 384 || bmp.width == 576)
+      assertTrue(bmp.width == 1152 || bmp.width == 1728)
       assertTrue("Image height should grow monotonically with $count items", bmp.height > previousImageHeight)
       previousImageHeight = bmp.height
       bmp.recycle()
