@@ -141,7 +141,7 @@ let suggestionHideFrame = 0;
 
 function normalizeSuggestionText(value) {
   return String(value ?? '').trim().toLocaleLowerCase('ar')
-    .replace(/[\\u064B-\\u065F\\u0670]/g, '')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
     .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي');
 }
 function uniqueSuggestionValues(values) {
@@ -179,7 +179,7 @@ function suggestionKindForInput(input) {
   const id = input.id || '';
   if (id === 'cust-form-name' || input.matches('[data-suggest="customers"]')) return 'customers';
   if (id === 'supp-form-name' || input.matches('[data-suggest="suppliers"]')) return 'suppliers';
-  if (/^(batch-name-\\d+|note-detail|inv-item-form-name|inventory-quick-name|quick-stock-name)$/.test(id) ||
+  if (/^(batch-name-\d+|note-detail|inv-item-form-name|inventory-quick-name|quick-stock-name)$/.test(id) ||
       input.classList?.contains('note-detail') || input.matches('[data-suggest="items"]')) return 'items';
   if (id === 'inventory-quick-category' || id === 'inv-item-form-category' || input.matches('[data-suggest="categories"]')) return 'categories';
   if (id === 'inventory-quick-unit' || id === 'inv-item-form-unit' || id.includes('pack-name') || id.includes('carton-name') ||
