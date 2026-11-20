@@ -38,6 +38,7 @@ data class FinancialReportSnapshot(
   val creditSales: Double,
   val cogs: Double,
   val grossProfit: Double,
+  val uncostedSalesLineCount: Int = 0,
   val totalDebts: Double,
   val totalPayables: Double,
   val inventoryCostValue: Double,
@@ -64,7 +65,8 @@ data class InventoryMovementSnapshot(
   val item: InventoryItemEntity,
   val totalPurchased: Int,
   val totalSold: Int,
-  val movements: List<StockMovementEntry>
+  val movements: List<StockMovementEntry>,
+  val totalAdjusted: Int = 0
 )
 
 data class TransactionReceiptSnapshot(
@@ -81,6 +83,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   private val inventoryDao = database.inventoryDao()
   private val invoiceDao = database.invoiceDao()
   private val transactionDao = database.transactionDao()
+  private val inventoryAdjustmentDao = database.inventoryAdjustmentDao()
 
   private fun purchaseInventoryUnitConfig(item: InvoiceItemEntity): String {
     val label = item.unitLabel.trim()
@@ -213,6 +216,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     database.withTransaction {
       val oldTx = transactionDao.getTransactionById(txId) ?: error("الحركة غير موجودة")
       require(oldTx.partyType == "CUSTOMER") { "نوع الحركة غير متطابق" }
+      check(oldTx.invoiceId == null) { "هذه الحركة مرتبطة بفاتورة؛ عدّل الفاتورة نفسها حتى لا يختل الرصيد" }
       val oldDelta = if (oldTx.type.startsWith("DEBIT")) oldTx.amount else -oldTx.amount
       val newDelta = if (isDebit) safeAmount else -safeAmount
       check(customerDao.updateBalance(oldTx.partyId, GroceryViewModel.roundMoney(newDelta - oldDelta)) == 1) { "تعذر تعديل رصيد العميل" }
@@ -231,6 +235,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     database.withTransaction {
       val oldTx = transactionDao.getTransactionById(txId) ?: error("الحركة غير موجودة")
       require(oldTx.partyType == "CUSTOMER") { "نوع الحركة غير متطابق" }
+      check(oldTx.invoiceId == null) { "لا يمكن حذف حركة فاتورة من كشف الحساب؛ احذف أو عدّل الفاتورة نفسها" }
       val oldDelta = if (oldTx.type.startsWith("DEBIT")) oldTx.amount else -oldTx.amount
       check(customerDao.updateBalance(oldTx.partyId, -oldDelta) == 1) { "تعذر عكس الرصيد على العميل" }
       transactionDao.deleteTransaction(oldTx)
@@ -355,6 +360,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     database.withTransaction {
       val oldTx = transactionDao.getTransactionById(txId) ?: error("الحركة غير موجودة")
       require(oldTx.partyType == "SUPPLIER") { "نوع الحركة غير متطابق" }
+      check(oldTx.invoiceId == null) { "هذه الحركة مرتبطة بفاتورة؛ عدّل الفاتورة نفسها حتى لا يختل الرصيد" }
       val oldDelta = if (oldTx.type.startsWith("CREDIT")) oldTx.amount else -oldTx.amount
       val newDelta = if (isCredit) safeAmount else -safeAmount
       check(supplierDao.updateBalance(oldTx.partyId, GroceryViewModel.roundMoney(newDelta - oldDelta)) == 1) { "تعذر تعديل رصيد المورد" }
@@ -373,6 +379,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     database.withTransaction {
       val oldTx = transactionDao.getTransactionById(txId) ?: error("الحركة غير موجودة")
       require(oldTx.partyType == "SUPPLIER") { "نوع الحركة غير متطابق" }
+      check(oldTx.invoiceId == null) { "لا يمكن حذف حركة فاتورة من كشف المورد؛ احذف أو عدّل الفاتورة نفسها" }
       val oldDelta = if (oldTx.type.startsWith("CREDIT")) oldTx.amount else -oldTx.amount
       check(supplierDao.updateBalance(oldTx.partyId, -oldDelta) == 1) { "تعذر عكس الرصيد على المورد" }
       transactionDao.deleteTransaction(oldTx)
@@ -418,7 +425,13 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         unit = unit.trim().ifBlank { "حبة" }
       )
       if (id > 0) {
-        check(inventoryDao.getItemById(id) != null) { "الصنف غير موجود" }
+        val previous = inventoryDao.getItemById(id) ?: error("الصنف غير موجود")
+        if (previous.quantity != quantity) inventoryAdjustmentDao.insertAdjustment(
+          InventoryAdjustmentEntity(id = 0L, itemId = id, itemName = cleanName,
+            previousQuantity = previous.quantity, newQuantity = quantity,
+            deltaQuantity = quantity - previous.quantity,
+            reason = "تسوية يدوية من شاشة بيانات الصنف", date = System.currentTimeMillis())
+        )
         inventoryDao.updateItem(entity)
         id
       } else {
@@ -493,23 +506,21 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val matchingLines = invoiceDao.getInvoiceItemsSnapshot().filter { it.itemId == itemId }
     var totalPurchased = 0
     var totalSold = 0
-    val movements = matchingLines.mapNotNull { line ->
+    val invoiceMovements = matchingLines.mapNotNull { line ->
       val inv = invoiceMap[line.invoiceId] ?: return@mapNotNull null
       val isPurchase = inv.type == "PURCHASE"
       val baseQuantity = line.stockQuantity.takeIf { it > 0 } ?: Math.multiplyExact(line.quantity, line.unitFactor.coerceAtLeast(1))
       if (isPurchase) totalPurchased += baseQuantity else totalSold += baseQuantity
-      StockMovementEntry(
-        invoiceId = inv.id,
-        invoiceNumber = inv.invoiceNumber,
-        invoiceType = inv.type,
-        partyName = inv.partyName,
-        deltaQty = if (isPurchase) baseQuantity else -baseQuantity,
-        unitPrice = line.unitPrice,
-        totalPrice = line.totalPrice,
-        date = inv.date
-      )
-    }.sortedByDescending { it.date }
-    return InventoryMovementSnapshot(item, totalPurchased, totalSold, movements)
+      StockMovementEntry(inv.id, inv.invoiceNumber, inv.type, inv.partyName,
+        if (isPurchase) baseQuantity else -baseQuantity, line.unitPrice, line.totalPrice, inv.date)
+    }
+    val adjustments = inventoryAdjustmentDao.getAdjustmentsForItem(itemId).map { a ->
+      StockMovementEntry(0L, "تسوية مخزون", "ADJUSTMENT", a.reason, a.deltaQuantity,
+        item.purchasePrice, kotlin.math.abs(a.deltaQuantity).toDouble() * item.purchasePrice, a.date)
+    }
+    val totalAdjusted = adjustments.sumOf { it.deltaQty }
+    val movements = (invoiceMovements + adjustments).sortedByDescending { it.date }
+    return InventoryMovementSnapshot(item, totalPurchased, totalSold, movements, totalAdjusted)
   }
 
   suspend fun getTransactionReceiptSnapshot(txId: Long): TransactionReceiptSnapshot? {
@@ -620,7 +631,9 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       // separate "export to stock" action.
       val persistedItems = normalizedItems.map { item ->
         if (normalizedType != "PURCHASE") {
-          item
+          val capturedCost = if (item.itemId > 0L) inventoryDao.getItemById(item.itemId)?.purchasePrice
+            ?: error("الصنف غير موجود في المخزن: ${item.itemName}") else null
+          item.copy(costPriceAtSale = capturedCost)
         } else {
           val factor = item.unitFactor.coerceAtLeast(1)
           val baseUnitPrice = GroceryViewModel.roundMoney(item.unitPrice / factor)
@@ -680,7 +693,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
               type = "CREDIT (له)",
               amount = validation.remainingAmount,
               description = "فاتورة مشتريات رقم $cleanNumber",
-              date = effectiveDate
+              date = effectiveDate,
+              invoiceId = targetInvoiceId
             )
           )
         } else {
@@ -693,7 +707,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
               type = "DEBIT (عليه)",
               amount = validation.remainingAmount,
               description = "فاتورة مبيعات رقم $cleanNumber",
-              date = effectiveDate
+              date = effectiveDate,
+              invoiceId = targetInvoiceId
             )
           )
         }
@@ -728,20 +743,12 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         check(supplierDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
           "تعذر عكس رصيد المورد السابق"
         }
-        transactionDao.deleteByDescription(
-          "SUPPLIER",
-          oldInvoice.partyId,
-          "فاتورة مشتريات رقم ${oldInvoice.invoiceNumber}"
-        )
+        transactionDao.deleteByInvoiceId(oldInvoice.id)
       } else {
         check(customerDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
           "تعذر عكس رصيد العميل السابق"
         }
-        transactionDao.deleteByDescription(
-          "CUSTOMER",
-          oldInvoice.partyId,
-          "فاتورة مبيعات رقم ${oldInvoice.invoiceNumber}"
-        )
+        transactionDao.deleteByInvoiceId(oldInvoice.id)
       }
     }
   }
@@ -778,13 +785,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val cashSales = salesInvoices.sumOf { it.paidAmount }
     val creditSales = salesInvoices.sumOf { it.remainingAmount }
 
-    val purchaseCostMap = inventory.associateBy({ it.id }, { it.purchasePrice })
     val salesInvoiceIds = salesInvoices.map { it.id }.toSet()
     val soldLines = allItems.filter { it.invoiceId in salesInvoiceIds }
-
+    val uncostedSalesLineCount = soldLines.count { it.costPriceAtSale == null }
     val cogs = soldLines.sumOf { line ->
-      val unitCost = purchaseCostMap[line.itemId] ?: line.unitPrice
-      (line.stockQuantity.takeIf { it > 0 } ?: line.quantity).toDouble() * unitCost
+      (line.stockQuantity.takeIf { it > 0 } ?: line.quantity).toDouble() * (line.costPriceAtSale ?: 0.0)
     }
     val grossProfit = periodSales - cogs
 
@@ -818,6 +823,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       creditSales = creditSales,
       cogs = cogs,
       grossProfit = grossProfit,
+      uncostedSalesLineCount = uncostedSalesLineCount,
       totalDebts = customers.sumOf { maxOf(it.balance, 0.0) },
       totalPayables = suppliers.sumOf { maxOf(it.balance, 0.0) },
       inventoryCostValue = inventory.sumOf { it.quantity.toDouble() * it.purchasePrice },
@@ -834,6 +840,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     database.withTransaction {
       invoiceDao.clearInvoiceItems()
       transactionDao.clearTransactions()
+      inventoryAdjustmentDao.clearAdjustments()
       database.noteDao().clearNotes()
       invoiceDao.clearInvoices()
       inventoryDao.clearItems()

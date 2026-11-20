@@ -91,6 +91,7 @@ object BackupRestoreManager {
               put("stockQuantity", i.stockQuantity)
               put("unitLabel", i.unitLabel)
               put("unitFactor", i.unitFactor)
+              i.costPriceAtSale?.let { put("costPriceAtSale", it) }
             })
           }
         })
@@ -105,6 +106,16 @@ object BackupRestoreManager {
               put("amount", t.amount)
               put("description", t.description)
               put("date", t.date)
+              t.invoiceId?.let { put("invoiceId", it) }
+            })
+          }
+        })
+        put("inventoryAdjustments", JSONArray().apply {
+          db.inventoryAdjustmentDao().getAllAdjustmentsSnapshot().forEach { a ->
+            put(JSONObject().apply {
+              put("id", a.id); put("itemId", a.itemId); put("itemName", a.itemName)
+              put("previousQuantity", a.previousQuantity); put("newQuantity", a.newQuantity)
+              put("deltaQuantity", a.deltaQuantity); put("reason", a.reason); put("date", a.date)
             })
           }
         })
@@ -283,7 +294,8 @@ object BackupRestoreManager {
           o.getDouble("totalPrice").boundedMoney("إجمالي الصنف", allowNegative = false),
           o.optInt("stockQuantity", 0).also { require(it in 0..10_000_000) { "كمية المخزون المحولة غير صحيحة" } },
           o.optString("unitLabel", ""),
-          o.optInt("unitFactor", 1).also { require(it in 1..1_000_000) { "معامل الوحدة غير صحيح" } }
+          o.optInt("unitFactor", 1).also { require(it in 1..1_000_000) { "معامل الوحدة غير صحيح" } },
+          if (!o.has("costPriceAtSale") || o.isNull("costPriceAtSale")) null else o.getDouble("costPriceAtSale").boundedMoney("تكلفة البيع وقت الفاتورة", allowNegative = false)
         )
       }
     } catch (e: IllegalArgumentException) {
@@ -302,7 +314,8 @@ object BackupRestoreManager {
           o.getString("type"),
           o.getDouble("amount").boundedMoney("مبلغ الحركة", allowNegative = false),
           o.optString("description", ""),
-          o.getLong("date").also { require(it > 0L) { "تاريخ الحركة غير صالح" } }
+          o.getLong("date").also { require(it > 0L) { "تاريخ الحركة غير صالح" } },
+          if (!o.has("invoiceId") || o.isNull("invoiceId")) null else o.getLong("invoiceId")
         )
       }
     } catch (e: IllegalArgumentException) {
@@ -311,6 +324,14 @@ object BackupRestoreManager {
       throw IllegalArgumentException("بيانات جدول الحركات المالية في النسخة الاحتياطية غير مكتملة أو تالفة")
     }
 
+    val inventoryAdjustments = payload.optJSONArray("inventoryAdjustments")?.let { array ->
+      (0 until array.length()).map { index ->
+        val o = array.getJSONObject(index)
+        InventoryAdjustmentEntity(o.getLong("id"), o.getLong("itemId"), o.getString("itemName"),
+          o.getInt("previousQuantity"), o.getInt("newQuantity"), o.getInt("deltaQuantity"),
+          o.optString("reason", "تسوية مخزون"), o.getLong("date"))
+      }
+    }.orEmpty()
     val notes = payload.optJSONArray("notes")?.let { array ->
       (0 until array.length()).map { index ->
         val o = array.getJSONObject(index)
@@ -327,6 +348,8 @@ object BackupRestoreManager {
       "توجد بيانات ملاحظات غير صالحة في النسخة الاحتياطية"
     }
     require(notes.map { it.id }.distinct().size == notes.size) { "معرفات ملاحظات مكررة" }
+    require(inventoryAdjustments.all { it.id > 0L && it.itemId > 0L && it.itemName.isNotBlank() && it.previousQuantity >= 0 && it.newQuantity >= 0 && it.deltaQuantity == it.newQuantity - it.previousQuantity && it.date > 0L }) { "توجد تسويات مخزون غير صالحة في النسخة الاحتياطية" }
+    require(inventoryAdjustments.map { it.id }.distinct().size == inventoryAdjustments.size) { "معرفات تسويات مخزون مكررة" }
 
     require(customers.all { it.name.isNotBlank() } && suppliers.all { it.name.isNotBlank() } &&
       inventory.all { it.name.isNotBlank() }) { "يوجد سجل باسم فارغ في النسخة الاحتياطية" }
@@ -356,7 +379,8 @@ object BackupRestoreManager {
       invoices.map { it.id },
       invoiceItems.map { it.id },
       transactions.map { it.id },
-      notes.map { it.id }
+      notes.map { it.id },
+      inventoryAdjustments.map { it.id }
     ).all { ids -> ids.all { it > 0 } && ids.distinct().size == ids.size }) {
       "توجد معرفات سجلات غير صحيحة أو مكررة"
     }
@@ -365,6 +389,7 @@ object BackupRestoreManager {
     }
 
     val inventoryIds = inventory.map { it.id }.toSet()
+    require(inventoryAdjustments.all { it.itemId in inventoryIds }) { "توجد تسوية مخزون مرتبطة بصنف غير موجود" }
     val invoiceIds = invoices.map { it.id }.toSet()
     require(invoiceItems.all { item ->
       item.invoiceId in invoiceIds &&
@@ -387,6 +412,7 @@ object BackupRestoreManager {
 
     require(transactions.all { transaction ->
       transaction.partyId > 0 && transaction.amount > 0 &&
+        (transaction.invoiceId == null || transaction.invoiceId in invoiceIds) &&
         transaction.type in setOf("DEBIT (عليه)", "CREDIT (له)") &&
         when (transaction.partyType) {
           "CUSTOMER" -> transaction.partyId in customerIds
@@ -403,6 +429,7 @@ object BackupRestoreManager {
     db.withTransaction {
       db.invoiceDao().clearInvoiceItems()
       db.transactionDao().clearTransactions()
+      db.inventoryAdjustmentDao().clearAdjustments()
       db.noteDao().clearNotes()
       db.invoiceDao().clearInvoices()
       db.inventoryDao().clearItems()
@@ -414,6 +441,7 @@ object BackupRestoreManager {
       db.invoiceDao().restoreInvoices(invoices)
       db.invoiceDao().restoreInvoiceItems(invoiceItems)
       db.transactionDao().restoreTransactions(transactions)
+      db.inventoryAdjustmentDao().restoreAdjustments(inventoryAdjustments)
       db.noteDao().restoreNotes(notes)
     }
 

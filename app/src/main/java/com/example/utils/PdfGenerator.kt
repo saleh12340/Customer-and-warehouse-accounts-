@@ -561,6 +561,7 @@ object PdfGenerator {
       val sectionPaint = textPaint(context, 13f, Color.rgb(15, 76, 156), true)
       val bodyPaint = textPaint(context, 11.5f, Color.BLACK)
       val boldPaint = textPaint(context, 11.5f, Color.BLACK, true)
+      val warningPaint = textPaint(context, 10.5f, Color.rgb(170, 45, 35), true)
       val boxFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(241, 245, 252) }
       val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(210, 218, 228)
@@ -575,7 +576,8 @@ object PdfGenerator {
       y += drawRtl(canvas, "${settings.storeName} - التقرير المالي", MARGIN, y, CONTENT_WIDTH, titlePaint, Layout.Alignment.ALIGN_NORMAL) + 4f
       y += drawRtl(canvas, "الفترة: $periodLabel   |   تاريخ الإصدار: $dateText", MARGIN, y, CONTENT_WIDTH, subPaint, Layout.Alignment.ALIGN_NORMAL) + 12f
 
-      canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 184f, 8f, 8f, boxFill)
+      val warningHeight = if (report.uncostedSalesLineCount > 0) 30f else 0f
+      canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 184f + warningHeight, 8f, 8f, boxFill)
       var sy = y + 12f
       val lines = listOf(
         "مبيعات الفترة (${report.invoiceCount} فاتورة): ${formatMoney(report.periodSales)} $currency",
@@ -589,7 +591,10 @@ object PdfGenerator {
       lines.forEach { text ->
         sy += drawRtl(canvas, text, MARGIN + 12f, sy, CONTENT_WIDTH - 24f, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 7f
       }
-      y += 198f
+      if (report.uncostedSalesLineCount > 0) {
+        sy += drawRtl(canvas, "تنبيه: ${report.uncostedSalesLineCount} سطر بيع لا تتوفر له تكلفة محفوظة؛ الربح غير مكتمل.", MARGIN + 12f, sy, CONTENT_WIDTH - 24f, warningPaint, Layout.Alignment.ALIGN_NORMAL) + 4f
+      }
+      y += 198f + warningHeight
 
       if (report.topItems.isNotEmpty()) {
         y += drawRtl(canvas, "الأصناف الأكثر مبيعاً", MARGIN, y, CONTENT_WIDTH, sectionPaint, Layout.Alignment.ALIGN_NORMAL) + 6f

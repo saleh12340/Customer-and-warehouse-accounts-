@@ -1457,16 +1457,19 @@ window.onInventoryHistoryData = function (jsonStr) {
       ? '<div class="muted-text" style="text-align:center; padding:6px;">لا توجد حركات فواتير مسجلة لهذا الصنف</div>'
       : `<div class="table-wrap" style="margin-top:6px;"><table class="data-table ruled-table"><thead><tr><th>الفاتورة</th><th>الطرف</th><th>الكمية</th><th>السعر</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody>` +
         movements.map(m => {
+          const isAdjustment = m.invoiceType === 'ADJUSTMENT';
           const isAdd = m.deltaQty > 0;
           const cls = isAdd ? 'text-success' : 'text-danger';
           const qtyStr = isAdd ? `+${m.deltaQty}` : String(m.deltaQty);
+          const invoiceCell = isAdjustment ? '<strong>تسوية مخزون</strong>' : `<strong>#${escapeHtml(m.invoiceNumber)}</strong>`;
+          const actions = isAdjustment ? '<span class="muted-text">حركة تسوية</span>' : `<button type="button" class="tbl-action-btn" onclick="openEditInvoice(${m.invoiceId})">تعديل</button><button type="button" class="tbl-action-btn del" onclick="deleteInvoiceWithConfirmation(${m.invoiceId})">حذف</button>`;
           return `<tr>
-            <td onclick="openEditInvoice(${m.invoiceId})"><strong>#${escapeHtml(m.invoiceNumber)}</strong></td>
+            <td ${isAdjustment ? '' : `onclick="openEditInvoice(${m.invoiceId})"`}>${invoiceCell}</td>
             <td>${escapeHtml(m.partyName)}</td>
             <td class="num-cell ${cls}" style="font-weight:800;">${qtyStr}</td>
             <td class="num-cell">${fmtMoney(m.unitPrice)}</td>
             <td class="num-cell" style="font-size:10.5px;">${fmtShortDate(m.date)}</td>
-            <td style="white-space:nowrap;"><button type="button" class="tbl-action-btn" onclick="openEditInvoice(${m.invoiceId})">تعديل</button><button type="button" class="tbl-action-btn del" onclick="deleteInvoiceWithConfirmation(${m.invoiceId})">حذف</button></td>
+            <td style="white-space:nowrap;">${actions}</td>
           </tr>`;
         }).join('') +
         `</tbody></table></div>`;
@@ -1479,7 +1482,8 @@ window.onInventoryHistoryData = function (jsonStr) {
       <div class="summary-strip" style="margin-bottom:4px;">
         <span>الوارد (+): ${data.totalPurchased || 0}</span>
         <span>المباع (-): ${data.totalSold || 0}</span>
-        <span>التكلفة: ${fmtMoney(item.purchasePrice)}</span>
+        <span>تسويات (+/-): ${data.totalAdjusted || 0}</span>
+        <span>التكلفة الحالية: ${fmtMoney(item.purchasePrice)}</span>
       </div>
       ${rowsHtml}
     `;
@@ -3078,6 +3082,7 @@ window.onReportsData = function (jsonStr) {
       <div class="metrics-grid">
         <div class="metric-card"><div class="title">مبيعات الفترة (${data.invoiceCount || 0} فاتورة)</div><div class="value text-success">${fmtMoney(data.sales)} ${escapeHtml(appCurrency)}</div></div>
         <div class="metric-card"><div class="title">صافي الربح (بعد COGS)</div><div class="value text-primary">${fmtMoney(data.grossProfit)} ${escapeHtml(appCurrency)}</div></div>
+        ${Number(data.uncostedSalesLineCount || 0) > 0 ? `<div class="info-pill" style="grid-column:1/-1;color:var(--danger);">تنبيه: ${Number(data.uncostedSalesLineCount)} سطر بيع لا تتوفر له تكلفة محفوظة؛ الربح المعروض غير مكتمل. راجع فواتير البيع القديمة.</div>` : ''}
         <div class="metric-card"><div class="title">تكلفة البضاعة المباعة</div><div class="value text-dark">${fmtMoney(data.cogs)} ${escapeHtml(appCurrency)}</div></div>
         <div class="metric-card"><div class="title">إجمالي المشتريات</div><div class="value text-dark">${fmtMoney(data.purchases)} ${escapeHtml(appCurrency)}</div></div>
         <div class="metric-card"><div class="title">ديون العملاء</div><div class="value text-danger">${fmtMoney(data.debts)} ${escapeHtml(appCurrency)}</div></div>

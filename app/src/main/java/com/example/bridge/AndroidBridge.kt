@@ -826,6 +826,7 @@ class AndroidBridge(
           })
           put("totalPurchased", snap.totalPurchased)
           put("totalSold", snap.totalSold)
+          put("totalAdjusted", snap.totalAdjusted)
           put("movements", JSONArray().apply {
             snap.movements.forEach { m ->
               put(JSONObject().apply {
@@ -1426,6 +1427,7 @@ class AndroidBridge(
         put("creditSales", report.creditSales)
         put("cogs", report.cogs)
         put("grossProfit", report.grossProfit)
+        put("uncostedSalesLineCount", report.uncostedSalesLineCount)
         put("debts", report.totalDebts)
         put("payables", report.totalPayables)
         put("inventoryVal", report.inventoryCostValue)

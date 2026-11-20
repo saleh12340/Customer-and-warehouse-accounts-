@@ -15,9 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     InvoiceEntity::class,
     InvoiceItemEntity::class,
     TransactionEntity::class,
+    InventoryAdjustmentEntity::class,
     NoteEntity::class
   ],
-  version = 4,
+  version = 5,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
   abstract fun inventoryDao(): InventoryDao
   abstract fun invoiceDao(): InvoiceDao
   abstract fun transactionDao(): TransactionDao
+  abstract fun inventoryAdjustmentDao(): InventoryAdjustmentDao
   abstract fun noteDao(): NoteDao
 
   companion object {
@@ -71,6 +73,42 @@ abstract class AppDatabase : RoomDatabase() {
       }
     }
 
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE invoice_items ADD COLUMN costPriceAtSale REAL")
+        db.execSQL("ALTER TABLE transactions ADD COLUMN invoiceId INTEGER")
+        db.execSQL("""
+          CREATE TABLE IF NOT EXISTS inventory_adjustments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            itemId INTEGER NOT NULL,
+            itemName TEXT NOT NULL,
+            previousQuantity INTEGER NOT NULL,
+            newQuantity INTEGER NOT NULL,
+            deltaQuantity INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            date INTEGER NOT NULL
+          )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_inventory_adjustments_itemId_date ON inventory_adjustments(itemId, date)")
+        db.execSQL("""
+          UPDATE transactions
+          SET invoiceId = (
+            SELECT invoices.id FROM invoices
+            WHERE invoices.partyId = transactions.partyId
+              AND (
+                (transactions.partyType = 'CUSTOMER' AND invoices.type IN ('SALE', 'CASH', 'CREDIT')
+                  AND transactions.description = 'فاتورة مبيعات رقم ' || invoices.invoiceNumber)
+                OR
+                (transactions.partyType = 'SUPPLIER' AND invoices.type = 'PURCHASE'
+                  AND transactions.description = 'فاتورة مشتريات رقم ' || invoices.invoiceNumber)
+              )
+            ORDER BY invoices.id DESC LIMIT 1
+          )
+          WHERE invoiceId IS NULL
+        """.trimIndent())
+      }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
       return INSTANCE ?: synchronized(this) {
         INSTANCE ?: Room.databaseBuilder(
@@ -78,7 +116,7 @@ abstract class AppDatabase : RoomDatabase() {
           AppDatabase::class.java,
           "alaziy_grocery.db"
         )
-          .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+          .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
           .build()
           .also { INSTANCE = it }
       }

@@ -411,7 +411,7 @@ class GroceryAccountingIntegrationTest {
     }
 
     val migratedDb = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-      .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
+      .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
       .allowMainThreadQueries()
       .build()
     try {
@@ -692,6 +692,36 @@ class GroceryAccountingIntegrationTest {
     }
 
     appEngine.resetAllDatabase()
+  }
+
+
+  @Test
+  fun invoiceLedgerRowsCannotBeEditedOrDeletedIndependentlyAndCostIsFrozenAtSale() = runBlocking {
+    val customerId = engine.saveCustomer(0L, "عميل ربط الفاتورة", "", "", 0.0)
+    val itemId = engine.saveInventoryItem(0L, "صنف بتكلفة متغيرة", "", 10, 10.0, 20.0, "حبة")
+    val invoiceId = engine.saveInvoice(0L, "LINK-COST-001", "CREDIT", customerId, "عميل ربط الفاتورة",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف بتكلفة متغيرة", 2, 20.0, 40.0)), 0.0)
+    val invoiceTx = db.transactionDao().getTransactionsForPartySnapshot("CUSTOMER", customerId).single()
+    assertEquals(invoiceId, invoiceTx.invoiceId)
+    try { engine.deleteCustomerTransaction(invoiceTx.id); fail("Invoice movement must be protected") }
+    catch (expected: IllegalStateException) { assertTrue(expected.message!!.contains("فاتورة")) }
+    try { engine.updateCustomerTransaction(invoiceTx.id, 1.0, true, "تعديل غير مسموح"); fail("Invoice movement must be protected") }
+    catch (expected: IllegalStateException) { assertTrue(expected.message!!.contains("فاتورة")) }
+    engine.saveInventoryItem(itemId, "صنف بتكلفة متغيرة", "", 8, 15.0, 25.0, "حبة")
+    val report = engine.buildReport()
+    assertEquals(20.0, report.cogs, 0.01)
+    assertEquals(0, report.uncostedSalesLineCount)
+    assertEquals(20.0, report.grossProfit, 0.01)
+  }
+
+  @Test
+  fun manualInventoryQuantityChangesAreAuditedAndIncludedInHistory() = runBlocking {
+    val itemId = engine.saveInventoryItem(0L, "صنف تسوية", "مواد", 20, 100.0, 130.0, "حبة")
+    engine.saveInventoryItem(itemId, "صنف تسوية", "مواد", 15, 100.0, 130.0, "حبة")
+    val history = engine.getInventoryMovementHistory(itemId)!!
+    assertEquals(-5, history.totalAdjusted)
+    assertEquals("ADJUSTMENT", history.movements.single().invoiceType)
+    assertEquals(-5, history.movements.single().deltaQty)
   }
 
   private fun sha256Hex(value: String): String =

@@ -19,5 +19,6 @@ data class InvoiceItemEntity(
   // Base-stock quantity is persisted separately from the invoiced package quantity.
   val stockQuantity: Int = 0,
   val unitLabel: String = "",
-  val unitFactor: Int = 1
+  val unitFactor: Int = 1,
+  val costPriceAtSale: Double? = null
 )

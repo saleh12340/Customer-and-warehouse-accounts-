@@ -16,5 +16,6 @@ data class TransactionEntity(
   val type: String, // DEBIT (عليه), CREDIT (له)
   val amount: Double,
   val description: String,
-  val date: Long
+  val date: Long,
+  val invoiceId: Long? = null
 )

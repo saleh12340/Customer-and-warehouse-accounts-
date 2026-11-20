@@ -35,8 +35,8 @@ interface TransactionDao {
   @Delete
   suspend fun deleteTransaction(transaction: TransactionEntity)
 
-  @Query("DELETE FROM transactions WHERE partyType = :partyType AND partyId = :partyId AND description = :description")
-  suspend fun deleteByDescription(partyType: String, partyId: Long, description: String): Int
+  @Query("DELETE FROM transactions WHERE invoiceId = :invoiceId")
+  suspend fun deleteByInvoiceId(invoiceId: Long): Int
 
   @Query("DELETE FROM transactions WHERE partyType = :partyType AND partyId = :partyId")
   suspend fun deleteByParty(partyType: String, partyId: Long): Int
