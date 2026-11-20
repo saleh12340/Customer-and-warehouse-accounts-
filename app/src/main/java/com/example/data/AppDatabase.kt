@@ -68,7 +68,6 @@ abstract class AppDatabase : RoomDatabase() {
             leftRowsJson TEXT NOT NULL
           )
         """.trimIndent())
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_notes_updatedAt ON notes (updatedAt)")
       }
     }
 
