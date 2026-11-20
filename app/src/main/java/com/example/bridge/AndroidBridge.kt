@@ -57,6 +57,7 @@ class AndroidBridge(
     getSuppliers()
     getInventory()
     getInvoices()
+    getNotes()
   }
 
   @JavascriptInterface
