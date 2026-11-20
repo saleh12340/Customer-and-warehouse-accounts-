@@ -183,6 +183,13 @@
 
         <!-- Pinned Compact Ruled Entry Row (Right-to-Left: المبلغ | التفاصيل | التاريخ) -->
         <div class="card compact-card entry-dock-card">
+          <div class="invoice-entry-toolbar">
+            <strong>إضافة الأصناف</strong>
+            <div class="invoice-toolbar-actions">
+              <button type="button" class="invoice-tool-btn" onclick="toggleMultiStockPicker()">قائمة المخزون</button>
+              <button type="button" class="invoice-tool-btn" onclick="toggleQuickAddStock()">+ صنف جديد</button>
+            </div>
+          </div>
           <div class="ruled-grid-labels grid-tx-entry">
             <span>المبلغ</span>
             <span>التفاصيل / البيان</span>
@@ -507,13 +514,16 @@
     <section id="view-create-invoice" class="view">
       <!-- Natural Scroll Top Ruled Multi-Row Input Bar (Right-to-Left: الإجمالي | الكمية | التفاصيل | سعر الواحدة آلي) -->
       <div class="natural-top-panel">
-        <div class="section-head" style="margin-bottom:4px;">
-          <h2 id="invoice-screen-title">إصدار فاتورة بيع نقدي</h2>
-          <div class="btn-row-compact">
+        <div class="invoice-heading">
+          <div class="invoice-heading-title">
+            <h2 id="invoice-screen-title">إصدار فاتورة بيع نقدي</h2>
             <span id="invoice-mode-badge" class="badge badge-green">فاتورة بيع نقدي</span>
             <span id="invoice-saved-badge" class="badge badge-green hidden">محفوظة ✓</span>
-            <button type="button" class="link-btn" onclick="toggleMultiStockPicker()">اختيار سريع</button>
-            <button type="button" class="link-btn" onclick="toggleQuickAddStock()">+ للمخزن</button>
+          </div>
+          <div class="invoice-mode-switch" role="group" aria-label="نوع الفاتورة">
+            <button type="button" class="invoice-mode-btn active-cash" data-invoice-mode="CASH" onclick="setInvoiceType('CASH')">بيع نقدي</button>
+            <button type="button" class="invoice-mode-btn" data-invoice-mode="CREDIT" onclick="setInvoiceType('CREDIT')">بيع آجل</button>
+            <button type="button" class="invoice-mode-btn" data-invoice-mode="PURCHASE" onclick="setInvoiceType('PURCHASE')">شراء</button>
           </div>
         </div>
 
@@ -538,7 +548,7 @@
           </div>
 
           <!-- Collapsible Multi-Item Stock Picker -->
-          <div id="multi-stock-picker-box" class="inline-subbox hidden">
+          <div id="multi-stock-picker-box" class="inline-subbox invoice-stock-picker hidden">
             <div class="card-title-row" style="margin-bottom:2px;">
               <strong style="font-size:12px;">اختر الصنف وأضفه مباشرة إلى الفاتورة</strong>
               <button type="button" class="link-btn" onclick="toggleMultiStockPicker(false)">إغلاق</button>
@@ -548,6 +558,19 @@
             </div>
             <div id="multi-stock-list" class="multi-stock-list"></div>
             <div class="quick-picker-hint">تُضاف الكمية المحددة فور الضغط على «إضافة»، ويمكن تكرار ذلك لأصناف متعددة.</div>
+          </div>
+
+          <div id="quick-add-party-box" class="inline-subbox hidden">
+            <div class="card-title-row"><strong id="quick-party-title">إضافة عميل جديد</strong><button type="button" class="link-btn" onclick="toggleQuickAddParty(false)">إغلاق</button></div>
+            <div class="quick-party-grid">
+              <input id="quick-party-name" class="ruled-cell" type="text" placeholder="الاسم *">
+              <input id="quick-party-phone" class="ruled-cell" type="tel" placeholder="رقم الهاتف">
+              <input id="quick-party-extra" class="ruled-cell" type="text" placeholder="العنوان أو الشركة">
+            </div>
+            <div class="btn-row" style="margin-top:6px">
+              <button type="button" class="btn btn-primary btn-sm" onclick="submitQuickAddParty()">حفظ واختيار الطرف</button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="toggleQuickAddParty(false)">إلغاء</button>
+            </div>
           </div>
 
           <!-- Inline Quick-Add Inventory Sub-Form -->
@@ -571,7 +594,11 @@
           </div>
 
           <!-- Compact Invoice Meta Row (RTL: الطرف | النوع | الرقم | التاريخ) -->
-          <div class="ruled-grid-labels grid-inv-meta-4" style="margin-top:6px;">
+          <div class="invoice-party-toolbar">
+            <strong id="invoice-party-caption">العميل</strong>
+            <button type="button" class="invoice-tool-btn" onclick="toggleQuickAddParty(true)">+ إضافة عميل / مورد</button>
+          </div>
+          <div class="ruled-grid-labels grid-inv-meta-4" style="margin-top:4px;">
             <span>العميل / المورد</span>
             <span>نوع الفاتورة</span>
             <span>رقم الفاتورة</span>
@@ -579,7 +606,7 @@
           </div>
           <div class="ruled-input-row grid-inv-meta-4">
             <select id="inv-party" class="ruled-cell cell-select" onchange="onInvoicePartyChanged()"></select>
-            <select id="inv-type" class="ruled-cell cell-select" onchange="onInvoiceTypeChange()">
+            <select id="inv-type" class="ruled-cell cell-select" style="display:none" onchange="onInvoiceTypeChange()" aria-hidden="true" tabindex="-1">
               <option value="CASH">بيع نقدي</option>
               <option value="CREDIT">بيع آجل</option>
               <option value="PURCHASE">شراء</option>
