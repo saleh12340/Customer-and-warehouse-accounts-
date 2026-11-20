@@ -182,7 +182,9 @@ function initializeContextSuggestions() {
   refreshContextSuggestions();
   if (typeof MutationObserver !== 'undefined' && document.documentElement) {
     const observer = new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => {
-      if (node.nodeType === 1) refreshContextSuggestions(node);
+      if (node.nodeType !== 1) return;
+      attachContextSuggestion(node);
+      if (node.querySelectorAll) node.querySelectorAll('input,textarea').forEach(attachContextSuggestion);
     })));
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
