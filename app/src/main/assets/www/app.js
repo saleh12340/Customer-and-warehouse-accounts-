@@ -90,13 +90,39 @@ let settingsData = {
   storePhone: '',
   storeAddress: '',
   currency: 'ر.ي',
+  uiTextScale: 'NORMAL',
+  compactLists: false,
+  defaultInvoiceType: 'CASH',
+  autoFillCashPaid: true,
+  confirmBeforeDeleteInvoice: true,
+  quickPartyCount: 5,
+  lowStockThreshold: 10,
+  defaultInventorySort: 'NAME',
+  defaultInventoryUnit: 'حبة',
+  defaultInventoryCategory: 'مواد غذائية',
+  defaultCustomerSort: 'NAME',
+  promptWhatsAppAfterTx: true,
+  showZeroBalanceParties: true,
+  defaultReportRange: 'ALL',
+  showUncostedProfitWarning: true,
   printerWidthMm: 58,
+  defaultPrinterAddress: '',
+  defaultPrinterName: '',
+  requireThermalPreview: true,
+  autoOpenPdfAfterExport: true,
+  preferWhatsAppDirect: true,
+  autoSaveThermalImage: false,
+  linkedFolderActive: false,
+  folderDisplayPath: 'Download/بقاله العزي',
+  hasSafetyBackup: false,
   printerConnected: false,
   connectedPrinterName: '',
   connectedPrinterAddress: '',
   bluetoothAvailable: false,
   bluetoothEnabled: false
 };
+let settingsLoadedOnce = false;
+let isSavingInvoice = false;
 
 
 // ---------------- Context-aware suggestions (shared across all screens) ----------------
@@ -236,10 +262,10 @@ const pendingCallbacks = {};
 let toastTimer = null;
 let pendingInvoicePartyId = 0;
 
-function nextReqId(onSuccess) {
+function nextReqId(onSuccess, onError) {
   const id = 'req_' + (reqSeq++);
-  if (typeof onSuccess === 'function') {
-    pendingCallbacks[id] = onSuccess;
+  if (typeof onSuccess === 'function' || typeof onError === 'function') {
+    pendingCallbacks[id] = { onSuccess, onError };
   }
   return id;
 }
@@ -254,12 +280,16 @@ window.onActionResult = function (reqId, success, message, dataJson) {
     }
   }
   showToast(message || (success ? 'تمت العملية بنجاح' : 'تعذر تنفيذ العملية'), success ? 'success' : 'error');
-  const cb = pendingCallbacks[reqId];
-  if (cb) {
+  const cbEntry = pendingCallbacks[reqId];
+  if (cbEntry) {
     // Always release one-shot callbacks, including failed operations.
-    // Run success continuations only after the native layer confirms success.
     delete pendingCallbacks[reqId];
-    if (success) cb(parsed);
+    if (typeof cbEntry === 'function') {
+      if (success) cbEntry(parsed);
+    } else {
+      if (success && typeof cbEntry.onSuccess === 'function') cbEntry.onSuccess(parsed);
+      if (!success && typeof cbEntry.onError === 'function') cbEntry.onError(message, parsed);
+    }
   }
 };
 
@@ -346,6 +376,20 @@ function toDateTimeLocalValue(millis) {
 
 function fromDateTimeLocalValue(val) {
   if (!val) return 0;
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(String(val).trim());
+  if (match) {
+    const localDate = new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4] || 0),
+      Number(match[5] || 0),
+      Number(match[6] || 0),
+      0
+    );
+    const ms = localDate.getTime();
+    return Number.isFinite(ms) && ms > 0 ? ms : 0;
+  }
   const ms = Date.parse(val);
   return Number.isFinite(ms) && ms > 0 ? ms : 0;
 }
@@ -508,7 +552,6 @@ function loadViewData(view) {
   } else if (view === 'settings') {
     window.Android.getSettings();
     window.Android.getBluetoothDevices();
-    window.Android.getAppFolderFiles();
   }
 }
 
@@ -527,9 +570,10 @@ window.onDashboardData = function (jsonStr) {
     document.getElementById('dash-payables').textContent = `${fmtMoney(data.payables)} ${appCurrency}`;
     document.getElementById('dash-inventory').textContent = `${fmtMoney(data.inventoryVal)} ${appCurrency}`;
 
+    const lowThreshold = Math.max(1, Number(data.lowStockThreshold ?? settingsData.lowStockThreshold) || 10);
     const lowBox = document.getElementById('dash-low-stock-alert');
     if ((data.lowStockCount || 0) > 0) {
-      lowBox.textContent = `تنبيه المخزون: يوجد ${data.lowStockCount} أصناف كميتها منخفضة (≤ 10) — اضغط للعرض`;
+      lowBox.textContent = `تنبيه المخزون: يوجد ${data.lowStockCount} أصناف كميتها منخفضة (≤ ${lowThreshold}) — اضغط للعرض`;
       lowBox.classList.remove('hidden');
     } else {
       lowBox.classList.add('hidden');
@@ -609,6 +653,8 @@ function renderCustomersList() {
   const container = document.getElementById('customers-list');
   const summary = document.getElementById('customers-summary-strip');
   const query = (document.getElementById('customer-search').value || '').trim().toLowerCase();
+  const showZero = settingsData.showZeroBalanceParties !== false;
+  const sortMode = settingsData.defaultCustomerSort || 'NAME';
 
   const filtered = customersData.filter(c => {
     const matchSearch = !query || c.name.toLowerCase().includes(query) || (c.phone || '').includes(query);
@@ -616,7 +662,12 @@ function renderCustomersList() {
     if (customerFilter === 'DEBIT') return c.balance > 0.01;
     if (customerFilter === 'CREDIT') return c.balance < -0.01;
     if (customerFilter === 'SETTLED') return Math.abs(c.balance) <= 0.01;
+    if (!showZero && Math.abs(c.balance) <= 0.01) return false;
     return true;
+  }).sort((a, b) => {
+    if (sortMode === 'BALANCE_DESC') return (Number(b.balance) || 0) - (Number(a.balance) || 0);
+    if (sortMode === 'BALANCE_ASC') return (Number(a.balance) || 0) - (Number(b.balance) || 0);
+    return (a.name || '').localeCompare(b.name || '', 'ar');
   });
 
   const totalDebt = filtered.reduce((sum, c) => sum + Math.max(c.balance, 0), 0);
@@ -912,7 +963,8 @@ function submitCustomerTx(isDebit) {
   const customerIdForShare = activeCustomerId;
   const reqId = nextReqId(() => {
     cancelEditCustomerTx();
-    if (isNewCustomerTransaction && customerIdForShare > 0 &&
+    if (settingsData.promptWhatsAppAfterTx !== false &&
+        isNewCustomerTransaction && customerIdForShare > 0 &&
         window.Android && window.Android.shareCustomerWhatsApp &&
         window.confirm('تم تسجيل العملية بنجاح. هل تريد فتح محادثة العميل في واتساب ومشاركة كشف حسابه الآن؟')) {
       window.Android.shareCustomerWhatsApp(customerIdForShare, nextReqId());
@@ -991,13 +1043,22 @@ function renderSuppliersList() {
   const container = document.getElementById('suppliers-list');
   const summary = document.getElementById('suppliers-summary-strip');
   const query = (document.getElementById('supplier-search').value || '').trim().toLowerCase();
+  const showZero = settingsData.showZeroBalanceParties !== false;
+  const sortMode = settingsData.defaultCustomerSort || 'NAME';
 
-  const filtered = suppliersData.filter(s =>
-    !query ||
-    s.name.toLowerCase().includes(query) ||
-    (s.company || '').toLowerCase().includes(query) ||
-    (s.phone || '').includes(query)
-  );
+  const filtered = suppliersData.filter(s => {
+    const matches = !query ||
+      s.name.toLowerCase().includes(query) ||
+      (s.company || '').toLowerCase().includes(query) ||
+      (s.phone || '').includes(query);
+    if (!matches) return false;
+    if (!showZero && !query && Math.abs(s.balance) <= 0.01) return false;
+    return true;
+  }).sort((a, b) => {
+    if (sortMode === 'BALANCE_DESC') return (Number(b.balance) || 0) - (Number(a.balance) || 0);
+    if (sortMode === 'BALANCE_ASC') return (Number(a.balance) || 0) - (Number(b.balance) || 0);
+    return (a.name || '').localeCompare(b.name || '', 'ar');
+  });
 
   const totalPayable = filtered.reduce((sum, s) => sum + Math.max(s.balance, 0), 0);
   summary.innerHTML = `<span>الموردون: ${filtered.length}</span><span>المستحقات: ${fmtMoney(totalPayable)} ${escapeHtml(appCurrency)}</span>`;
@@ -1259,7 +1320,8 @@ function submitSupplierTx(isCredit) {
   const supplierIdForShare = activeSupplierId;
   const reqId = nextReqId(() => {
     cancelEditSupplierTx();
-    if (isNewSupplierTransaction && supplierIdForShare > 0 &&
+    if (settingsData.promptWhatsAppAfterTx !== false &&
+        isNewSupplierTransaction && supplierIdForShare > 0 &&
         window.Android && window.Android.shareSupplierWhatsApp &&
         window.confirm('تم تسجيل العملية بنجاح. هل تريد فتح محادثة المورد في واتساب ومشاركة كشف حسابه الآن؟')) {
       window.Android.shareSupplierWhatsApp(supplierIdForShare, nextReqId());
@@ -1296,7 +1358,14 @@ window.onInventoryData = function (jsonStr) {
     if (currentView === 'inventory') renderInventoryList();
     if (currentView === 'create-invoice') {
       populateItemDropdown();
-      renderBatchEntryRows();
+      const hasActiveEntry = batchEntryRows.some(r =>
+        (r.itemName && r.itemName.trim() !== '') || r.total !== '' || r.unitPrice !== ''
+      ) || Boolean(document.querySelector('#invoice-batch-rows input:focus'));
+      if (!hasActiveEntry) {
+        renderBatchEntryRows();
+      } else {
+        batchEntryRows.forEach((_, idx) => updateBatchUnitOptions(idx));
+      }
     }
   } catch (e) {
     console.error(e);
@@ -1350,6 +1419,9 @@ function renderInventoryList() {
   const searchEl = document.getElementById('inventory-search');
   if (!container || !summary || !searchEl) return;
   const query = (searchEl.value || '').trim().toLowerCase();
+  const lowThreshold = Math.max(1, Number(settingsData.lowStockThreshold) || 10);
+  const lowPill = document.getElementById('inventory-low-pill');
+  if (lowPill) lowPill.textContent = `منخفض (≤ ${lowThreshold})`;
 
   const filtered = inventoryData.filter(i => {
     const name = (i.name || '').toLowerCase();
@@ -1357,7 +1429,7 @@ function renderInventoryList() {
     const matchText = !query || name.includes(query) || category.includes(query);
     if (!matchText) return false;
     if (inventoryCategoryFilter !== 'ALL' && (i.category || 'عام') !== inventoryCategoryFilter) return false;
-    if (inventoryFilter === 'LOW') return Number(i.quantity) > 0 && Number(i.quantity) <= 10;
+    if (inventoryFilter === 'LOW') return Number(i.quantity) > 0 && Number(i.quantity) <= lowThreshold;
     if (inventoryFilter === 'OUT') return Number(i.quantity) <= 0;
     return true;
   });
@@ -1372,7 +1444,7 @@ function renderInventoryList() {
   const totalCost = filtered.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.purchasePrice)), 0);
   const totalRetail = filtered.reduce((sum, i) => sum + (Number(i.quantity) * Number(i.sellingPrice)), 0);
   const totalUnits = filtered.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
-  const lowCount = filtered.filter(i => Number(i.quantity) > 0 && Number(i.quantity) <= 10).length;
+  const lowCount = filtered.filter(i => Number(i.quantity) > 0 && Number(i.quantity) <= lowThreshold).length;
   const outCount = filtered.filter(i => Number(i.quantity) <= 0).length;
   summary.innerHTML = `<span>الأصناف: ${filtered.length}</span><span>الوحدات: ${fmtMoney(totalUnits)}</span><span>قيمة الشراء: ${fmtMoney(totalCost)} ${escapeHtml(appCurrency)}</span><span>قيمة البيع: ${fmtMoney(totalRetail)} ${escapeHtml(appCurrency)}</span><span>منخفض: ${lowCount}</span><span>نافذ: ${outCount}</span>`;
 
@@ -1385,7 +1457,7 @@ function renderInventoryList() {
     const qty = Number(i.quantity) || 0;
     const badge = qty <= 0
       ? '<span class="badge badge-red">نافذ</span>'
-      : (qty <= 10 ? '<span class="badge badge-amber">منخفض</span>' : '<span class="badge badge-green">متوفر</span>');
+      : (qty <= lowThreshold ? '<span class="badge badge-amber">منخفض</span>' : '<span class="badge badge-green">متوفر</span>');
     const isConfirming = pendingDeleteInventoryId === i.id;
     const actionsHtml = isConfirming
       ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteInventory(${i.id})">تأكيد الحذف</button>
@@ -1402,7 +1474,7 @@ function renderInventoryList() {
         </div>
         <div class="inventory-row-qty">
           <span class="inventory-meta-label">الرصيد</span>
-          <strong class="${qty <= 0 ? 'text-danger' : (qty <= 10 ? 'text-primary' : 'text-success')}">${fmtMoney(qty)}</strong>
+          <strong class="${qty <= 0 ? 'text-danger' : (qty <= lowThreshold ? 'text-primary' : 'text-success')}">${fmtMoney(qty)}</strong>
         </div>
         <div class="inventory-row-prices">
           <span>شراء <b>${fmtMoney(i.purchasePrice)}</b></span>
@@ -1420,6 +1492,11 @@ function toggleInventoryQuickAdd(forceState) {
   const show = typeof forceState === 'boolean' ? forceState : panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !show);
   if (show) {
+    const cat = document.getElementById('inventory-quick-category');
+    const unit = document.getElementById('inventory-quick-unit');
+    if (cat && !cat.value) cat.value = settingsData.defaultInventoryCategory || 'مواد غذائية';
+    if (unit && !unit.value) unit.value = settingsData.defaultInventoryUnit || 'حبة';
+    updateInventoryUnitPreview('inventory-quick');
     const name = document.getElementById('inventory-quick-name');
     if (name) name.focus();
   }
@@ -1427,7 +1504,7 @@ function toggleInventoryQuickAdd(forceState) {
 
 function submitInventoryQuickAdd() {
   const name = (document.getElementById('inventory-quick-name').value || '').trim();
-  const category = (document.getElementById('inventory-quick-category').value || '').trim() || 'مواد غذائية';
+  const category = (document.getElementById('inventory-quick-category').value || '').trim() || settingsData.defaultInventoryCategory || 'مواد غذائية';
   const unit = serializeInventoryUnitConfig('inventory-quick');
   if (!unit) return;
   const quantityRaw = document.getElementById('inventory-quick-qty').value;
@@ -1549,8 +1626,8 @@ function openInventoryForm(itemId) {
     }
   } else {
     document.getElementById('inv-item-form-name').value = '';
-    document.getElementById('inv-item-form-category').value = '';
-    fillInventoryUnitConfig('inv-item-form', 'حبة');
+    document.getElementById('inv-item-form-category').value = settingsData.defaultInventoryCategory || 'مواد غذائية';
+    fillInventoryUnitConfig('inv-item-form', settingsData.defaultInventoryUnit || 'حبة');
     document.getElementById('inv-item-form-qty').value = '';
     document.getElementById('inv-item-form-buy').value = '';
     document.getElementById('inv-item-form-sell').value = '';
@@ -1588,7 +1665,7 @@ function updateMarginPreview() {
 
 function submitInventoryForm() {
   const name = (document.getElementById('inv-item-form-name').value || '').trim();
-  const category = (document.getElementById('inv-item-form-category').value || '').trim() || 'مواد غذائية';
+  const category = (document.getElementById('inv-item-form-category').value || '').trim() || settingsData.defaultInventoryCategory || 'مواد غذائية';
   const unit = serializeInventoryUnitConfig('inv-item-form');
   if (!unit) return;
   const rawQty = document.getElementById('inv-item-form-qty').value;
@@ -1729,6 +1806,10 @@ function renderInvoicesList() {
 }
 
 function askDeleteInvoice(id) {
+  if (id > 0 && settingsData.confirmBeforeDeleteInvoice === false) {
+    confirmDeleteInvoice(id);
+    return;
+  }
   pendingDeleteInvoiceId = id;
   renderInvoicesList();
 }
@@ -1743,7 +1824,8 @@ function confirmDeleteInvoice(id) {
 // The native engine reverses the invoice's stock and account effects atomically.
 function deleteInvoiceWithConfirmation(id) {
   if (!window.Android || !Number(id)) return;
-  if (!window.confirm('هل تريد حذف هذه الفاتورة نهائياً؟ سيتم عكس أثرها على المخزون ورصيد العميل أو المورد.')) return;
+  if (settingsData.confirmBeforeDeleteInvoice !== false &&
+      !window.confirm('هل تريد حذف هذه الفاتورة نهائياً؟ سيتم عكس أثرها على المخزون ورصيد العميل أو المورد.')) return;
   const view = currentView;
   const customerId = activeCustomerId;
   const supplierId = activeSupplierId;
@@ -1861,7 +1943,34 @@ function getInventoryUnitOptions(item) {
   return options;
 }
 function createBlankBatchRow() {
-  return { itemId: 0, itemName: '', qty: '1', unitPrice: '', total: '', unitName: '', unitFactor: 1 };
+  return { itemId: 0, itemName: '', qty: '1', unitPrice: '', total: '', unitName: '', unitFactor: 1, lastEdited: 'TOTAL' };
+}
+
+function setInvoiceSubmitBusy(busy) {
+  isSavingInvoice = Boolean(busy);
+  const saveBtn = document.getElementById('btn-save-invoice');
+  const printBtn = document.getElementById('btn-invoice-preview-print');
+  if (saveBtn) saveBtn.disabled = isSavingInvoice;
+  if (printBtn) printBtn.disabled = isSavingInvoice;
+}
+
+function syncCashPaidWithCart() {
+  const type = document.getElementById('inv-type')?.value || 'CASH';
+  const paidEl = document.getElementById('inv-paid');
+  if (!paidEl) return;
+  const subtotal = Math.round(cartItems.reduce((acc, cur) => acc + (Number(cur.totalPrice) || 0), 0) * 100) / 100;
+  if (cartItems.length === 0 || subtotal <= 0) {
+    paidEl.value = '';
+    return;
+  }
+  if (type === 'CASH' && settingsData.autoFillCashPaid !== false) {
+    paidEl.value = String(subtotal);
+  } else {
+    const currentPaid = parseFloat(paidEl.value);
+    if (Number.isFinite(currentPaid) && currentPaid > subtotal) {
+      paidEl.value = String(subtotal);
+    }
+  }
 }
 
 function openCreateInvoice(presetType, presetPartyId) {
@@ -1869,11 +1978,13 @@ function openCreateInvoice(presetType, presetPartyId) {
   invoiceDirty = true;
   cartItems = [];
   batchEntryRows = [createBlankBatchRow()];
+  setInvoiceSubmitBusy(false);
   document.getElementById('invoice-screen-title').textContent = 'إصدار فاتورة جديدة';
   document.getElementById('btn-save-invoice').textContent = 'حفظ الفاتورة';
   document.getElementById('invoice-saved-badge').classList.add('hidden');
-  document.getElementById('inv-type').value = presetType || 'CASH';
+  document.getElementById('inv-type').value = presetType || settingsData.defaultInvoiceType || 'CASH';
   lastInvoiceType = document.getElementById('inv-type').value;
+  pendingInvoicePartyId = Number(presetPartyId) || 0;
   document.getElementById('inv-party').value = '0';
   document.getElementById('inv-paid').value = '';
   const invDateEl = document.getElementById('inv-date');
@@ -1891,12 +2002,13 @@ function openCreateInvoice(presetType, presetPartyId) {
   }
 
   onInvoiceTypeChange();
-  if (presetPartyId) {
-    setTimeout(() => {
-      const sel = document.getElementById('inv-party');
-      if (sel) sel.value = String(presetPartyId);
+  if (pendingInvoicePartyId > 0) {
+    const sel = document.getElementById('inv-party');
+    if (sel && sel.querySelector(`option[value="${pendingInvoicePartyId}"]`)) {
+      sel.value = String(pendingInvoicePartyId);
+      pendingInvoicePartyId = 0;
       updatePartyBalanceChip();
-    }, 120);
+    }
   }
   renderBatchEntryRows();
   enforceEnglishNumericFields(document.getElementById('view-create-invoice'));
@@ -1989,7 +2101,7 @@ function updateInvoiceModeUI() {
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
   const partyCaption = document.getElementById('invoice-party-caption');
-  if (partyCaption) partyCaption.textContent = type === 'PURCHASE' ? 'المورد' : 'العميل';
+  if (partyCaption) partyCaption.textContent = type === 'PURCHASE' ? 'المورد والتاريخ' : 'العميل والتاريخ';
   const addPartyButton = document.querySelector('.invoice-party-toolbar .invoice-tool-btn');
   if (addPartyButton) addPartyButton.textContent = type === 'PURCHASE' ? '+ إضافة مورد' : '+ إضافة عميل';
   const modeLabel = type === 'PURCHASE' ? 'فاتورة شراء'
@@ -2061,28 +2173,30 @@ function populatePartyDropdown() {
 
 function populateCustomersDropdown() {
   const select = document.getElementById('inv-party');
-  let html = '<option value="0">عميل نقدي</option>';
+  let html = '<option value="0" data-party-name="عميل نقدي">عميل نقدي</option>';
   customersData.forEach(c => {
-    html += `<option value="${c.id}">${escapeHtml(c.name)} (${fmtMoney(c.balance)})</option>`;
+    html += `<option value="${c.id}" data-party-name="${escapeHtml(c.name)}">${escapeHtml(c.name)} (${fmtMoney(c.balance)})</option>`;
   });
   select.innerHTML = html;
 
+  const quickLimit = Math.max(3, Math.min(12, Number(settingsData.quickPartyCount) || 5));
   const chipsEl = document.getElementById('inv-quick-party-chips');
-  chipsEl.innerHTML = customersData.slice(0, 5).map(c =>
+  chipsEl.innerHTML = customersData.slice(0, quickLimit).map(c =>
     `<button type="button" class="chip chip-blue" onclick="selectQuickParty(${c.id})">${escapeHtml(c.name)}</button>`
   ).join('');
 }
 
 function populateSuppliersDropdown() {
   const select = document.getElementById('inv-party');
-  let html = '<option value="0">اختر المورد...</option>';
+  let html = '<option value="0" data-party-name="">اختر المورد...</option>';
   suppliersData.forEach(s => {
-    html += `<option value="${s.id}">${escapeHtml(s.name)}${s.company ? ' - ' + escapeHtml(s.company) : ''}</option>`;
+    html += `<option value="${s.id}" data-party-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}${s.company ? ' - ' + escapeHtml(s.company) : ''}</option>`;
   });
   select.innerHTML = html;
 
+  const quickLimit = Math.max(3, Math.min(12, Number(settingsData.quickPartyCount) || 5));
   const chipsEl = document.getElementById('inv-quick-party-chips');
-  chipsEl.innerHTML = suppliersData.slice(0, 5).map(s =>
+  chipsEl.innerHTML = suppliersData.slice(0, quickLimit).map(s =>
     `<button type="button" class="chip chip-blue" onclick="selectQuickParty(${s.id})">${escapeHtml(s.name)}</button>`
   ).join('');
 }
@@ -2143,12 +2257,12 @@ function renderBatchEntryRows() {
   if (!batchEntryRows || batchEntryRows.length === 0) {
     batchEntryRows = [createBlankBatchRow()];
   }
-  container.innerHTML = batchEntryRows.slice(0, 1).map((row, idx) => `
+  container.innerHTML = batchEntryRows.map((row, idx) => `
     <div class="batch-entry-line">
       <div class="ruled-input-row grid-invoice-batch-row">
         <input type="number" id="batch-total-${idx}" class="ruled-cell cell-num batch-total-input" placeholder="الإجمالي" min="0" step="0.01"
           value="${escapeHtml(row.total)}" oninput="onBatchRowTotalInput(${idx}, this.value)">
-        <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="الكمية" min="1"
+        <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="الكمية" min="1" step="1"
           value="${escapeHtml(row.qty)}" oninput="onBatchRowQtyInput(${idx}, this.value)">
         <input type="text" id="batch-name-${idx}" class="ruled-cell" list="inv-items-datalist"
           placeholder="اسم الصنف..." value="${escapeHtml(row.itemName)}"
@@ -2158,9 +2272,9 @@ function renderBatchEntryRows() {
         <button type="button" class="row-remove-cell" onclick="removeBatchRow(${idx})" aria-label="حذف صف">×</button>
       </div>
       <div class="batch-derived-price">
-        <label for="batch-price-${idx}">سعر الوحدة المستنتج</label>
-        <input type="number" id="batch-price-${idx}" class="ruled-cell cell-num cell-auto" placeholder="يُحسب تلقائياً" step="0.0001" min="0"
-          value="${escapeHtml(row.unitPrice)}" readonly aria-readonly="true">
+        <label for="batch-price-${idx}">سعر الوحدة (قابل للتعديل)</label>
+        <input type="number" id="batch-price-${idx}" class="ruled-cell cell-num" placeholder="تلقائي أو يدوي" step="0.0001" min="0"
+          value="${escapeHtml(row.unitPrice)}" oninput="onBatchRowUnitPriceInput(${idx}, this.value)">
       </div>
     </div>
   `).join('');
@@ -2181,20 +2295,24 @@ function updateBatchUnitOptions(idx) {
 
 function onBatchRowUnitChange(idx, name) {
   const row = batchEntryRows[idx]; if (!row) return;
-  const item = inventoryData.find(x => x.id === row.itemId);
+  const item = inventoryData.find(x => x.id === row.itemId) ||
+    inventoryData.find(x => (x.name || '').trim().toLowerCase() === (row.itemName || '').trim().toLowerCase());
   const option = getInventoryUnitOptions(item).find(o => o.name === name); if (!option) return;
   row.unitName = option.name; row.unitFactor = option.factor;
   const basePrice = item ? ((document.getElementById('inv-type').value === 'PURCHASE') ? item.purchasePrice : item.sellingPrice) : 0;
   if (basePrice > 0) {
-    row.unitPrice = String(basePrice * option.factor);
-    const qty = parseInt(row.qty, 10) || 1; row.total = String(Math.round(qty * Number(row.unitPrice) * 100) / 100);
+    row.unitPrice = String(Math.round(basePrice * option.factor * 10000) / 10000);
+    row.lastEdited = 'PRICE';
+    const qty = parseInt(row.qty, 10) || 1;
+    row.total = String(Math.round(qty * Number(row.unitPrice) * 100) / 100);
     const p = document.getElementById('batch-price-' + idx), t = document.getElementById('batch-total-' + idx);
-    if (p) p.value = row.unitPrice; if (t) t.value = row.total;
+    if (p) p.value = row.unitPrice;
+    if (t) t.value = row.total;
   }
 }
 
 function addBatchRow() {
-  batchEntryRows = [createBlankBatchRow()];
+  batchEntryRows.push(createBlankBatchRow());
   renderBatchEntryRows();
   const lastIdx = batchEntryRows.length - 1;
   setTimeout(() => {
@@ -2204,7 +2322,11 @@ function addBatchRow() {
 }
 
 function removeBatchRow(idx) {
-  batchEntryRows = [createBlankBatchRow()];
+  if (batchEntryRows.length <= 1) {
+    batchEntryRows = [createBlankBatchRow()];
+  } else {
+    batchEntryRows.splice(idx, 1);
+  }
   renderBatchEntryRows();
 }
 
@@ -2215,24 +2337,32 @@ function onBatchRowNameInput(idx, val) {
   const clean = (val || '').trim().toLowerCase();
   const matched = clean ? inventoryData.find(x => (x.name || '').trim().toLowerCase() === clean) : null;
   const invType = document.getElementById('inv-type').value;
+  const priceEl = document.getElementById(`batch-price-${idx}`);
+  const totalEl = document.getElementById(`batch-total-${idx}`);
   if (matched) {
     row.itemId = matched.id;
     const options = getInventoryUnitOptions(matched);
     const selected = options.find(o => o.name === row.unitName && o.factor === row.unitFactor) || options[0];
-    row.unitName = selected.name; row.unitFactor = selected.factor; updateBatchUnitOptions(idx);
+    row.unitName = selected.name;
+    row.unitFactor = selected.factor;
+    updateBatchUnitOptions(idx);
     const suggestedPrice = (invType === 'PURCHASE' ? matched.purchasePrice : matched.sellingPrice) * row.unitFactor;
     if (suggestedPrice > 0) {
-      row.unitPrice = String(suggestedPrice);
+      row.unitPrice = String(Math.round(suggestedPrice * 10000) / 10000);
+      row.lastEdited = 'PRICE';
       const qty = parseInt(row.qty, 10) || 1;
       row.total = String(Math.round(qty * suggestedPrice * 100) / 100);
-      const priceEl = document.getElementById(`batch-price-${idx}`);
-      const totalEl = document.getElementById(`batch-total-${idx}`);
       if (priceEl) priceEl.value = row.unitPrice;
       if (totalEl) totalEl.value = row.total;
+    } else {
+      row.unitPrice = '';
+      row.total = '';
+      if (priceEl) priceEl.value = '';
+      if (totalEl) totalEl.value = '';
     }
   } else {
     row.itemId = 0;
-    if (!row.unitName) { row.unitName = 'حبة'; row.unitFactor = 1; }
+    if (!row.unitName) { row.unitName = settingsData.defaultInventoryUnit || 'حبة'; row.unitFactor = 1; }
     updateBatchUnitOptions(idx);
   }
 }
@@ -2241,6 +2371,7 @@ function onBatchRowTotalInput(idx, val) {
   const row = batchEntryRows[idx];
   if (!row) return;
   row.total = val;
+  row.lastEdited = 'TOTAL';
   const qty = parseInt(row.qty, 10) || 1;
   const total = parseFloat(val);
   if (val === '') {
@@ -2259,7 +2390,14 @@ function onBatchRowQtyInput(idx, val) {
   const qty = val === '' ? 1 : parseInt(val, 10);
   if (!Number.isFinite(qty) || qty <= 0) return;
 
-  if (row.total !== '') {
+  if (row.lastEdited === 'PRICE' && row.unitPrice !== '') {
+    const price = parseFloat(row.unitPrice);
+    if (Number.isFinite(price) && price >= 0) {
+      row.total = String(Math.round(qty * price * 100) / 100);
+      const totalEl = document.getElementById(`batch-total-${idx}`);
+      if (totalEl) totalEl.value = row.total;
+    }
+  } else if (row.total !== '') {
     const total = parseFloat(row.total);
     if (Number.isFinite(total) && total >= 0) {
       row.unitPrice = String(Math.round((total / qty) * 10000) / 10000);
@@ -2280,6 +2418,7 @@ function onBatchRowUnitPriceInput(idx, val) {
   const row = batchEntryRows[idx];
   if (!row) return;
   row.unitPrice = val;
+  row.lastEdited = 'PRICE';
   const qty = parseInt(row.qty, 10) || 1;
   const price = parseFloat(val);
   if (val === '') {
@@ -2374,11 +2513,7 @@ function addBatchItemsToCart() {
   invoiceDirty = true;
   batchEntryRows = [createBlankBatchRow()];
   renderBatchEntryRows();
-
-  if (document.getElementById('inv-type').value === 'CASH') {
-    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
-    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
-  }
+  syncCashPaidWithCart();
   renderCart();
   showToast(`تمت إضافة ${pendingLines.length} ${pendingLines.length === 1 ? 'صنف' : 'أصناف'} إلى الفاتورة ✓`, 'success');
 }
@@ -2473,24 +2608,27 @@ function renderMultiStockPicker() {
     container.innerHTML = '<div class="muted-text" style="grid-column:1/-1;text-align:center;padding:24px 10px;">لا توجد أصناف مطابقة. يمكنك إضافة صنف جديد للمخزن.</div>';
     return;
   }
+  const lowThreshold = Math.max(1, Number(settingsData.lowStockThreshold) || 10);
   container.innerHTML = list.map(i => {
     const price = Number(type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice) || 0;
     const qty = Number(i.quantity) || 0;
-    const stockClass = qty <= 0 ? 'text-danger' : (qty <= 10 ? 'text-primary' : 'text-success');
-    const cartLine = cartItems.find(line => Number(line.itemId) === Number(i.id) && !line.unitName);
-    const inCartQty = cartLine ? Number(cartLine.quantity) || 0 : 0;
+    const stockClass = qty <= 0 ? 'text-danger' : (qty <= lowThreshold ? 'text-primary' : 'text-success');
+    const inCartQty = cartItems
+      .filter(line => Number(line.itemId) === Number(i.id))
+      .reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
     return `
-      <article class="quick-stock-pick-row" role="button" tabindex="0"
+      <article class="quick-stock-pick-row${inCartQty > 0 ? ' is-in-cart' : ''}" role="button" tabindex="0"
         aria-label="إضافة ${escapeHtml(i.name)} إلى الفاتورة"
         onclick="addInventoryItemQuick(${i.id})"
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();addInventoryItemQuick(${i.id})}">
-        <div class="quick-stock-pick-info">
-          <strong>${escapeHtml(i.name)}</strong>
-          <span class="muted-text">${escapeHtml(i.category || 'عام')}</span>
-          <span class="muted-text"><b class="${stockClass}">المخزون: ${fmtMoney(qty)}</b></span>
-          <span class="muted-text">السعر: <b>${fmtMoney(price)} ${escapeHtml(appCurrency)}</b></span>
+        <div class="quick-stock-pick-top">
+          <strong class="quick-stock-pick-name">${escapeHtml(i.name)}</strong>
+          ${inCartQty > 0 ? `<span class="quick-stock-pick-badge">×${fmtMoney(inCartQty)}</span>` : ''}
         </div>
-        <span class="quick-stock-pick-selected" aria-live="polite">${inCartQty > 0 ? `في الفاتورة: ${fmtMoney(inCartQty)}` : 'اضغط للإضافة'}</span>
+        <div class="quick-stock-pick-meta">
+          <span class="quick-stock-pick-price">${fmtMoney(price)} ${escapeHtml(appCurrency)}</span>
+          <span class="quick-stock-pick-qty ${stockClass}">${fmtMoney(qty)}</span>
+        </div>
       </article>
     `;
   }).join('');
@@ -2504,12 +2642,10 @@ function addInventoryItemQuick(itemId) {
   }
   const type = document.getElementById('inv-type').value;
   const unitPrice = Math.max(0, Number(type === 'PURCHASE' ? item.purchasePrice : item.sellingPrice) || 0);
-  appendItemLineToCart(item.id, item.name, 1, unitPrice, unitPrice);
+  const baseUnit = parseInventoryUnitConfig(item.unit).base || settingsData.defaultInventoryUnit || 'حبة';
+  appendItemLineToCart(item.id, item.name, 1, unitPrice, unitPrice, baseUnit, 1);
   invoiceDirty = true;
-  if (type === 'CASH') {
-    const subtotal = cartItems.reduce((sum, line) => sum + line.totalPrice, 0);
-    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
-  }
+  syncCashPaidWithCart();
   renderCart();
   renderMultiStockPicker();
   showToast(`تمت إضافة وحدة من ${item.name} ✓`, 'success');
@@ -2545,6 +2681,8 @@ function submitQuickAddStock() {
         const suggested = type === 'PURCHASE' ? created.purchasePrice : created.sellingPrice;
         batchEntryRows[idx].itemId = created.id;
         batchEntryRows[idx].itemName = created.name;
+        batchEntryRows[idx].unitName = parseInventoryUnitConfig(created.unit).base || 'حبة';
+        batchEntryRows[idx].unitFactor = 1;
         batchEntryRows[idx].unitPrice = suggested > 0 ? String(suggested) : '';
         batchEntryRows[idx].total = suggested > 0 ? String(suggested) : '';
         renderBatchEntryRows();
@@ -2554,88 +2692,113 @@ function submitQuickAddStock() {
   window.Android.saveInventoryItem(JSON.stringify({
     id: 0,
     name,
-    category: 'مواد غذائية',
-    unit: 'حبة',
+    category: settingsData.defaultInventoryCategory || 'مواد غذائية',
+    unit: settingsData.defaultInventoryUnit || 'حبة',
     quantity,
     purchasePrice,
     sellingPrice
   }), reqId);
 }
 
-function stepCartQty(idx, delta) {
-  const line = cartItems[idx];
-  if (!line) return;
-  updateCartQty(idx, Math.max(1, (parseInt(line.quantity, 10) || 1) + delta));
-}
-
-function updateCartQty(idx, newQtyVal) {
+function onCartQtyInput(idx, newQtyVal) {
   const qty = parseInt(newQtyVal, 10);
-  if (!Number.isFinite(qty) || qty <= 0) return;
+  if (!Number.isFinite(qty) || qty <= 0 || !cartItems[idx]) return;
   cartItems[idx].quantity = qty;
   cartItems[idx].stockQuantity = qty * (cartItems[idx].unitFactor || 1);
   cartItems[idx].totalPrice = Math.round(qty * cartItems[idx].unitPrice * 100) / 100;
   invoiceDirty = true;
-  if (document.getElementById('inv-type').value === 'CASH') {
-    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
-    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
-  }
+  const totEl = document.getElementById(`cart-line-total-${idx}`);
+  if (totEl) totEl.value = cartItems[idx].totalPrice;
+  syncCashPaidWithCart();
+  updateInvoiceTotals();
+}
+
+function onCartLineTotalInput(idx, newTotalVal) {
+  const total = parseFloat(newTotalVal);
+  if (!Number.isFinite(total) || total < 0 || !cartItems[idx]) return;
+  const qty = cartItems[idx].quantity || 1;
+  cartItems[idx].totalPrice = Math.round(total * 100) / 100;
+  cartItems[idx].unitPrice = Math.round((total / qty) * 10000) / 10000;
+  invoiceDirty = true;
+  const priceEl = document.getElementById(`cart-line-price-${idx}`);
+  if (priceEl) priceEl.value = cartItems[idx].unitPrice;
+  syncCashPaidWithCart();
+  updateInvoiceTotals();
+}
+
+function onCartUnitPriceInput(idx, newPriceVal) {
+  const price = parseFloat(newPriceVal);
+  if (!Number.isFinite(price) || price < 0 || !cartItems[idx]) return;
+  const qty = cartItems[idx].quantity || 1;
+  cartItems[idx].unitPrice = Math.round(price * 10000) / 10000;
+  cartItems[idx].totalPrice = Math.round(qty * price * 100) / 100;
+  invoiceDirty = true;
+  const totEl = document.getElementById(`cart-line-total-${idx}`);
+  if (totEl) totEl.value = cartItems[idx].totalPrice;
+  syncCashPaidWithCart();
+  updateInvoiceTotals();
+}
+
+function updateCartQty(idx, newQtyVal) {
+  const qty = parseInt(newQtyVal, 10);
+  if (!Number.isFinite(qty) || qty <= 0 || !cartItems[idx]) { renderCart(); return; }
+  cartItems[idx].quantity = qty;
+  cartItems[idx].stockQuantity = qty * (cartItems[idx].unitFactor || 1);
+  cartItems[idx].totalPrice = Math.round(qty * cartItems[idx].unitPrice * 100) / 100;
+  invoiceDirty = true;
+  syncCashPaidWithCart();
   renderCart();
 }
 
 function updateCartLineTotal(idx, newTotalVal) {
   const total = parseFloat(newTotalVal);
-  if (!Number.isFinite(total) || total < 0) return;
+  if (!Number.isFinite(total) || total < 0 || !cartItems[idx]) { renderCart(); return; }
   const qty = cartItems[idx].quantity || 1;
   cartItems[idx].totalPrice = Math.round(total * 100) / 100;
   cartItems[idx].unitPrice = Math.round((total / qty) * 10000) / 10000;
   invoiceDirty = true;
-  if (document.getElementById('inv-type').value === 'CASH') {
-    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
-    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
-  }
+  syncCashPaidWithCart();
   renderCart();
 }
 
 function updateCartUnitPrice(idx, newPriceVal) {
   const price = parseFloat(newPriceVal);
-  if (!Number.isFinite(price) || price < 0) return;
+  if (!Number.isFinite(price) || price < 0 || !cartItems[idx]) { renderCart(); return; }
   const qty = cartItems[idx].quantity || 1;
   cartItems[idx].unitPrice = Math.round(price * 10000) / 10000;
   cartItems[idx].totalPrice = Math.round(qty * price * 100) / 100;
   invoiceDirty = true;
-  if (document.getElementById('inv-type').value === 'CASH') {
-    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
-    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
-  }
+  syncCashPaidWithCart();
   renderCart();
 }
 
 function updateCartItemName(idx, newNameVal) {
   const clean = (newNameVal || '').trim();
-  if (!clean) return;
+  if (!clean) { renderCart(); return; }
   const line = cartItems[idx];
   if (!line) return;
   const matched = inventoryData.find(x => (x.name || '').trim().toLowerCase() === clean.toLowerCase());
   line.itemName = clean;
   line.itemId = matched ? matched.id : 0;
   if (matched) {
-    // Preserve the selected package conversion when the replacement item supports it.
     const options = getInventoryUnitOptions(matched);
     const selected = options.find(o => o.name === line.unitName && o.factor === line.unitFactor) || options[0];
     line.unitName = selected.name;
     line.unitFactor = selected.factor;
   } else {
-    line.unitName = 'حبة';
+    line.unitName = settingsData.defaultInventoryUnit || 'حبة';
     line.unitFactor = 1;
   }
   line.stockQuantity = line.quantity * (line.unitFactor || 1);
   invoiceDirty = true;
+  syncCashPaidWithCart();
   renderCart();
 }
 
 function removeCartItem(index) {
   cartItems.splice(index, 1);
   invoiceDirty = true;
+  syncCashPaidWithCart();
   renderCart();
 }
 
@@ -2654,21 +2817,18 @@ function renderCart() {
   } else {
     tbody.innerHTML = cartItems.map((item, idx) => `
       <tr>
-        <td><input type="number" class="qty-inline-input" style="width:66px; color:var(--success-green);" min="0" step="0.01" value="${item.totalPrice}" onchange="updateCartLineTotal(${idx}, this.value)"></td>
+        <td><input type="number" id="cart-line-total-${idx}" class="qty-inline-input" style="color:var(--success-green);" min="0" step="0.01" value="${item.totalPrice}" oninput="onCartLineTotalInput(${idx}, this.value)" onchange="updateCartLineTotal(${idx}, this.value)"></td>
         <td>
-          <div class="quantity-stepper cart-quantity-stepper">
-            <button type="button" aria-label="تقليل الكمية" onclick="stepCartQty(${idx}, -1)">−</button>
-            <input type="number" class="qty-inline-input" min="1" step="1" value="${item.quantity}" onchange="updateCartQty(${idx}, this.value)">
-            <button type="button" aria-label="زيادة الكمية" onclick="stepCartQty(${idx}, 1)">+</button>
-          </div>
-          <small class="cart-unit-label">${escapeHtml(item.unitName || '')}</small>
+          <input type="number" lang="en" dir="ltr" inputmode="numeric" id="cart-line-qty-${idx}" class="qty-inline-input cart-qty-direct" min="1" step="1" value="${item.quantity}" oninput="onCartQtyInput(${idx}, this.value)" onchange="updateCartQty(${idx}, this.value)">
+          ${item.unitName ? `<small class="cart-unit-label">${escapeHtml(item.unitName)}</small>` : ''}
         </td>
-        <td><input type="text" class="inline-name-input" value="${escapeHtml(item.itemName)}" onchange="updateCartItemName(${idx}, this.value)"></td>
-        <td><input type="number" class="qty-inline-input" style="width:60px; color:var(--dark-header); background:#F5F8FF;" min="0" step="0.01" value="${item.unitPrice}" onchange="updateCartUnitPrice(${idx}, this.value)"></td>
+        <td><input type="text" id="cart-line-name-${idx}" class="inline-name-input" value="${escapeHtml(item.itemName)}" onchange="updateCartItemName(${idx}, this.value)"></td>
+        <td><input type="number" id="cart-line-price-${idx}" class="qty-inline-input" style="color:var(--dark-header); background:#F5F8FF;" min="0" step="0.0001" value="${item.unitPrice}" oninput="onCartUnitPriceInput(${idx}, this.value)" onchange="updateCartUnitPrice(${idx}, this.value)"></td>
         <td><button type="button" class="tbl-action-btn del" onclick="removeCartItem(${idx})">حذف</button></td>
       </tr>
     `).join('');
   }
+  enforceEnglishNumericFields(tbody);
   updateInvoiceTotals();
 }
 
@@ -2684,7 +2844,7 @@ function setPaymentMode(mode) {
     document.getElementById('inv-type').value = mode;
   }
   const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
-  document.getElementById('inv-paid').value = mode === 'CASH' && subtotal > 0
+  document.getElementById('inv-paid').value = mode === 'CASH' && settingsData.autoFillCashPaid !== false && subtotal > 0
     ? String(Math.round(subtotal * 100) / 100)
     : '';
   invoiceDirty = true;
@@ -2694,11 +2854,7 @@ function setPaymentMode(mode) {
 
 function updatePaymentModeButtons() {
   const type = document.getElementById('inv-type').value;
-  const cashBtn = document.getElementById('btn-mode-cash');
-  const creditBtn = document.getElementById('btn-mode-credit');
-  if (cashBtn) cashBtn.classList.toggle('active-cash', type === 'CASH');
-  if (creditBtn) creditBtn.classList.toggle('active-credit', type === 'CREDIT');
-  if (type === 'CASH') {
+  if (type === 'CASH' && settingsData.autoFillCashPaid !== false) {
     const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
     const paidEl = document.getElementById('inv-paid');
     if (paidEl && subtotal > 0 && (!paidEl.value || parseFloat(paidEl.value) === 0)) {
@@ -2767,8 +2923,26 @@ function computeExchangeChange() {
   outEl.textContent = parts.length ? parts.join('   |   ') : 'أدخل المبلغ المستلم لحساب الباقي أو التحويل';
 }
 
+function resolveSelectedPartyName(type, partyId) {
+  if (partyId > 0) {
+    if (type === 'PURCHASE') {
+      const s = suppliersData.find(x => Number(x.id) === partyId);
+      if (s && s.name) return s.name;
+    } else {
+      const c = customersData.find(x => Number(x.id) === partyId);
+      if (c && c.name) return c.name;
+    }
+  }
+  const partySelect = document.getElementById('inv-party');
+  const selectedOpt = partySelect && partySelect.options ? partySelect.options[partySelect.selectedIndex] : null;
+  if (selectedOpt && selectedOpt.dataset && selectedOpt.dataset.partyName) {
+    return selectedOpt.dataset.partyName.trim() || (type === 'PURCHASE' ? '' : 'عميل نقدي');
+  }
+  return type === 'PURCHASE' ? '' : 'عميل نقدي';
+}
+
 function saveInvoiceAction(followUpAction) {
-  if (!window.Android) return;
+  if (!window.Android || isSavingInvoice) return;
 
   if (editingInvoiceId > 0 && !invoiceDirty && followUpAction !== 'NONE') {
     runInvoiceFollowUp(editingInvoiceId, followUpAction);
@@ -2778,10 +2952,7 @@ function saveInvoiceAction(followUpAction) {
   const number = (document.getElementById('inv-number').value || '').trim();
   const type = document.getElementById('inv-type').value;
   const partyId = parseInt(document.getElementById('inv-party').value, 10) || 0;
-  const partySelect = document.getElementById('inv-party');
-  const partyName = partySelect.options[partySelect.selectedIndex]
-    ? partySelect.options[partySelect.selectedIndex].text.split('(')[0].trim()
-    : 'عميل نقدي';
+  const partyName = resolveSelectedPartyName(type, partyId);
   const rawPaid = document.getElementById('inv-paid').value;
   const paid = rawPaid === '' ? 0 : (parseFloat(rawPaid) || 0);
   const invDateEl = document.getElementById('inv-date');
@@ -2816,21 +2987,28 @@ function saveInvoiceAction(followUpAction) {
     date: dateMillis
   };
 
-  const reqId = nextReqId((data) => {
-    const savedId = (data && data.invoiceId) ? data.invoiceId : editingInvoiceId;
-    editingInvoiceId = savedId;
-    invoiceDirty = false;
-    document.getElementById('invoice-saved-badge').classList.remove('hidden');
-    updateInvoiceModeUI();
-    if (followUpAction && followUpAction !== 'NONE' && savedId > 0) {
-      runInvoiceFollowUp(savedId, followUpAction);
-    } else {
-      // A normal successful save returns to the invoice register; failures stay on this form.
-      editingInvoiceId = 0;
+  setInvoiceSubmitBusy(true);
+  const reqId = nextReqId(
+    (data) => {
+      setInvoiceSubmitBusy(false);
+      const savedId = (data && data.invoiceId) ? data.invoiceId : editingInvoiceId;
+      editingInvoiceId = savedId;
       invoiceDirty = false;
-      switchView('invoices', false);
+      document.getElementById('invoice-saved-badge').classList.remove('hidden');
+      updateInvoiceModeUI();
+      if (followUpAction && followUpAction !== 'NONE' && savedId > 0) {
+        runInvoiceFollowUp(savedId, followUpAction);
+      } else {
+        // A normal successful save returns to the invoice register; failures stay on this form.
+        editingInvoiceId = 0;
+        invoiceDirty = false;
+        switchView('invoices', false);
+      }
+    },
+    () => {
+      setInvoiceSubmitBusy(false);
     }
-  });
+  );
   window.Android.saveInvoice(JSON.stringify(payload), reqId);
 }
 
@@ -2892,7 +3070,7 @@ window.onThermalPreviewData = function (jsonStr) {
 
     const waBtn = document.getElementById('btn-preview-wa-share');
     const pdfBtn = document.getElementById('btn-preview-open-pdf');
-    if (waBtn) waBtn.classList.toggle('hidden', kind !== 'INVOICE' && kind !== 'STATEMENT' && kind !== 'REPORT');
+    if (waBtn) waBtn.classList.toggle('hidden', kind !== 'INVOICE' && kind !== 'STATEMENT' && kind !== 'REPORT' && kind !== 'NOTE');
     if (pdfBtn) pdfBtn.classList.toggle('hidden', kind === 'TX');
 
     switchView('thermal-preview');
@@ -2946,6 +3124,8 @@ function shareActivePreviewImage() {
     window.Android.shareStatementWhatsAppPdf(st.extraStr, st.targetId, nextReqId());
   } else if (st.kind === 'REPORT') {
     window.Android.shareReportWhatsAppPdf(st.startMillis, st.endMillis, st.extraStr, nextReqId());
+  } else if (st.kind === 'NOTE' && st.targetId) {
+    window.Android.shareNoteWhatsApp(st.targetId, nextReqId());
   }
 }
 
@@ -2958,6 +3138,8 @@ function openActivePreviewPdf() {
     window.Android.exportStatementPdf(st.extraStr, st.targetId, nextReqId());
   } else if (st.kind === 'REPORT') {
     window.Android.exportFinancialReportPdf(st.startMillis, st.endMillis, st.extraStr, nextReqId());
+  } else if (st.kind === 'NOTE' && st.targetId) {
+    window.Android.exportNotePdf(st.targetId, nextReqId());
   }
 }
 
@@ -3005,11 +3187,25 @@ function renderNoteRows(side) {
   if (!rows.length) rows.push({ qty: '', detail: '' });
   body.innerHTML = rows.map((_, index) => noteRowMarkup(side, index)).join('');
 }
+let notePreviewVisible = true;
+let notePreviewTimer = null;
+
+function scheduleNoteThermalPreviewRefresh(delayMs = 220) {
+  if (!notePreviewVisible) return;
+  clearTimeout(notePreviewTimer);
+  notePreviewTimer = setTimeout(() => {
+    refreshNoteThermalPreview();
+  }, delayMs);
+}
+
 function renderNoteEditor() {
   renderNoteRows('right'); renderNoteRows('left');
   refreshContextSuggestions();
   const status = document.getElementById('note-editor-status');
   if (status) status.textContent = noteEditorId ? 'تعديل ملاحظة محفوظة' : 'ملاحظة جديدة غير محفوظة';
+  const toggleBtn = document.getElementById('btn-note-preview-toggle');
+  if (toggleBtn) toggleBtn.textContent = notePreviewVisible ? 'إخفاء المعاينة' : 'معاينة حرارية';
+  scheduleNoteThermalPreviewRefresh(60);
 }
 function updateNoteCell(side, index, field, value) {
   const rows = noteRowsFor(side);
@@ -3021,6 +3217,7 @@ function updateNoteCell(side, index, field, value) {
     const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
     if (body) body.insertAdjacentHTML('beforeend', noteRowMarkup(side, rows.length - 1));
   }
+  scheduleNoteThermalPreviewRefresh(260);
 }
 function removeNoteRow(side, index) {
   const rows = noteRowsFor(side);
@@ -3034,6 +3231,7 @@ function removeNoteRow(side, index) {
   renderNoteRows(side);
   const status = document.getElementById('note-editor-status');
   if (status) status.textContent = noteEditorId ? 'تعديل ملاحظة محفوظة — توجد تغييرات غير محفوظة' : 'ملاحظة جديدة غير محفوظة';
+  scheduleNoteThermalPreviewRefresh(80);
 }
 function startNewNote() {
   noteEditorId = 0;
@@ -3054,8 +3252,12 @@ function saveCurrentNote() {
   window.Android.saveNote(JSON.stringify({ id: noteEditorId, rightRows, leftRows }), nextReqId());
 }
 window.onNoteSaved = function (jsonStr) {
-  try { noteEditorId = Number(JSON.parse(jsonStr).id) || 0; renderNoteEditor(); refreshContextSuggestions(); }
-  catch (e) { console.error(e); }
+  try {
+    noteEditorId = Number(JSON.parse(jsonStr).id) || 0;
+    noteEditorDirty = false;
+    renderNoteEditor();
+    refreshContextSuggestions();
+  } catch (e) { console.error(e); }
 };
 window.onNotesData = function (jsonStr) {
   try {
@@ -3106,7 +3308,66 @@ function requireSavedNote() {
   if (noteEditorDirty) { showToast('احفظ التعديلات أولاً قبل الطباعة أو المشاركة'); return false; }
   return true;
 }
-function printCurrentNote() { if (window.Android && requireSavedNote()) window.Android.printNote(noteEditorId, nextReqId()); }
+function toggleNoteThermalPreview(forceState) {
+  const card = document.getElementById('note-thermal-preview-card');
+  const btn = document.getElementById('btn-note-preview-toggle');
+  if (!card) return;
+  notePreviewVisible = typeof forceState === 'boolean' ? forceState : card.classList.contains('hidden');
+  card.classList.toggle('hidden', !notePreviewVisible);
+  if (btn) btn.textContent = notePreviewVisible ? 'إخفاء المعاينة' : 'معاينة حرارية';
+  if (notePreviewVisible) {
+    refreshNoteThermalPreview();
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+function refreshNoteThermalPreview() {
+  const card = document.getElementById('note-thermal-preview-card');
+  if (!card || !window.Android || !window.Android.previewNoteThermalDraft) return;
+  const payload = {
+    id: noteEditorId || 0,
+    rightRows: notePayloadRows(noteRightRows),
+    leftRows: notePayloadRows(noteLeftRows),
+    updatedAt: Date.now()
+  };
+  const reqId = nextReqId(data => {
+    if (!data || !data.imageBase64) return;
+    const img = document.getElementById('note-thermal-preview-img');
+    const badge = document.getElementById('note-preview-width-badge');
+    const status = document.getElementById('note-preview-printer-status');
+    const b58 = document.getElementById('note-preview-58-btn');
+    const b80 = document.getElementById('note-preview-80-btn');
+    if (img) img.src = 'data:image/png;base64,' + data.imageBase64;
+    if (badge) badge.textContent = `${data.widthMm} مم`;
+    if (b58) b58.classList.toggle('is-active', Number(data.widthMm) === 58);
+    if (b80) b80.classList.toggle('is-active', Number(data.widthMm) === 80);
+    if (status) {
+      status.textContent = data.connected
+        ? `متصل بالطابعة: ${data.printerName || 'طابعة بلوتوث'}`
+        : 'الطابعة غير متصلة حالياً — المعاينة جاهزة، يمكنك الاتصال بالطابعة من الإعدادات';
+    }
+  });
+  window.Android.previewNoteThermalDraft(JSON.stringify(payload), reqId);
+}
+function switchNotePreviewWidth(widthMm) {
+  if (!window.Android) return;
+  window.Android.setPrinterWidth(widthMm, nextReqId(() => {
+    refreshNoteThermalPreview();
+  }));
+}
+function openFullNoteThermalPreview() {
+  if (!window.Android || !requireSavedNote()) return;
+  thermalReturnView = 'notes';
+  window.Android.previewGenericThermal('NOTE', noteEditorId, '', 0, 0, nextReqId());
+}
+function saveNoteThermalImage() {
+  if (!window.Android || !requireSavedNote()) return;
+  window.Android.saveGenericThermalToAppFolder('NOTE', noteEditorId, '', 0, 0, nextReqId());
+}
+function printCurrentNote() {
+  if (!window.Android || !requireSavedNote()) return;
+  thermalReturnView = 'notes';
+  window.Android.printNote(noteEditorId, nextReqId());
+}
 function exportCurrentNotePdf() { if (window.Android && requireSavedNote()) window.Android.exportNotePdf(noteEditorId, nextReqId()); }
 function shareCurrentNoteWhatsApp() { if (window.Android && requireSavedNote()) window.Android.shareNoteWhatsApp(noteEditorId, nextReqId()); }
 
@@ -3192,7 +3453,7 @@ window.onReportsData = function (jsonStr) {
       <div class="metrics-grid">
         <div class="metric-card"><div class="title">مبيعات الفترة (${data.invoiceCount || 0} فاتورة)</div><div class="value text-success">${fmtMoney(data.sales)} ${escapeHtml(appCurrency)}</div></div>
         <div class="metric-card"><div class="title">صافي الربح (بعد COGS)</div><div class="value text-primary">${fmtMoney(data.grossProfit)} ${escapeHtml(appCurrency)}</div></div>
-        ${Number(data.uncostedSalesLineCount || 0) > 0 ? `<div class="info-pill" style="grid-column:1/-1;color:var(--danger);">تنبيه: ${Number(data.uncostedSalesLineCount)} سطر بيع لا تتوفر له تكلفة محفوظة؛ الربح المعروض غير مكتمل. راجع فواتير البيع القديمة.</div>` : ''}
+        ${settingsData.showUncostedProfitWarning !== false && Number(data.uncostedSalesLineCount || 0) > 0 ? `<div class="info-pill" style="grid-column:1/-1;color:var(--danger);">تنبيه: ${Number(data.uncostedSalesLineCount)} سطر بيع لا تتوفر له تكلفة محفوظة؛ الربح المعروض غير مكتمل. راجع فواتير البيع القديمة.</div>` : ''}
         <div class="metric-card"><div class="title">تكلفة البضاعة المباعة</div><div class="value text-dark">${fmtMoney(data.cogs)} ${escapeHtml(appCurrency)}</div></div>
         <div class="metric-card"><div class="title">إجمالي المشتريات</div><div class="value text-dark">${fmtMoney(data.purchases)} ${escapeHtml(appCurrency)}</div></div>
         <div class="metric-card"><div class="title">ديون العملاء</div><div class="value text-danger">${fmtMoney(data.debts)} ${escapeHtml(appCurrency)}</div></div>
@@ -3222,45 +3483,184 @@ window.onReportsData = function (jsonStr) {
   }
 };
 
-// ---------------- Settings & Bluetooth ----------------
+// ---------------- Advanced 7-Section Settings, Bluetooth & Backup ----------------
+
+function applyUiPreferences() {
+  if (!document.body) return;
+  const scale = (settingsData.uiTextScale || 'NORMAL').toUpperCase();
+  document.body.classList.toggle('text-scale-small', scale === 'SMALL');
+  document.body.classList.toggle('text-scale-large', scale === 'LARGE');
+  document.body.classList.toggle('compact-lists', Boolean(settingsData.compactLists));
+}
+
+function scrollToSettingsSection(sectionId, btn) {
+  document.querySelectorAll('#settings-section-pills .pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const el = document.getElementById(sectionId);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setCheckboxValue(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.checked = Boolean(val);
+}
+
+function setControlValue(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val ?? '';
+}
 
 window.onSettingsData = function (jsonStr) {
   try {
-    settingsData = JSON.parse(jsonStr);
+    const incoming = JSON.parse(jsonStr);
+    settingsData = { ...settingsData, ...incoming };
     appCurrency = settingsData.currency || appCurrency;
     storeName = settingsData.storeName || storeName;
     document.getElementById('app-title').textContent = storeName;
     document.getElementById('drawer-store-name').textContent = storeName;
 
-    document.getElementById('set-store-name').value = settingsData.storeName || '';
-    document.getElementById('set-store-phone').value = settingsData.storePhone || '';
-    document.getElementById('set-store-address').value = settingsData.storeAddress || '';
-    document.getElementById('set-currency').value = settingsData.currency || 'ر.ي';
+    applyUiPreferences();
 
+    if (!settingsLoadedOnce) {
+      settingsLoadedOnce = true;
+      inventorySort = settingsData.defaultInventorySort || 'NAME';
+      const invSortEl = document.getElementById('inventory-sort');
+      if (invSortEl) invSortEl.value = inventorySort;
+
+      reportRange = settingsData.defaultReportRange || 'ALL';
+      const rangeOrder = ['ALL', 'TODAY', 'WEEK', 'MONTH'];
+      document.querySelectorAll('#report-range-tabs .pill').forEach((p, idx) => {
+        p.classList.toggle('active', rangeOrder[idx] === reportRange);
+      });
+    }
+
+    // Section 1: General
+    setControlValue('set-store-name', settingsData.storeName || '');
+    setControlValue('set-store-phone', settingsData.storePhone || '');
+    setControlValue('set-store-address', settingsData.storeAddress || '');
+    setControlValue('set-currency', settingsData.currency || 'ر.ي');
+    setControlValue('set-ui-text-scale', settingsData.uiTextScale || 'NORMAL');
+    setCheckboxValue('set-compact-lists', settingsData.compactLists);
+
+    // Section 2: Invoices
+    setControlValue('set-default-invoice-type', settingsData.defaultInvoiceType || 'CASH');
+    setControlValue('set-quick-party-count', settingsData.quickPartyCount ?? 5);
+    setCheckboxValue('set-auto-fill-cash-paid', settingsData.autoFillCashPaid !== false);
+    setCheckboxValue('set-confirm-delete-invoice', settingsData.confirmBeforeDeleteInvoice !== false);
+
+    // Section 3: Inventory
+    setControlValue('set-low-stock-threshold', settingsData.lowStockThreshold ?? 10);
+    setControlValue('set-default-inventory-sort', settingsData.defaultInventorySort || 'NAME');
+    setControlValue('set-default-inventory-unit', settingsData.defaultInventoryUnit || 'حبة');
+    setControlValue('set-default-inventory-category', settingsData.defaultInventoryCategory || 'مواد غذائية');
+
+    // Section 4: Customers & Suppliers
+    setControlValue('set-default-customer-sort', settingsData.defaultCustomerSort || 'NAME');
+    setCheckboxValue('set-prompt-wa-tx', settingsData.promptWhatsAppAfterTx !== false);
+    setCheckboxValue('set-show-zero-balance', settingsData.showZeroBalanceParties !== false);
+
+    // Section 5: Reports
+    setControlValue('set-default-report-range', settingsData.defaultReportRange || 'ALL');
+    setCheckboxValue('set-show-uncosted-warning', settingsData.showUncostedProfitWarning !== false);
+
+    // Section 6: Printing & Sharing
     const w58 = document.getElementById('width-btn-58');
     const w80 = document.getElementById('width-btn-80');
-    w58.className = settingsData.printerWidthMm === 58 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
-    w80.className = settingsData.printerWidthMm === 80 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
-
+    if (w58) w58.className = settingsData.printerWidthMm === 58 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
+    if (w80) w80.className = settingsData.printerWidthMm === 80 ? 'btn btn-primary btn-compact' : 'btn btn-outline btn-compact';
     const statusEl = document.getElementById('printer-status-text');
-    statusEl.textContent = settingsData.printerConnected
-      ? `متصل بالطابعة: ${settingsData.connectedPrinterName || settingsData.connectedPrinterAddress}`
-      : 'حالة الطابعة: غير متصل';
-    document.getElementById('btn-disconnect-printer').classList.toggle('hidden', !settingsData.printerConnected);
+    if (statusEl) {
+      statusEl.textContent = settingsData.printerConnected
+        ? `متصل بالطابعة: ${settingsData.connectedPrinterName || settingsData.connectedPrinterAddress}`
+        : 'حالة الطابعة: غير متصل';
+    }
+    const discBtn = document.getElementById('btn-disconnect-printer');
+    if (discBtn) discBtn.classList.toggle('hidden', !settingsData.printerConnected);
+    setCheckboxValue('set-require-thermal-preview', settingsData.requireThermalPreview !== false);
+    setCheckboxValue('set-auto-save-thermal-img', settingsData.autoSaveThermalImage);
+    setCheckboxValue('set-auto-open-pdf', settingsData.autoOpenPdfAfterExport !== false);
+    setCheckboxValue('set-prefer-wa-direct', settingsData.preferWhatsAppDirect !== false);
+
+    // Section 7: Backup & Folder Status (NO saved-files list)
+    const folderPill = document.getElementById('app-folder-status-pill');
+    if (folderPill) {
+      const linkNote = settingsData.linkedFolderActive ? 'مجلد مخصص مرتبط ✓' : 'حفظ تلقائي في التنزيلات ✓';
+      folderPill.textContent = `المسار: ${settingsData.folderDisplayPath || 'Download/بقاله العزي'}  •  ${linkNote}`;
+    }
+    const linkBtn = document.getElementById('btn-link-app-folder');
+    if (linkBtn) {
+      linkBtn.textContent = settingsData.linkedFolderActive ? 'إلغاء ربط المجلد' : 'ربط مجلد بقاله العزي';
+    }
+    const safetyRow = document.getElementById('safety-backup-row');
+    if (safetyRow) {
+      safetyRow.classList.toggle('hidden', !settingsData.hasSafetyBackup);
+    }
+
+    if (currentView === 'inventory') renderInventoryList();
+    if (currentView === 'customers') renderCustomersList();
+    if (currentView === 'suppliers') renderSuppliersList();
+    if (currentView === 'reports') loadReports();
   } catch (e) {
     console.error(e);
   }
 };
 
 function saveStoreSettings() {
+  saveAllAdvancedSettings();
+}
+
+function saveAllAdvancedSettings() {
   if (!window.Android) return;
+  const quickCountRaw = parseInt(document.getElementById('set-quick-party-count')?.value, 10);
+  const lowThresholdRaw = parseInt(document.getElementById('set-low-stock-threshold')?.value, 10);
   const payload = {
-    storeName: document.getElementById('set-store-name').value,
-    storePhone: document.getElementById('set-store-phone').value,
-    storeAddress: document.getElementById('set-store-address').value,
-    currency: document.getElementById('set-currency').value
+    storeName: (document.getElementById('set-store-name')?.value || '').trim() || 'بقالة العزي للمواد الغذائية',
+    storePhone: (document.getElementById('set-store-phone')?.value || '').trim(),
+    storeAddress: (document.getElementById('set-store-address')?.value || '').trim(),
+    currency: (document.getElementById('set-currency')?.value || '').trim() || 'ر.ي',
+    uiTextScale: document.getElementById('set-ui-text-scale')?.value || 'NORMAL',
+    compactLists: Boolean(document.getElementById('set-compact-lists')?.checked),
+    defaultInvoiceType: document.getElementById('set-default-invoice-type')?.value || 'CASH',
+    quickPartyCount: Number.isFinite(quickCountRaw) ? Math.max(3, Math.min(12, quickCountRaw)) : 5,
+    autoFillCashPaid: Boolean(document.getElementById('set-auto-fill-cash-paid')?.checked),
+    confirmBeforeDeleteInvoice: Boolean(document.getElementById('set-confirm-delete-invoice')?.checked),
+    lowStockThreshold: Number.isFinite(lowThresholdRaw) ? Math.max(1, Math.min(500, lowThresholdRaw)) : 10,
+    defaultInventorySort: document.getElementById('set-default-inventory-sort')?.value || 'NAME',
+    defaultInventoryUnit: (document.getElementById('set-default-inventory-unit')?.value || '').trim() || 'حبة',
+    defaultInventoryCategory: (document.getElementById('set-default-inventory-category')?.value || '').trim() || 'مواد غذائية',
+    defaultCustomerSort: document.getElementById('set-default-customer-sort')?.value || 'NAME',
+    promptWhatsAppAfterTx: Boolean(document.getElementById('set-prompt-wa-tx')?.checked),
+    showZeroBalanceParties: Boolean(document.getElementById('set-show-zero-balance')?.checked),
+    defaultReportRange: document.getElementById('set-default-report-range')?.value || 'ALL',
+    showUncostedProfitWarning: Boolean(document.getElementById('set-show-uncosted-warning')?.checked),
+    printerWidthMm: settingsData.printerWidthMm === 80 ? 80 : 58,
+    requireThermalPreview: Boolean(document.getElementById('set-require-thermal-preview')?.checked),
+    autoSaveThermalImage: Boolean(document.getElementById('set-auto-save-thermal-img')?.checked),
+    autoOpenPdfAfterExport: Boolean(document.getElementById('set-auto-open-pdf')?.checked),
+    preferWhatsAppDirect: Boolean(document.getElementById('set-prefer-wa-direct')?.checked)
   };
-  window.Android.saveStoreSettings(JSON.stringify(payload), nextReqId());
+  inventorySort = payload.defaultInventorySort;
+  const invSortEl = document.getElementById('inventory-sort');
+  if (invSortEl) invSortEl.value = inventorySort;
+
+  reportRange = payload.defaultReportRange;
+  const rangeOrder = ['ALL', 'TODAY', 'WEEK', 'MONTH'];
+  document.querySelectorAll('#report-range-tabs .pill').forEach((p, idx) => {
+    p.classList.toggle('active', rangeOrder[idx] === reportRange);
+  });
+
+  window.Android.saveAdvancedSettings(JSON.stringify(payload), nextReqId());
+}
+
+function askResetSettings(show) {
+  const box = document.getElementById('reset-settings-confirm');
+  if (box) box.classList.toggle('hidden', !show);
+}
+
+function confirmResetSettings() {
+  if (!window.Android) return;
+  settingsLoadedOnce = false;
+  window.Android.resetAdvancedSettings(nextReqId(() => askResetSettings(false)));
 }
 
 function setPrinterWidth(widthMm) {
@@ -3278,6 +3678,7 @@ window.onBluetoothDevices = function (jsonStr) {
   try {
     const data = JSON.parse(jsonStr);
     const container = document.getElementById('bluetooth-devices-list');
+    if (!container) return;
     if (!data.available) {
       container.innerHTML = '<div class="muted-text">هذا الجهاز لا يدعم البلوتوث</div>';
       return;
@@ -3320,17 +3721,6 @@ function printTestReceipt() {
   }
 }
 
-let appFolderData = {
-  folderDisplayPath: 'Download/بقاله العزي',
-  linkedTreeActive: false,
-  isPublicDownloadsApiSupported: true,
-  files: []
-};
-let folderFilter = 'ALL';
-let renderedFolderFiles = [];
-let pendingRestoreFolderIdx = -1;
-let pendingDeleteFolderIdx = -1;
-
 function exportBackupToFolder() {
   if (!window.Android) return;
   window.Android.exportBackupToAppFolder(nextReqId());
@@ -3350,165 +3740,21 @@ function triggerRestore() {
 
 function linkAppFolder() {
   if (!window.Android) return;
-  if (appFolderData.linkedTreeActive) {
+  if (settingsData.linkedFolderActive) {
     window.Android.unlinkAppFolder(nextReqId());
   } else {
     window.Android.linkAppFolder();
   }
 }
 
-function refreshAppFolderFiles() {
-  if (window.Android) {
-    window.Android.getAppFolderFiles();
-  }
+function toggleSafetyRestoreConfirm(show) {
+  const box = document.getElementById('restore-safety-confirm');
+  if (box) box.classList.toggle('hidden', !show);
 }
 
-function setFolderFilter(filter, btn) {
-  folderFilter = filter;
-  pendingRestoreFolderIdx = -1;
-  pendingDeleteFolderIdx = -1;
-  document.querySelectorAll('#folder-filter-tabs .pill').forEach(p => p.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderAppFolderFiles();
-}
-
-window.onAppFolderFilesData = function (jsonStr) {
-  try {
-    appFolderData = JSON.parse(jsonStr);
-    pendingRestoreFolderIdx = -1;
-    pendingDeleteFolderIdx = -1;
-    const pill = document.getElementById('app-folder-status-pill');
-    if (pill) {
-      const linkNote = appFolderData.linkedTreeActive
-        ? 'مرتبط بالذاكرة ✓'
-        : (appFolderData.isPublicDownloadsApiSupported ? 'حفظ تلقائي في التنزيلات ✓' : 'مجلد التطبيق المحلي');
-      const count = (appFolderData.files || []).length;
-      pill.textContent = `المسار: ${appFolderData.folderDisplayPath || 'Download/بقاله العزي'}  •  ${linkNote}  •  ${count} ملف`;
-    }
-    const linkBtn = document.getElementById('btn-link-app-folder');
-    if (linkBtn) {
-      linkBtn.textContent = appFolderData.linkedTreeActive ? 'إلغاء ربط المجلد' : 'ربط مجلد بقاله العزي';
-    }
-    renderAppFolderFiles();
-  } catch (e) {
-    console.error(e);
-  }
-};
-
-function fmtFileSize(bytes) {
-  const b = Number(bytes) || 0;
-  if (b < 1024) return `${b} بايت`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} ك.ب`;
-  return `${(b / (1024 * 1024)).toFixed(2)} م.ب`;
-}
-
-function folderCategoryBadge(cat) {
-  switch (cat) {
-    case 'BACKUP': return '<span class="badge badge-green">نسخة احتياطية</span>';
-    case 'PDF': return '<span class="badge badge-blue">فاتورة PDF</span>';
-    case 'IMAGE': return '<span class="badge badge-amber">صورة</span>';
-    case 'REPORT': return '<span class="badge badge-blue">تقرير</span>';
-    default: return '<span class="badge badge-blue">ملف</span>';
-  }
-}
-
-function renderAppFolderFiles() {
-  const container = document.getElementById('app-folder-files-list');
-  if (!container) return;
-
-  const all = appFolderData.files || [];
-  renderedFolderFiles = all.filter(f => folderFilter === 'ALL' || f.category === folderFilter);
-
-  if (renderedFolderFiles.length === 0) {
-    container.innerHTML = '<div class="empty-state" style="padding:12px;">لا توجد ملفات محفوظة في هذا القسم بعد</div>';
-    return;
-  }
-
-  container.innerHTML = renderedFolderFiles.map((f, idx) => {
-    const isBackup = f.category === 'BACKUP';
-    const isConfirmRestore = pendingRestoreFolderIdx === idx;
-    const isConfirmDelete = pendingDeleteFolderIdx === idx;
-
-    let actionButtons = '';
-    if (isConfirmRestore) {
-      actionButtons = `
-        <button type="button" class="tbl-action-btn" style="color:var(--success-green); border-color:#86EFAC;" onclick="confirmRestoreFolderFile(${idx})">تأكيد الاستعادة</button>
-        <button type="button" class="tbl-action-btn" onclick="cancelFolderConfirm()">إلغاء</button>
-      `;
-    } else if (isConfirmDelete) {
-      actionButtons = `
-        <button type="button" class="tbl-action-btn del" onclick="confirmDeleteFolderFile(${idx})">تأكيد الحذف</button>
-        <button type="button" class="tbl-action-btn" onclick="cancelFolderConfirm()">لا</button>
-      `;
-    } else {
-      const primaryBtn = isBackup
-        ? `<button type="button" class="tbl-action-btn" style="color:var(--success-green); border-color:#86EFAC;" onclick="askRestoreFolderFile(${idx})">استعادة</button>`
-        : `<button type="button" class="tbl-action-btn" onclick="openFolderFile(${idx})">فتح</button>`;
-      actionButtons = `
-        ${primaryBtn}
-        <button type="button" class="tbl-action-btn" onclick="shareFolderFile(${idx})">مشاركة</button>
-        <button type="button" class="tbl-action-btn del" onclick="askDeleteFolderFile(${idx})">حذف</button>
-      `;
-    }
-
-    const subText = f.subfolder ? `${f.subfolder} • ` : '';
-    return `
-      <div class="card compact-card" style="margin-bottom:5px; padding:8px;">
-        <div class="card-title-row" style="margin-bottom:4px;">
-          <div style="min-width:0; flex:1;">
-            <strong style="font-size:12.5px; word-break:break-word;">${escapeHtml(f.displayName)}</strong>
-            <div class="muted-text" style="font-size:11px;">${escapeHtml(subText)}${fmtFileSize(f.sizeBytes)} • ${fmtShortDate(f.modifiedMillis)}</div>
-          </div>
-          ${folderCategoryBadge(f.category)}
-        </div>
-        <div class="btn-row-compact">${actionButtons}</div>
-      </div>
-    `;
-  }).join('');
-}
-
-function cancelFolderConfirm() {
-  pendingRestoreFolderIdx = -1;
-  pendingDeleteFolderIdx = -1;
-  renderAppFolderFiles();
-}
-
-function askRestoreFolderFile(idx) {
-  pendingDeleteFolderIdx = -1;
-  pendingRestoreFolderIdx = idx;
-  renderAppFolderFiles();
-}
-
-function confirmRestoreFolderFile(idx) {
-  const f = renderedFolderFiles[idx];
-  if (!f || !window.Android) return;
-  pendingRestoreFolderIdx = -1;
-  window.Android.restoreBackupFromAppFolder(f.uriString, nextReqId());
-}
-
-function openFolderFile(idx) {
-  const f = renderedFolderFiles[idx];
-  if (!f || !window.Android) return;
-  window.Android.openAppFolderFile(f.uriString, f.mimeType || '*/*', nextReqId());
-}
-
-function shareFolderFile(idx) {
-  const f = renderedFolderFiles[idx];
-  if (!f || !window.Android) return;
-  window.Android.shareAppFolderFile(f.uriString, f.mimeType || '*/*', f.displayName, nextReqId());
-}
-
-function askDeleteFolderFile(idx) {
-  pendingRestoreFolderIdx = -1;
-  pendingDeleteFolderIdx = idx;
-  renderAppFolderFiles();
-}
-
-function confirmDeleteFolderFile(idx) {
-  const f = renderedFolderFiles[idx];
-  if (!f || !window.Android) return;
-  pendingDeleteFolderIdx = -1;
-  window.Android.deleteAppFolderFile(f.uriString, nextReqId());
+function confirmRestoreSafetyBackup() {
+  if (!window.Android) return;
+  window.Android.restoreSafetyBackup(nextReqId(() => toggleSafetyRestoreConfirm(false)));
 }
 
 function toggleResetConfirm(show) {
@@ -3526,6 +3772,9 @@ window.onload = function () {
   const label = document.getElementById('dash-date-label');
   if (label) {
     label.textContent = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
+  }
+  if (window.Android && window.Android.getSettings) {
+    window.Android.getSettings();
   }
   switchView('dashboard');
 };

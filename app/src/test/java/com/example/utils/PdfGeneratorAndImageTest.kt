@@ -275,6 +275,19 @@ class PdfGeneratorAndImageTest {
       assertEquals(expectedPx, repBmp.width)
       assertTrue(repBmp.height in 140..1400)
       assertTrue(BluetoothPrinterManager.renderBitmapToBase64(repBmp).length > 100)
+
+      val sampleNote = com.example.data.NoteEntity(
+        id = 7L,
+        createdAt = 1763312400000L,
+        updatedAt = 1763312400000L,
+        rightRowsJson = """[{"qty":"12","detail":"سكر 10 كيلو"},{"qty":"4","detail":"زيت دوار الشمس"}]""",
+        leftRowsJson = """[{"qty":"3","detail":"دقيق أبيض"}]"""
+      )
+      val noteBmp = BluetoothPrinterManager.buildNoteReceiptBitmap(context, sampleNote, widthMm)
+      assertEquals(expectedPx, noteBmp.width)
+      assertTrue(noteBmp.height in 140..1200)
+      assertTrue(BluetoothPrinterManager.convertBitmapToEscPos(noteBmp).size > 200)
+      assertTrue(BluetoothPrinterManager.renderBitmapToBase64(noteBmp).length > 100)
     }
   }
 

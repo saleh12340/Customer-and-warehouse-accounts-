@@ -43,6 +43,13 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
         .toDouble()
     }
 
+    fun roundUnitPrice(value: Double): Double {
+      require(value.isFinite() && abs(value) <= MAX_MONETARY_AMOUNT) { "سعر الوحدة خارج النطاق المسموح" }
+      return java.math.BigDecimal.valueOf(value)
+        .setScale(4, java.math.RoundingMode.HALF_UP)
+        .toDouble()
+    }
+
     fun validateInvoiceInput(
       invoiceNumber: String,
       type: String,

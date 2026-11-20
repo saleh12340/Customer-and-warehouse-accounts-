@@ -18,7 +18,9 @@ import com.example.data.FinancialReportSnapshot
 import com.example.data.InvoiceEntity
 import com.example.data.InvoiceItemEntity
 import com.example.data.LedgerEntryWithBalance
+import com.example.data.NoteEntity
 import com.example.data.TransactionReceiptSnapshot
+import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.text.SimpleDateFormat
@@ -579,6 +581,117 @@ object BluetoothPrinterManager {
       }
     }
 
+    canvas.drawLine(pad, y, width - pad, y, ruleLine)
+    y += 3f
+    y += drawRtl(canvas, settings.storeName, pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER)
+
+    return tightCropBitmap(bitmap, width, y)
+  }
+
+  /**
+   * Builds a compact, high-contrast HD thermal receipt bitmap for a two-panel note.
+   */
+  fun buildNoteReceiptBitmap(
+    context: Context,
+    note: NoteEntity,
+    paperWidthMm: Int = 58
+  ): Bitmap {
+    val settings = StorePreferences.getSettings(context)
+    val width = if (paperWidthMm == 80) 576 else 384
+    val isWide = width >= 576
+    val pad = if (isWide) 6f else 3f
+    val contentW = width - pad * 2
+
+    val titlePaint = textPaint(context, if (isWide) 28f else 22f, bold = true)
+    val boldPaint = textPaint(context, if (isWide) 20f else 16f, bold = true)
+    val bodyPaint = textPaint(context, if (isWide) 19f else 15f, bold = false)
+    val metaPaint = textPaint(context, if (isWide) 18f else 14f, bold = true)
+    val headerWhite = textPaint(context, if (isWide) 19.5f else 15.5f, bold = true, color = Color.WHITE)
+    val heavyLine = Paint().apply { color = Color.BLACK; strokeWidth = 2f; style = Paint.Style.STROKE }
+    val ruleLine = Paint().apply { color = Color.BLACK; strokeWidth = 1.2f; style = Paint.Style.STROKE }
+    val solidBlack = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
+
+    fun parseRows(json: String): List<Pair<String, String>> {
+      val arr = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
+      return (0 until arr.length()).mapNotNull { i ->
+        val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+        val qty = obj.optString("qty", "").trim()
+        val detail = obj.optString("detail", "").trim()
+        if (qty.isBlank() && detail.isBlank()) null else qty to detail
+      }
+    }
+
+    val rightRows = parseRows(note.rightRowsJson)
+    val leftRows = parseRows(note.leftRowsJson)
+    val qtyW = if (isWide) 104f else 72f
+    val detailW = contentW - qtyW
+
+    data class MeasuredNoteSection(val title: String, val rows: List<Triple<String, StaticLayout, Int>>)
+    val sections = buildList {
+      if (rightRows.isNotEmpty()) add("الشق الأول" to rightRows)
+      if (leftRows.isNotEmpty()) add("الشق الثاني" to leftRows)
+      if (isEmpty()) add("الملاحظة" to listOf("" to "لا توجد بنود مدخلة"))
+    }.map { (sectionTitle, list) ->
+      val measured = list.map { (qty, detail) ->
+        val detailLayout = buildRtlLayout(
+          text = detail.ifBlank { "—" },
+          paint = bodyPaint,
+          width = (detailW - 8f).toInt(),
+          alignment = Layout.Alignment.ALIGN_NORMAL,
+          maxLines = 40
+        )
+        val rowH = maxOf(if (isWide) 30 else 24, detailLayout.height + 6)
+        Triple(qty.ifBlank { "-" }, detailLayout, rowH)
+      }
+      MeasuredNoteSection(sectionTitle, measured)
+    }
+
+    val estH = 260 + sections.sumOf { sec -> 64 + sec.rows.sumOf { it.third } }
+    val bitmap = Bitmap.createBitmap(width, estH.coerceAtLeast(240), Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    canvas.drawColor(Color.WHITE)
+
+    var y = 4f
+    y += drawRtl(canvas, settings.storeName, pad, y, contentW, titlePaint, Layout.Alignment.ALIGN_CENTER) + 2f
+    val bannerH = if (isWide) 32f else 26f
+    canvas.drawRect(pad, y, width - pad, y + bannerH, solidBlack)
+    val noteTitle = if (note.id > 0L) "ملاحظة #${note.id}" else "معاينة ملاحظة"
+    drawRtl(canvas, noteTitle, pad + 4f, y + 2f, contentW - 8f, headerWhite, Layout.Alignment.ALIGN_CENTER)
+    y += bannerH + 4f
+
+    val dateStr = SimpleDateFormat("yy/MM/dd HH:mm", Locale.US).format(Date(note.updatedAt.takeIf { it > 0L } ?: System.currentTimeMillis()))
+    y += drawRtl(canvas, "التاريخ: $dateStr", pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER) + 4f
+
+    val colDetailX = pad
+    val colQtyX = pad + detailW
+    val thH = if (isWide) 30f else 25f
+
+    sections.forEach { section ->
+      y += drawRtl(canvas, section.title, pad, y, contentW, boldPaint, Layout.Alignment.ALIGN_NORMAL) + 2f
+      val tableTop = y
+      canvas.drawRect(pad, tableTop, width - pad, tableTop + thH, solidBlack)
+      drawRtl(canvas, "الكمية", colQtyX + 2f, tableTop + 2f, qtyW - 4f, headerWhite, Layout.Alignment.ALIGN_CENTER)
+      drawRtl(canvas, "التفاصيل", colDetailX + 4f, tableTop + 2f, detailW - 8f, headerWhite, Layout.Alignment.ALIGN_NORMAL)
+      y = tableTop + thH
+
+      section.rows.forEach { (qty, detailLayout, rowH) ->
+        val textY = y + 3f
+        drawRtl(canvas, qty, colQtyX + 2f, textY, qtyW - 4f, boldPaint, Layout.Alignment.ALIGN_CENTER)
+        canvas.save()
+        canvas.translate(colDetailX + 4f, textY)
+        detailLayout.draw(canvas)
+        canvas.restore()
+
+        y += rowH
+        canvas.drawLine(pad, y, width - pad, y, ruleLine)
+      }
+      canvas.drawLine(colQtyX, tableTop + thH, colQtyX, y, ruleLine)
+      canvas.drawRect(pad, tableTop, width - pad, y, heavyLine)
+      y += 6f
+    }
+
+    val totalCount = rightRows.size + leftRows.size
+    y += drawRtl(canvas, "إجمالي البنود: $totalCount", pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER) + 3f
     canvas.drawLine(pad, y, width - pad, y, ruleLine)
     y += 3f
     y += drawRtl(canvas, settings.storeName, pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER)

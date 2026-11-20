@@ -100,7 +100,7 @@ class AndroidBridge(
       val totalDebts = customers.sumOf { maxOf(it.balance, 0.0) }
       val totalPayables = suppliers.sumOf { maxOf(it.balance, 0.0) }
       val inventoryVal = inventory.sumOf { it.quantity.toDouble() * it.purchasePrice }
-      val lowStockCount = inventory.count { it.quantity <= 10 }
+      val lowStockCount = inventory.count { it.quantity <= settings.lowStockThreshold }
 
       val recent = JSONArray().apply {
         invoices.take(6).forEach { inv ->
@@ -126,6 +126,7 @@ class AndroidBridge(
         put("payables", totalPayables)
         put("inventoryVal", inventoryVal)
         put("lowStockCount", lowStockCount)
+        put("lowStockThreshold", settings.lowStockThreshold)
         put("customersCount", customers.size)
         put("suppliersCount", suppliers.size)
         put("inventoryCount", inventory.size)
@@ -433,9 +434,9 @@ class AndroidBridge(
           overwriteExisting = true
         )
         val uri = PdfGenerator.getUriForFile(activity, file)
-        getAppFolderFiles()
+        val settings = StorePreferences.getSettings(activity)
         activity.runOnUiThread {
-          val opened = WhatsAppHelper.openPdf(activity, uri)
+          val opened = if (settings.autoOpenPdfAfterExport) WhatsAppHelper.openPdf(activity, uri) else false
           notifyResult(reqId, true, if (opened) "تم حفظ وفتح ملف الملاحظة PDF ✓" else "تم حفظ ملف الملاحظة في ${saved?.displayPath ?: "مجلد ملفات التطبيق"} ✓")
         }
       } catch (e: Exception) {
@@ -459,19 +460,57 @@ class AndroidBridge(
           overwriteExisting = true
         )
         val uri = PdfGenerator.getUriForFile(activity, file)
-        getAppFolderFiles()
+        val settings = StorePreferences.getSettings(activity)
         activity.runOnUiThread {
           val ok = WhatsAppHelper.shareFile(
             context = activity,
             fileUri = uri,
             mimeType = "application/pdf",
-            message = "ملاحظة من ${StorePreferences.getSettings(activity).storeName}",
-            preferWhatsApp = true
+            message = "ملاحظة من ${settings.storeName}",
+            preferWhatsApp = settings.preferWhatsAppDirect
           )
-          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة الملاحظة عبر واتساب ✓" else "تعذر فتح واتساب؛ تم حفظ الملف في ${saved?.displayPath ?: "مجلد ملفات التطبيق"}")
+          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة الملاحظة ✓" else "تعذر فتح المشاركة؛ تم حفظ الملف في ${saved?.displayPath ?: "مجلد ملفات التطبيق"}")
         }
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذرت مشاركة الملاحظة")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun previewNoteThermalDraft(noteJson: String, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val obj = JSONObject(noteJson)
+        val id = obj.optLong("id", 0L)
+        val rightRows = obj.optJSONArray("rightRows") ?: JSONArray()
+        val leftRows = obj.optJSONArray("leftRows") ?: JSONArray()
+        val updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()).takeIf { it > 0L } ?: System.currentTimeMillis()
+        val draftNote = NoteEntity(
+          id = id,
+          createdAt = updatedAt,
+          updatedAt = updatedAt,
+          rightRowsJson = rightRows.toString(),
+          leftRowsJson = leftRows.toString()
+        )
+        val settings = StorePreferences.getSettings(activity)
+        val widthMm = settings.printerWidthMm
+        val bmp = BluetoothPrinterManager.buildNoteReceiptBitmap(activity, draftNote, widthMm)
+        val base64 = BluetoothPrinterManager.renderBitmapToBase64(bmp)
+        val sig = "NOTE_${id}_${rightRows.toString().hashCode()}_${leftRows.toString().hashCode()}_$widthMm"
+        verifiedThermalSignatures.add(sig)
+        val conn = BluetoothPrinterManager.getConnectionInfo()
+        val payload = JSONObject().apply {
+          put("id", id)
+          put("widthMm", widthMm)
+          put("connected", BluetoothPrinterManager.isConnected())
+          put("printerName", conn.first)
+          put("previewSignature", sig)
+          put("imageBase64", base64)
+        }
+        notifyResult(reqId, true, "تم تجهيز معاينة الملاحظة", payload.toString())
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر تجهيز المعاينة الحرارية للملاحظة")
       }
     }
   }
@@ -481,28 +520,32 @@ class AndroidBridge(
     scope.launch(Dispatchers.IO) {
       try {
         val note = database.noteDao().getNoteById(noteId) ?: error("احفظ الملاحظة أولاً")
-        val details = mutableListOf<String>()
-        fun addRows(label: String, json: String) {
-          val rows = JSONArray(json)
-          details.add("--- $label ---")
-          for (i in 0 until rows.length()) {
-            val row = rows.optJSONObject(i) ?: continue
-            val qty = row.optString("qty").trim()
-            val detail = row.optString("detail").trim()
-            if (qty.isNotBlank() || detail.isNotBlank()) details.add("$qty    $detail")
-          }
-        }
-        addRows("الشق الأول", note.rightRowsJson)
-        addRows("الشق الثاني", note.leftRowsJson)
         val settings = StorePreferences.getSettings(activity)
-        val ok = BluetoothPrinterManager.printReceiptText(
-          title = "ملاحظة - ${settings.storeName}",
-          details = details,
-          footer = "تاريخ الملاحظة: ${SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US).format(Date(note.updatedAt))}",
-          paperWidthMm = settings.printerWidthMm,
-          context = activity
-        )
-        notifyResult(reqId, ok, if (ok) "تم إرسال الملاحظة إلى الطابعة الحرارية ✓" else "تعذرت الطباعة؛ تحقق من اتصال الطابعة")
+        val widthMm = settings.printerWidthMm
+        val sig = "NOTE_${note.id}_${note.rightRowsJson.hashCode()}_${note.leftRowsJson.hashCode()}_$widthMm"
+        val bmp = BluetoothPrinterManager.buildNoteReceiptBitmap(activity, note, widthMm)
+        if (settings.requireThermalPreview && !verifiedThermalSignatures.contains(sig)) {
+          val base64 = BluetoothPrinterManager.renderBitmapToBase64(bmp)
+          verifiedThermalSignatures.add(sig)
+          val conn = BluetoothPrinterManager.getConnectionInfo()
+          callJs("onThermalPreviewData", JSONObject().apply {
+            put("kind", "NOTE")
+            put("targetId", note.id)
+            put("extraStr", "")
+            put("startMillis", 0L)
+            put("endMillis", 0L)
+            put("title", "معاينة ملاحظة #${note.id}")
+            put("widthMm", widthMm)
+            put("previewSignature", sig)
+            put("connected", BluetoothPrinterManager.isConnected())
+            put("printerName", conn.first)
+            put("imageBase64", base64)
+          }.toString())
+          notifyResult(reqId, false, "المعاينة إلزامية قبل الطباعة البلوتوث — راجع المعاينة ثم اضغط طباعة")
+          return@launch
+        }
+        val result = BluetoothPrinterManager.printBitmap(bmp)
+        notifyResult(reqId, result.first, result.second)
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذرت طباعة الملاحظة")
       }
@@ -718,9 +761,9 @@ class AndroidBridge(
       try {
         val result = generatePartyStatementPdfInternal(partyType, partyId)
         val uri = PdfGenerator.getUriForFile(activity, result.first)
-        getAppFolderFiles()
+        val settings = StorePreferences.getSettings(activity)
         activity.runOnUiThread {
-          val opened = WhatsAppHelper.openPdf(activity, uri)
+          val opened = if (settings.autoOpenPdfAfterExport) WhatsAppHelper.openPdf(activity, uri) else false
           notifyResult(
             reqId,
             true,
@@ -752,10 +795,9 @@ class AndroidBridge(
           phone = s.phone
           partyName = s.name
         }
-        getAppFolderFiles()
         val msg = "${settings.storeName} - كشف حساب: $partyName"
         activity.runOnUiThread {
-          val ok = WhatsAppHelper.shareFile(activity, uri, "application/pdf", msg, phone, preferWhatsApp = true)
+          val ok = WhatsAppHelper.shareFile(activity, uri, "application/pdf", msg, phone, preferWhatsApp = settings.preferWhatsAppDirect)
           notifyResult(reqId, ok, if (ok) "تم تجهيز كشف الحساب PDF للمشاركة ✓" else "تعذر مشاركة كشف الحساب")
         }
       } catch (e: Exception) {
@@ -859,9 +901,9 @@ class AndroidBridge(
         val items = database.inventoryDao().getItemsSnapshot()
         val result = PdfGenerator.generateInventoryPdf(activity, items) ?: error("تعذر إنشاء تقرير جرد المخزون PDF")
         val uri = PdfGenerator.getUriForFile(activity, result.first)
-        getAppFolderFiles()
+        val settings = StorePreferences.getSettings(activity)
         activity.runOnUiThread {
-          WhatsAppHelper.openPdf(activity, uri)
+          if (settings.autoOpenPdfAfterExport) WhatsAppHelper.openPdf(activity, uri)
           notifyResult(reqId, true, "تم حفظ جرد المخزون PDF في ${result.second.displayPath} ✓")
         }
       } catch (e: Exception) {
@@ -1049,6 +1091,8 @@ class AndroidBridge(
           val itemObj = itemsArray.getJSONObject(i)
           val qty = itemObj.optInt("quantity", 0)
           val unitPrice = itemObj.optDouble("unitPrice", -1.0)
+          val totalPriceOpt = itemObj.optDouble("totalPrice", -1.0)
+          val lineTotal = if (totalPriceOpt.isFinite() && totalPriceOpt >= 0.0) totalPriceOpt else qty.toDouble() * unitPrice
           items.add(
             InvoiceItemEntity(
               invoiceId = 0L,
@@ -1056,7 +1100,7 @@ class AndroidBridge(
               itemName = itemObj.optString("itemName", ""),
               quantity = qty,
               unitPrice = unitPrice,
-              totalPrice = qty.toDouble() * unitPrice,
+              totalPrice = lineTotal,
               stockQuantity = itemObj.optInt("stockQuantity", 0),
               unitLabel = itemObj.optString("unitLabel", ""),
               unitFactor = itemObj.optInt("unitFactor", 1)
@@ -1074,6 +1118,21 @@ class AndroidBridge(
           paidAmount = paidAmount,
           invoiceDateMillis = dateOpt
         )
+
+        val settings = StorePreferences.getSettings(activity)
+        if (settings.autoSaveThermalImage && savedId > 0L) {
+          runCatching {
+            database.invoiceDao().getInvoiceWithItems(savedId)?.let { savedWithItems ->
+              BluetoothPrinterManager.saveThermalReceiptImageToDownloads(
+                context = activity,
+                invoice = savedWithItems.invoice,
+                items = savedWithItems.items,
+                partyBalanceAfter = resolvePartyBalance(savedWithItems.invoice),
+                paperWidthMm = settings.printerWidthMm
+              )
+            }
+          }
+        }
 
         // Refresh lists only. getInvoiceDetails() invokes the edit-form callback and
         // can reopen the invoice screen after a successful save due to async timing.
@@ -1161,7 +1220,7 @@ class AndroidBridge(
         val inv = withItems.invoice
         val settings = StorePreferences.getSettings(activity)
         val signature = computePreviewSignature(inv, withItems.items, settings.printerWidthMm)
-        if (!previewedInvoiceSignatures.contains(signature)) {
+        if (settings.requireThermalPreview && !previewedInvoiceSignatures.contains(signature)) {
           emitThermalPreview(withItems)
           notifyResult(reqId, false, "المعاينة إلزامية قبل الطباعة البلوتوث — راجع المعاينة ثم اضغط طباعة")
           return@launch
@@ -1228,6 +1287,12 @@ class AndroidBridge(
         val bmp = BluetoothPrinterManager.buildReportReceiptBitmap(activity, report, label, widthMm)
         Triple("معاينة التقرير المالي ($label)", sig, bmp)
       }
+      "NOTE" -> {
+        val note = database.noteDao().getNoteById(targetId) ?: error("الملاحظة غير موجودة")
+        val sig = "NOTE_${note.id}_${note.rightRowsJson.hashCode()}_${note.leftRowsJson.hashCode()}_$widthMm"
+        val bmp = BluetoothPrinterManager.buildNoteReceiptBitmap(activity, note, widthMm)
+        Triple("معاينة ملاحظة #${note.id}", sig, bmp)
+      }
       else -> error("نوع المعاينة الحرارية غير مدعوم")
     }
   }
@@ -1284,7 +1349,7 @@ class AndroidBridge(
         val settings = StorePreferences.getSettings(activity)
         val widthMm = settings.printerWidthMm
         val (title, sig, bmp) = renderGenericThermalBitmap(kind, targetId, extraStr, startMillis, endMillis, widthMm)
-        if (!verifiedThermalSignatures.contains(sig)) {
+        if (settings.requireThermalPreview && !verifiedThermalSignatures.contains(sig)) {
           val base64 = BluetoothPrinterManager.renderBitmapToBase64(bmp)
           verifiedThermalSignatures.add(sig)
           val conn = BluetoothPrinterManager.getConnectionInfo()
@@ -1327,7 +1392,6 @@ class AndroidBridge(
         val (_, _, bmp) = renderGenericThermalBitmap(kind, targetId, extraStr, startMillis, endMillis, settings.printerWidthMm)
         val prefix = "thermal_${kind.lowercase(Locale.US)}_$targetId"
         val saved = BluetoothPrinterManager.saveThermalBitmapToDownloads(activity, bmp, prefix)
-        getAppFolderFiles()
         notifyResult(reqId, true, "تم حفظ صورة الإيصال في ${saved.displayPath} ✓")
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر حفظ صورة الإيصال")
@@ -1345,8 +1409,9 @@ class AndroidBridge(
         val file = PdfGenerator.generateInvoicePdf(activity, inv, withItems.items, balanceAfter)
           ?: error("تعذر إنشاء ملف PDF")
         val uri = PdfGenerator.getUriForFile(activity, file)
+        val settings = StorePreferences.getSettings(activity)
         activity.runOnUiThread {
-          val opened = WhatsAppHelper.openPdf(activity, uri)
+          val opened = if (settings.autoOpenPdfAfterExport) WhatsAppHelper.openPdf(activity, uri) else false
           notifyResult(
             reqId,
             true,
@@ -1374,7 +1439,7 @@ class AndroidBridge(
         val settings = StorePreferences.getSettings(activity)
         val msg = "${settings.storeName} - فاتورة رقم ${inv.invoiceNumber} بإجمالي ${formatNum(inv.totalAmount)} ${settings.currency}"
         activity.runOnUiThread {
-          val ok = WhatsAppHelper.shareFile(activity, uri, "application/pdf", msg, phone, preferWhatsApp = true)
+          val ok = WhatsAppHelper.shareFile(activity, uri, "application/pdf", msg, phone, preferWhatsApp = settings.preferWhatsAppDirect)
           notifyResult(
             reqId,
             ok,
@@ -1402,7 +1467,7 @@ class AndroidBridge(
         val settings = StorePreferences.getSettings(activity)
         val msg = "${settings.storeName} - فاتورة رقم ${inv.invoiceNumber} بإجمالي ${formatNum(inv.totalAmount)} ${settings.currency}"
         activity.runOnUiThread {
-          val ok = WhatsAppHelper.shareFile(activity, uri, "image/png", msg, phone, preferWhatsApp = true)
+          val ok = WhatsAppHelper.shareFile(activity, uri, "image/png", msg, phone, preferWhatsApp = settings.preferWhatsAppDirect)
           notifyResult(reqId, ok, if (ok) "تم تجهيز صورة الفاتورة للمشاركة ✓" else "تعذر مشاركة صورة الفاتورة")
         }
       } catch (e: Exception) {
@@ -1416,9 +1481,10 @@ class AndroidBridge(
   @JavascriptInterface
   fun getReports(startDateMillis: Long, endDateMillis: Long) {
     scope.launch(Dispatchers.IO) {
+      val settings = StorePreferences.getSettings(activity)
       val effectiveStart = if (startDateMillis > 0) startDateMillis else 0L
       val effectiveEnd = if (endDateMillis > 0) endDateMillis else Long.MAX_VALUE
-      val report = engine.buildReport(effectiveStart, effectiveEnd)
+      val report = engine.buildReport(effectiveStart, effectiveEnd, settings.lowStockThreshold)
 
       val json = JSONObject().apply {
         put("todaySales", report.todaySales)
@@ -1474,18 +1540,17 @@ class AndroidBridge(
   fun shareReportWhatsAppPdf(startDateMillis: Long, endDateMillis: Long, periodLabel: String, reqId: String) {
     scope.launch(Dispatchers.IO) {
       try {
+        val settings = StorePreferences.getSettings(activity)
         val effectiveStart = if (startDateMillis > 0) startDateMillis else 0L
         val effectiveEnd = if (endDateMillis > 0) endDateMillis else Long.MAX_VALUE
         val label = periodLabel.ifBlank { "الكل" }
-        val report = engine.buildReport(effectiveStart, effectiveEnd)
+        val report = engine.buildReport(effectiveStart, effectiveEnd, settings.lowStockThreshold)
         val result = PdfGenerator.generateFinancialReportPdf(activity, report, label)
           ?: error("تعذر إنشاء ملف التقرير PDF")
         val uri = PdfGenerator.getUriForFile(activity, result.first)
-        val settings = StorePreferences.getSettings(activity)
         val msg = "${settings.storeName} - التقرير المالي ($label)"
-        getAppFolderFiles()
         activity.runOnUiThread {
-          val ok = WhatsAppHelper.shareFile(activity, uri, "application/pdf", msg, "", preferWhatsApp = true)
+          val ok = WhatsAppHelper.shareFile(activity, uri, "application/pdf", msg, "", preferWhatsApp = settings.preferWhatsAppDirect)
           notifyResult(reqId, ok, if (ok) "تم تجهيز التقرير PDF للمشاركة ✓" else "تعذر مشاركة التقرير")
         }
       } catch (e: Exception) {
@@ -1496,46 +1561,115 @@ class AndroidBridge(
 
   // ---------------- Settings, Bluetooth, Backup & Reset ----------------
 
+  private fun buildSettingsJson(): JSONObject {
+    val settings = StorePreferences.getSettings(activity)
+    val conn = BluetoothPrinterManager.getConnectionInfo()
+    val safetyFile = BackupRestoreManager.getSafetyBackupFile(activity)
+    return JSONObject().apply {
+      put("storeName", settings.storeName)
+      put("storePhone", settings.storePhone)
+      put("storeAddress", settings.storeAddress)
+      put("currency", settings.currency)
+      put("uiTextScale", settings.uiTextScale)
+      put("compactLists", settings.compactLists)
+      put("defaultInvoiceType", settings.defaultInvoiceType)
+      put("autoFillCashPaid", settings.autoFillCashPaid)
+      put("confirmBeforeDeleteInvoice", settings.confirmBeforeDeleteInvoice)
+      put("quickPartyCount", settings.quickPartyCount)
+      put("lowStockThreshold", settings.lowStockThreshold)
+      put("defaultInventorySort", settings.defaultInventorySort)
+      put("defaultInventoryUnit", settings.defaultInventoryUnit)
+      put("defaultInventoryCategory", settings.defaultInventoryCategory)
+      put("defaultCustomerSort", settings.defaultCustomerSort)
+      put("promptWhatsAppAfterTx", settings.promptWhatsAppAfterTx)
+      put("showZeroBalanceParties", settings.showZeroBalanceParties)
+      put("defaultReportRange", settings.defaultReportRange)
+      put("showUncostedProfitWarning", settings.showUncostedProfitWarning)
+      put("printerWidthMm", settings.printerWidthMm)
+      put("defaultPrinterAddress", settings.defaultPrinterAddress)
+      put("defaultPrinterName", settings.defaultPrinterName)
+      put("requireThermalPreview", settings.requireThermalPreview)
+      put("autoOpenPdfAfterExport", settings.autoOpenPdfAfterExport)
+      put("preferWhatsAppDirect", settings.preferWhatsAppDirect)
+      put("autoSaveThermalImage", settings.autoSaveThermalImage)
+      put("linkedFolderActive", settings.linkedFolderUri.isNotBlank())
+      put("folderDisplayPath", "Download/${AppDownloadsFolderManager.APP_FOLDER_NAME}")
+      put("hasSafetyBackup", safetyFile.exists() && safetyFile.length() > 0L)
+      put("printerConnected", BluetoothPrinterManager.isConnected())
+      put("connectedPrinterName", conn.first)
+      put("connectedPrinterAddress", conn.second)
+      put("bluetoothAvailable", BluetoothPrinterManager.isBluetoothAvailable())
+      put("bluetoothEnabled", BluetoothPrinterManager.isBluetoothEnabled())
+    }
+  }
+
   @JavascriptInterface
   fun getSettings() {
     scope.launch(Dispatchers.IO) {
-      val settings = StorePreferences.getSettings(activity)
-      val conn = BluetoothPrinterManager.getConnectionInfo()
-      val json = JSONObject().apply {
-        put("storeName", settings.storeName)
-        put("storePhone", settings.storePhone)
-        put("storeAddress", settings.storeAddress)
-        put("currency", settings.currency)
-        put("printerWidthMm", settings.printerWidthMm)
-        put("defaultPrinterAddress", settings.defaultPrinterAddress)
-        put("defaultPrinterName", settings.defaultPrinterName)
-        put("printerConnected", BluetoothPrinterManager.isConnected())
-        put("connectedPrinterName", conn.first)
-        put("connectedPrinterAddress", conn.second)
-        put("bluetoothAvailable", BluetoothPrinterManager.isBluetoothAvailable())
-        put("bluetoothEnabled", BluetoothPrinterManager.isBluetoothEnabled())
-      }
-      callJs("onSettingsData", json.toString())
+      callJs("onSettingsData", buildSettingsJson().toString())
     }
   }
 
   @JavascriptInterface
   fun saveStoreSettings(jsonPayload: String, reqId: String) {
+    saveAdvancedSettings(jsonPayload, reqId)
+  }
+
+  @JavascriptInterface
+  fun saveAdvancedSettings(jsonPayload: String, reqId: String) {
     scope.launch(Dispatchers.IO) {
       try {
         val obj = JSONObject(jsonPayload)
-        StorePreferences.saveStoreInfo(
-          context = activity,
-          storeName = obj.optString("storeName", ""),
-          storePhone = obj.optString("storePhone", ""),
-          storeAddress = obj.optString("storeAddress", ""),
-          currency = obj.optString("currency", "ر.ي")
+        val cur = StorePreferences.getSettings(activity)
+        val updated = StoreSettings(
+          storeName = obj.optString("storeName", cur.storeName),
+          storePhone = obj.optString("storePhone", cur.storePhone),
+          storeAddress = obj.optString("storeAddress", cur.storeAddress),
+          currency = obj.optString("currency", cur.currency),
+          uiTextScale = obj.optString("uiTextScale", cur.uiTextScale),
+          compactLists = obj.optBoolean("compactLists", cur.compactLists),
+          defaultInvoiceType = obj.optString("defaultInvoiceType", cur.defaultInvoiceType),
+          autoFillCashPaid = obj.optBoolean("autoFillCashPaid", cur.autoFillCashPaid),
+          confirmBeforeDeleteInvoice = obj.optBoolean("confirmBeforeDeleteInvoice", cur.confirmBeforeDeleteInvoice),
+          quickPartyCount = obj.optInt("quickPartyCount", cur.quickPartyCount),
+          lowStockThreshold = obj.optInt("lowStockThreshold", cur.lowStockThreshold),
+          defaultInventorySort = obj.optString("defaultInventorySort", cur.defaultInventorySort),
+          defaultInventoryUnit = obj.optString("defaultInventoryUnit", cur.defaultInventoryUnit),
+          defaultInventoryCategory = obj.optString("defaultInventoryCategory", cur.defaultInventoryCategory),
+          defaultCustomerSort = obj.optString("defaultCustomerSort", cur.defaultCustomerSort),
+          promptWhatsAppAfterTx = obj.optBoolean("promptWhatsAppAfterTx", cur.promptWhatsAppAfterTx),
+          showZeroBalanceParties = obj.optBoolean("showZeroBalanceParties", cur.showZeroBalanceParties),
+          defaultReportRange = obj.optString("defaultReportRange", cur.defaultReportRange),
+          showUncostedProfitWarning = obj.optBoolean("showUncostedProfitWarning", cur.showUncostedProfitWarning),
+          printerWidthMm = obj.optInt("printerWidthMm", cur.printerWidthMm),
+          defaultPrinterAddress = cur.defaultPrinterAddress,
+          defaultPrinterName = cur.defaultPrinterName,
+          requireThermalPreview = obj.optBoolean("requireThermalPreview", cur.requireThermalPreview),
+          autoOpenPdfAfterExport = obj.optBoolean("autoOpenPdfAfterExport", cur.autoOpenPdfAfterExport),
+          preferWhatsAppDirect = obj.optBoolean("preferWhatsAppDirect", cur.preferWhatsAppDirect),
+          autoSaveThermalImage = obj.optBoolean("autoSaveThermalImage", cur.autoSaveThermalImage),
+          linkedFolderUri = cur.linkedFolderUri
         )
-        getSettings()
+        StorePreferences.saveAdvancedSettings(activity, updated)
+        callJs("onSettingsData", buildSettingsJson().toString())
         getDashboardData()
-        notifyResult(reqId, true, "تم حفظ إعدادات المتجر ✓")
+        notifyResult(reqId, true, "تم حفظ الإعدادات بنجاح ✓")
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر حفظ الإعدادات")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun resetAdvancedSettings(reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        StorePreferences.resetAdvancedSettings(activity)
+        callJs("onSettingsData", buildSettingsJson().toString())
+        getDashboardData()
+        notifyResult(reqId, true, "تمت استعادة الإعدادات الافتراضية ✓")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر إعادة ضبط الإعدادات")
       }
     }
   }
@@ -1641,7 +1775,6 @@ class AndroidBridge(
     scope.launch(Dispatchers.IO) {
       try {
         val result = BackupRestoreManager.exportToAppDownloadsFolder(activity)
-        getAppFolderFiles()
         notifyResult(
           reqId,
           true,
@@ -1649,6 +1782,20 @@ class AndroidBridge(
         )
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر حفظ النسخة الاحتياطية في مجلد بقاله العزي")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun restoreSafetyBackup(reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val msg = BackupRestoreManager.restoreFromSafetyBackup(activity)
+        refreshCoreViews()
+        getSettings()
+        notifyResult(reqId, true, msg)
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر استعادة نسخة الأمان السابقة")
       }
     }
   }
@@ -1662,83 +1809,8 @@ class AndroidBridge(
   fun unlinkAppFolder(reqId: String) {
     scope.launch(Dispatchers.IO) {
       StorePreferences.clearLinkedFolderUri(activity)
-      getAppFolderFiles()
+      getSettings()
       notifyResult(reqId, true, "تم إلغاء ربط المجلد المخصص")
-    }
-  }
-
-  @JavascriptInterface
-  fun getAppFolderFiles() {
-    scope.launch(Dispatchers.IO) {
-      val snapshot = AppDownloadsFolderManager.listFiles(activity)
-      val payload = JSONObject().apply {
-        put("folderDisplayPath", snapshot.folderDisplayPath)
-        put("linkedTreeActive", snapshot.linkedTreeActive)
-        put("isPublicDownloadsApiSupported", snapshot.isPublicDownloadsApiSupported)
-        put("files", JSONArray().apply {
-          snapshot.files.forEach { f ->
-            put(JSONObject().apply {
-              put("id", f.id)
-              put("uriString", f.uriString)
-              put("displayName", f.displayName)
-              put("category", f.category)
-              put("subfolder", f.subfolder)
-              put("mimeType", f.mimeType)
-              put("sizeBytes", f.sizeBytes)
-              put("modifiedMillis", f.modifiedMillis)
-              put("source", f.source)
-            })
-          }
-        })
-      }
-      callJs("onAppFolderFilesData", payload.toString())
-    }
-  }
-
-  @JavascriptInterface
-  fun openAppFolderFile(uriString: String, mimeType: String, reqId: String) {
-    activity.runOnUiThread {
-      val ok = AppDownloadsFolderManager.openFile(activity, uriString, mimeType)
-      if (!ok) {
-        notifyResult(reqId, false, "لا يوجد تطبيق مناسب لفتح هذا الملف على جهازك")
-      }
-    }
-  }
-
-  @JavascriptInterface
-  fun shareAppFolderFile(uriString: String, mimeType: String, title: String, reqId: String) {
-    activity.runOnUiThread {
-      val ok = AppDownloadsFolderManager.shareFile(activity, uriString, mimeType, title)
-      if (!ok) {
-        notifyResult(reqId, false, "تعذر مشاركة الملف المحدد")
-      }
-    }
-  }
-
-  @JavascriptInterface
-  fun deleteAppFolderFile(uriString: String, reqId: String) {
-    scope.launch(Dispatchers.IO) {
-      val ok = AppDownloadsFolderManager.deleteFile(activity, uriString)
-      getAppFolderFiles()
-      notifyResult(
-        reqId,
-        ok,
-        if (ok) "تم حذف الملف من مجلد بقاله العزي" else "تعذر حذف الملف المحدد"
-      )
-    }
-  }
-
-  @JavascriptInterface
-  fun restoreBackupFromAppFolder(uriString: String, reqId: String) {
-    scope.launch(Dispatchers.IO) {
-      try {
-        val msg = BackupRestoreManager.restoreFromUri(activity, Uri.parse(uriString))
-        refreshCoreViews()
-        getAppFolderFiles()
-        notifyResult(reqId, true, msg)
-      } catch (e: Exception) {
-        notifyResult(reqId, false, e.message ?: "فشلت استعادة النسخة الاحتياطية")
-      }
     }
   }
 
@@ -1757,7 +1829,6 @@ class AndroidBridge(
           partyBalanceAfter = balanceAfter,
           paperWidthMm = settings.printerWidthMm
         )
-        getAppFolderFiles()
         notifyResult(reqId, true, "تم حفظ صورة الإيصال في ${saved.displayPath} ✓")
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر حفظ صورة الإيصال")
@@ -1769,21 +1840,16 @@ class AndroidBridge(
   fun exportFinancialReportPdf(startDateMillis: Long, endDateMillis: Long, periodLabel: String, reqId: String) {
     scope.launch(Dispatchers.IO) {
       try {
+        val settings = StorePreferences.getSettings(activity)
         val effectiveStart = if (startDateMillis > 0) startDateMillis else 0L
         val effectiveEnd = if (endDateMillis > 0) endDateMillis else Long.MAX_VALUE
-        val report = engine.buildReport(effectiveStart, effectiveEnd)
+        val report = engine.buildReport(effectiveStart, effectiveEnd, settings.lowStockThreshold)
         val result = PdfGenerator.generateFinancialReportPdf(activity, report, periodLabel.ifBlank { "الكل" })
           ?: error("تعذر إنشاء ملف التقرير PDF")
         val uri = PdfGenerator.getUriForFile(activity, result.first)
-        getAppFolderFiles()
         activity.runOnUiThread {
-          val opened = WhatsAppHelper.openPdf(activity, uri)
-          notifyResult(
-            reqId,
-            true,
-            if (opened) "تم حفظ التقرير المالي في ${result.second.displayPath} ✓"
-            else "تم حفظ التقرير المالي في ${result.second.displayPath} ✓"
-          )
+          if (settings.autoOpenPdfAfterExport) WhatsAppHelper.openPdf(activity, uri)
+          notifyResult(reqId, true, "تم حفظ التقرير المالي في ${result.second.displayPath} ✓")
         }
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر تصدير التقرير PDF")
@@ -1805,13 +1871,15 @@ class AndroidBridge(
   }
 
   fun onBackupOperationComplete(success: Boolean, message: String) {
-    if (success) refreshCoreViews()
-    getAppFolderFiles()
+    if (success) {
+      refreshCoreViews()
+      getSettings()
+    }
     notifyResult("backup_op", success, message)
   }
 
   fun onFolderLinkResult(success: Boolean, message: String) {
-    getAppFolderFiles()
+    getSettings()
     notifyResult("folder_link_op", success, message)
   }
 

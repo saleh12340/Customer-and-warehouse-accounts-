@@ -9,6 +9,7 @@ import android.provider.ContactsContract
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -108,6 +109,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     checkBluetoothPermissions()
     lifecycleScope.launch(Dispatchers.IO) {
       AppDownloadsFolderManager.ensureFolderInitialized(this@MainActivity)

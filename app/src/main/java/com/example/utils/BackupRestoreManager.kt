@@ -135,9 +135,28 @@ object BackupRestoreManager {
           put("storePhone", settings.storePhone)
           put("storeAddress", settings.storeAddress)
           put("currency", settings.currency)
+          put("uiTextScale", settings.uiTextScale)
+          put("compactLists", settings.compactLists)
+          put("defaultInvoiceType", settings.defaultInvoiceType)
+          put("autoFillCashPaid", settings.autoFillCashPaid)
+          put("confirmBeforeDeleteInvoice", settings.confirmBeforeDeleteInvoice)
+          put("quickPartyCount", settings.quickPartyCount)
+          put("lowStockThreshold", settings.lowStockThreshold)
+          put("defaultInventorySort", settings.defaultInventorySort)
+          put("defaultInventoryUnit", settings.defaultInventoryUnit)
+          put("defaultInventoryCategory", settings.defaultInventoryCategory)
+          put("defaultCustomerSort", settings.defaultCustomerSort)
+          put("promptWhatsAppAfterTx", settings.promptWhatsAppAfterTx)
+          put("showZeroBalanceParties", settings.showZeroBalanceParties)
+          put("defaultReportRange", settings.defaultReportRange)
+          put("showUncostedProfitWarning", settings.showUncostedProfitWarning)
           put("printerWidthMm", settings.printerWidthMm)
           put("defaultPrinterAddress", settings.defaultPrinterAddress)
           put("defaultPrinterName", settings.defaultPrinterName)
+          put("requireThermalPreview", settings.requireThermalPreview)
+          put("autoOpenPdfAfterExport", settings.autoOpenPdfAfterExport)
+          put("preferWhatsAppDirect", settings.preferWhatsAppDirect)
+          put("autoSaveThermalImage", settings.autoSaveThermalImage)
         })
       }
     }
@@ -290,7 +309,7 @@ object BackupRestoreManager {
           o.getLong("itemId"),
           o.getString("itemName"),
           o.getInt("quantity").also { require(it in 1..10_000_000) { "كمية صنف فاتورة غير صحيحة" } },
-          o.getDouble("unitPrice").boundedMoney("سعر الوحدة", allowNegative = false),
+          o.getDouble("unitPrice").boundedUnitPrice("سعر الوحدة"),
           o.getDouble("totalPrice").boundedMoney("إجمالي الصنف", allowNegative = false),
           o.optInt("stockQuantity", 0).also { require(it in 0..10_000_000) { "كمية المخزون المحولة غير صحيحة" } },
           o.optString("unitLabel", ""),
@@ -447,17 +466,36 @@ object BackupRestoreManager {
 
     payload.optJSONObject("settings")?.let { sObj ->
       val currentSettings = StorePreferences.getSettings(context)
-      StorePreferences.saveStoreInfo(
-        context = context,
-        storeName = sObj.optString("storeName", currentSettings.storeName),
+      val merged = StoreSettings(
+        storeName = sObj.optString("storeName", currentSettings.storeName).ifBlank { currentSettings.storeName },
         storePhone = sObj.optString("storePhone", currentSettings.storePhone),
         storeAddress = sObj.optString("storeAddress", currentSettings.storeAddress),
-        currency = sObj.optString("currency", currentSettings.currency)
+        currency = sObj.optString("currency", currentSettings.currency).ifBlank { currentSettings.currency },
+        uiTextScale = sObj.optString("uiTextScale", currentSettings.uiTextScale),
+        compactLists = sObj.optBoolean("compactLists", currentSettings.compactLists),
+        defaultInvoiceType = sObj.optString("defaultInvoiceType", currentSettings.defaultInvoiceType),
+        autoFillCashPaid = sObj.optBoolean("autoFillCashPaid", currentSettings.autoFillCashPaid),
+        confirmBeforeDeleteInvoice = sObj.optBoolean("confirmBeforeDeleteInvoice", currentSettings.confirmBeforeDeleteInvoice),
+        quickPartyCount = sObj.optInt("quickPartyCount", currentSettings.quickPartyCount),
+        lowStockThreshold = sObj.optInt("lowStockThreshold", currentSettings.lowStockThreshold),
+        defaultInventorySort = sObj.optString("defaultInventorySort", currentSettings.defaultInventorySort),
+        defaultInventoryUnit = sObj.optString("defaultInventoryUnit", currentSettings.defaultInventoryUnit),
+        defaultInventoryCategory = sObj.optString("defaultInventoryCategory", currentSettings.defaultInventoryCategory),
+        defaultCustomerSort = sObj.optString("defaultCustomerSort", currentSettings.defaultCustomerSort),
+        promptWhatsAppAfterTx = sObj.optBoolean("promptWhatsAppAfterTx", currentSettings.promptWhatsAppAfterTx),
+        showZeroBalanceParties = sObj.optBoolean("showZeroBalanceParties", currentSettings.showZeroBalanceParties),
+        defaultReportRange = sObj.optString("defaultReportRange", currentSettings.defaultReportRange),
+        showUncostedProfitWarning = sObj.optBoolean("showUncostedProfitWarning", currentSettings.showUncostedProfitWarning),
+        printerWidthMm = sObj.optInt("printerWidthMm", currentSettings.printerWidthMm),
+        defaultPrinterAddress = sObj.optString("defaultPrinterAddress", currentSettings.defaultPrinterAddress),
+        defaultPrinterName = sObj.optString("defaultPrinterName", currentSettings.defaultPrinterName),
+        requireThermalPreview = sObj.optBoolean("requireThermalPreview", currentSettings.requireThermalPreview),
+        autoOpenPdfAfterExport = sObj.optBoolean("autoOpenPdfAfterExport", currentSettings.autoOpenPdfAfterExport),
+        preferWhatsAppDirect = sObj.optBoolean("preferWhatsAppDirect", currentSettings.preferWhatsAppDirect),
+        autoSaveThermalImage = sObj.optBoolean("autoSaveThermalImage", currentSettings.autoSaveThermalImage),
+        linkedFolderUri = currentSettings.linkedFolderUri
       )
-      StorePreferences.savePrinterWidth(
-        context = context,
-        widthMm = sObj.optInt("printerWidthMm", currentSettings.printerWidthMm)
-      )
+      StorePreferences.saveAdvancedSettings(context, merged)
       val savedAddr = sObj.optString("defaultPrinterAddress", "")
       val savedName = sObj.optString("defaultPrinterName", "")
       if (savedAddr.isNotBlank()) {
@@ -481,6 +519,13 @@ object BackupRestoreManager {
       require(this >= 0.0) { "$label لا يمكن أن يكون سالباً" }
     }
     return GroceryViewModel.roundMoney(this)
+  }
+
+  private fun Double.boundedUnitPrice(label: String): Double {
+    require(isFinite()) { "$label يحتوي على قيمة غير صالحة" }
+    require(abs(this) <= MAX_MONETARY) { "$label يتجاوز الحد المحاسبي المسموح" }
+    require(this >= 0.0) { "$label لا يمكن أن يكون سالباً" }
+    return GroceryViewModel.roundUnitPrice(this)
   }
 
   private fun sha256(value: String): String =

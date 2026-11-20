@@ -512,7 +512,7 @@ object PdfGenerator {
           val totalQty = items.sumOf { it.quantity }
           val totalCost = items.sumOf { it.quantity.toDouble() * it.purchasePrice }
           val totalRetail = items.sumOf { it.quantity.toDouble() * it.sellingPrice }
-          val lowCount = items.count { it.quantity <= 10 }
+          val lowCount = items.count { it.quantity <= settings.lowStockThreshold }
           y += 10f
           canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 66f, 6f, 6f, boxFill)
           var sy = y + 10f

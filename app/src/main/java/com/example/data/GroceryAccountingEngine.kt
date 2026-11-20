@@ -107,6 +107,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     return GroceryViewModel.roundMoney(value)
   }
 
+  private fun sanitizeUnitPrice(value: Double, label: String): Double {
+    require(value.isFinite() && abs(value) <= GroceryViewModel.MAX_MONETARY_AMOUNT) { "$label خارج النطاق المسموح" }
+    return GroceryViewModel.roundUnitPrice(value)
+  }
+
   // ---------------- Customers ----------------
 
   suspend fun saveCustomer(
@@ -559,10 +564,16 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   ): Long {
     val safePaidInput = sanitizeMoney(paidAmount, "المبلغ المدفوع")
     val normalizedItems = rawItems.map {
-      val safeUnit = sanitizeMoney(it.unitPrice, "سعر الوحدة")
+      val safeUnit = sanitizeUnitPrice(it.unitPrice, "سعر الوحدة")
       require(it.unitFactor > 0 && it.unitFactor <= 1_000_000) { "معامل الوحدة غير صحيح" }
       require(it.stockQuantity >= 0 && it.stockQuantity <= 10_000_000) { "كمية المخزون المحولة غير صحيحة" }
-      val computedTotal = GroceryViewModel.roundMoney(it.quantity.toDouble() * safeUnit)
+      val expectedFromUnit = it.quantity.toDouble() * safeUnit
+      val lineTolerance = maxOf(0.02, 0.00001 * maxOf(1.0, abs(expectedFromUnit)))
+      val computedTotal = if (it.totalPrice > 0 && it.totalPrice.isFinite() && abs(it.totalPrice - expectedFromUnit) <= lineTolerance) {
+        GroceryViewModel.roundMoney(it.totalPrice)
+      } else {
+        GroceryViewModel.roundMoney(expectedFromUnit)
+      }
       val convertedStock = Math.multiplyExact(it.quantity, it.unitFactor)
       require(convertedStock in 1..10_000_000) { "كمية المخزون المحولة غير صحيحة للصنف: ${it.itemName}" }
       it.copy(id = 0L, itemName = it.itemName.trim(), unitPrice = safeUnit, totalPrice = computedTotal, stockQuantity = convertedStock)
@@ -762,7 +773,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
 
   // ---------------- Reports & Reset ----------------
 
-  suspend fun buildReport(startDateMillis: Long = 0L, endDateMillis: Long = Long.MAX_VALUE): FinancialReportSnapshot {
+  suspend fun buildReport(
+    startDateMillis: Long = 0L,
+    endDateMillis: Long = Long.MAX_VALUE,
+    lowStockThreshold: Int = 10
+  ): FinancialReportSnapshot {
     val invoices = invoiceDao.getInvoicesSnapshot()
     val allItems = invoiceDao.getInvoiceItemsSnapshot()
     val inventory = inventoryDao.getItemsSnapshot()
@@ -835,7 +850,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       totalPayables = suppliers.sumOf { maxOf(it.balance, 0.0) },
       inventoryCostValue = inventory.sumOf { it.quantity.toDouble() * it.purchasePrice },
       inventoryRetailValue = inventory.sumOf { it.quantity.toDouble() * it.sellingPrice },
-      lowStockCount = inventory.count { it.quantity <= 10 },
+      lowStockCount = inventory.count { it.quantity <= lowStockThreshold.coerceAtLeast(0) },
       invoiceCount = rangeInvoices.size,
       topItems = topItems,
       topDebtors = topDebtors,

@@ -751,6 +751,87 @@ class GroceryAccountingIntegrationTest {
     assertEquals(30.0, newTx.amount, 0.01)
   }
 
+  @Test
+  fun totalFirstFractionalUnitPricePreservesExactLineTotalAndRestoresCleanly() = runBlocking {
+    val appDb = AppDatabase.getDatabase(context)
+    val appEngine = GroceryAccountingEngine(appDb)
+    appEngine.resetAllDatabase()
+
+    val itemId = appEngine.saveInventoryItem(0L, "بسكويت جملة", "حلويات", 50, 2.5, 3.3333, "حبة")
+    // qty = 30, total = 100.0 => 100 / 30 = 3.333333... rounded to 3.3333 (4 decimals)
+    val unit4 = com.example.viewmodel.GroceryViewModel.roundUnitPrice(100.0 / 30.0)
+    assertEquals(3.3333, unit4, 0.00001)
+
+    val invoiceId = appEngine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "FRAC-30-100",
+      type = "CASH",
+      partyId = 0L,
+      partyName = "عميل نقدي",
+      rawItems = listOf(InvoiceItemEntity(0L, 0L, itemId, "بسكويت جملة", 30, unit4, 100.0)),
+      paidAmount = 100.0
+    )
+
+    val saved = appDb.invoiceDao().getInvoiceWithItems(invoiceId)!!
+    assertEquals(100.0, saved.invoice.totalAmount, 0.001)
+    assertEquals(100.0, saved.items.single().totalPrice, 0.001)
+    assertEquals(3.3333, saved.items.single().unitPrice, 0.00001)
+
+    // Save advanced settings and roundtrip through BackupRestoreManager
+    com.example.utils.StorePreferences.saveAdvancedSettings(
+      context,
+      com.example.utils.StoreSettings(
+        storeName = "بقالة العزي فرع 2",
+        currency = "ر.ي",
+        uiTextScale = "SMALL",
+        compactLists = true,
+        defaultInvoiceType = "CREDIT",
+        autoFillCashPaid = false,
+        confirmBeforeDeleteInvoice = false,
+        quickPartyCount = 8,
+        lowStockThreshold = 25,
+        defaultInventorySort = "VALUE_DESC",
+        defaultInventoryUnit = "باكت",
+        defaultInventoryCategory = "بقوليات",
+        defaultCustomerSort = "BALANCE_ASC",
+        promptWhatsAppAfterTx = false,
+        showZeroBalanceParties = false,
+        defaultReportRange = "WEEK",
+        showUncostedProfitWarning = false,
+        printerWidthMm = 80,
+        requireThermalPreview = false,
+        autoOpenPdfAfterExport = false,
+        preferWhatsAppDirect = false,
+        autoSaveThermalImage = true
+      )
+    )
+
+    val reportDefault = appEngine.buildReport(lowStockThreshold = 10)
+    val reportCustom = appEngine.buildReport(lowStockThreshold = 25)
+    assertEquals(0, reportDefault.lowStockCount) // remaining qty = 20 > 10
+    assertEquals(1, reportCustom.lowStockCount) // remaining qty = 20 <= 25
+
+    val envJson = BackupRestoreManager.buildBackupEnvelope(context).toString()
+    com.example.utils.StorePreferences.resetAdvancedSettings(context)
+    appEngine.resetAllDatabase()
+
+    val restoreMsg = BackupRestoreManager.restoreFromJson(context, envJson, createSafetyBackup = false)
+    assertTrue(restoreMsg.contains("1 فاتورة"))
+    assertEquals(100.0, appDb.invoiceDao().getInvoiceWithItems(invoiceId)!!.invoice.totalAmount, 0.001)
+    val restoredSettings = com.example.utils.StorePreferences.getSettings(context)
+    assertEquals("SMALL", restoredSettings.uiTextScale)
+    assertTrue(restoredSettings.compactLists)
+    assertEquals("CREDIT", restoredSettings.defaultInvoiceType)
+    assertEquals(8, restoredSettings.quickPartyCount)
+    assertEquals(25, restoredSettings.lowStockThreshold)
+    assertEquals("WEEK", restoredSettings.defaultReportRange)
+    assertEquals(80, restoredSettings.printerWidthMm)
+    assertTrue(restoredSettings.autoSaveThermalImage)
+
+    appEngine.resetAllDatabase()
+    com.example.utils.StorePreferences.resetAdvancedSettings(context)
+  }
+
   private fun sha256Hex(value: String): String =
     java.security.MessageDigest.getInstance("SHA-256")
       .digest(value.toByteArray(Charsets.UTF_8))

@@ -183,13 +183,6 @@
 
         <!-- Pinned Compact Ruled Entry Row (Right-to-Left: المبلغ | التفاصيل | التاريخ) -->
         <div class="card compact-card entry-dock-card">
-          <div class="invoice-entry-toolbar">
-            <strong>إضافة الأصناف</strong>
-            <div class="invoice-toolbar-actions">
-              <button type="button" class="invoice-tool-btn" onclick="toggleMultiStockPicker()">قائمة المخزون</button>
-              <button type="button" class="invoice-tool-btn" onclick="toggleQuickAddStock()">+ صنف جديد</button>
-            </div>
-          </div>
           <div class="ruled-grid-labels grid-tx-entry">
             <span>المبلغ</span>
             <span>التفاصيل / البيان</span>
@@ -385,7 +378,7 @@
         </div>
         <div class="pill-tabs" id="inventory-filter-tabs">
           <button type="button" class="pill active" onclick="setInventoryFilter('ALL', this)">الكل</button>
-          <button type="button" class="pill" onclick="setInventoryFilter('LOW', this)">منخفض (≤ 10)</button>
+          <button type="button" id="inventory-low-pill" class="pill" onclick="setInventoryFilter('LOW', this)">منخفض (≤ 10)</button>
           <button type="button" class="pill" onclick="setInventoryFilter('OUT', this)">نافذ (0)</button>
         </div>
         <div id="inventory-summary-strip" class="summary-strip"></div>
@@ -512,57 +505,49 @@
 
     <!-- 7. Create / Edit Invoice Screen -->
     <section id="view-create-invoice" class="view">
-      <!-- Natural Scroll Top Ruled Multi-Row Input Bar (Right-to-Left: الإجمالي | الكمية | التفاصيل | سعر الواحدة آلي) -->
+      <!-- Natural Scroll Top Bar: Compact Mode Selectors + Top Party/Date Bar + Item Entry -->
       <div class="natural-top-panel">
         <div class="invoice-heading">
-          <div class="invoice-heading-title">
-            <h2 id="invoice-screen-title">إصدار فاتورة بيع نقدي</h2>
-            <span id="invoice-mode-badge" class="badge badge-green">فاتورة بيع نقدي</span>
-            <span id="invoice-saved-badge" class="badge badge-green hidden">محفوظة ✓</span>
-          </div>
-          <div class="invoice-mode-switch" role="group" aria-label="نوع الفاتورة">
-            <button type="button" class="invoice-mode-btn active-cash" data-invoice-mode="CASH" onclick="setInvoiceType('CASH')">بيع نقدي</button>
-            <button type="button" class="invoice-mode-btn" data-invoice-mode="CREDIT" onclick="setInvoiceType('CREDIT')">بيع آجل</button>
-            <button type="button" class="invoice-mode-btn" data-invoice-mode="PURCHASE" onclick="setInvoiceType('PURCHASE')">شراء</button>
+          <div class="invoice-heading-top">
+            <div class="invoice-heading-title">
+              <h2 id="invoice-screen-title">إصدار فاتورة بيع نقدي</h2>
+              <span id="invoice-mode-badge" class="badge badge-green hidden">فاتورة بيع نقدي</span>
+              <span id="invoice-saved-badge" class="badge badge-green hidden">محفوظة ✓</span>
+            </div>
+            <div class="invoice-mode-switch" role="group" aria-label="نوع الفاتورة">
+              <button type="button" class="invoice-mode-btn active-cash" data-invoice-mode="CASH" onclick="setInvoiceType('CASH')">نقدي</button>
+              <button type="button" class="invoice-mode-btn" data-invoice-mode="CREDIT" onclick="setInvoiceType('CREDIT')">آجل</button>
+              <button type="button" class="invoice-mode-btn" data-invoice-mode="PURCHASE" onclick="setInvoiceType('PURCHASE')">شراء</button>
+            </div>
           </div>
         </div>
 
         <datalist id="inv-items-datalist"></datalist>
 
-        <div class="card compact-card entry-dock-card">
-          <div class="ruled-grid-labels grid-invoice-batch-row">
-            <span>الإجمالي</span>
-            <span>الكمية</span>
-            <span>اسم الصنف</span>
-            <span>الوحدة</span>
-            <span></span>
-          </div>
+        <select id="inv-type" class="hidden" onchange="onInvoiceTypeChange()" aria-hidden="true" tabindex="-1">
+          <option value="CASH">بيع نقدي</option>
+          <option value="CREDIT">بيع آجل</option>
+          <option value="PURCHASE">شراء</option>
+        </select>
+        <label id="party-label" class="hidden">العميل</label>
 
-          <div id="invoice-batch-rows" class="batch-rows-stack"></div>
-
-          <div class="btn-row" style="margin-top:5px;">
-            <button type="button" class="btn btn-success btn-compact" style="flex:1;" onclick="addBatchItemsToCart()">إضافة الصنف إلى الفاتورة</button>
+        <!-- Top Compact Customer/Supplier & Date Meta Card -->
+        <div class="card compact-card invoice-party-card">
+          <div class="invoice-party-toolbar">
+            <strong id="invoice-party-caption">العميل والتاريخ</strong>
+            <button type="button" class="invoice-tool-btn" onclick="toggleQuickAddParty(true)">+ إضافة عميل / مورد</button>
           </div>
-          <div id="purchase-auto-stock-hint" class="quick-picker-hint hidden">
-            في فاتورة الشراء: أي صنف تكتبه يدوياً يُنشأ تلقائياً في المخزن عند حفظ الفاتورة، وتُضاف كميته وسعر شرائه. ويمكنك تعديل بقية بياناته من شاشة المخزون.
+          <div class="ruled-grid-labels grid-inv-meta-3">
+            <span>العميل / المورد</span>
+            <span>رقم الفاتورة</span>
+            <span>التاريخ والوقت</span>
           </div>
-
-          <button type="button" id="btn-open-stock-picker" class="btn btn-outline-primary btn-compact stock-picker-open-btn" onclick="toggleMultiStockPicker(true)">اختيار صنف من المخزن</button>
-
-          <!-- Centered stock selection dialog -->
-          <div id="multi-stock-picker-box" class="stock-picker-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="stock-picker-title" onclick="if(event.target===this)toggleMultiStockPicker(false)">
-            <div class="stock-picker-dialog">
-              <div class="stock-picker-heading">
-                <div><strong id="stock-picker-title">اختيار صنف من المخزن</strong><small>اضغط على الصنف لإضافته، وكرر الضغط لزيادة الكمية</small></div>
-                <button type="button" class="stock-picker-close" onclick="toggleMultiStockPicker(false)" aria-label="إغلاق">×</button>
-              </div>
-              <div class="ruled-input-row ruled-search-row stock-picker-search">
-                <input type="search" id="multi-stock-search" class="ruled-cell" placeholder="ابحث باسم الصنف أو القسم..." oninput="renderMultiStockPicker()">
-              </div>
-              <div id="multi-stock-list" class="multi-stock-list"></div>
-              <div class="stock-picker-footer"><span id="stock-picker-count">0 صنف</span><span>كل ضغطة تضيف وحدة واحدة</span></div>
-            </div>
+          <div class="ruled-input-row grid-inv-meta-3">
+            <select id="inv-party" class="ruled-cell cell-select" onchange="onInvoicePartyChanged()"></select>
+            <input type="text" id="inv-number" lang="en" dir="ltr" inputmode="numeric" class="ruled-cell cell-num" placeholder="رقم الفاتورة" oninput="markInvoiceDirty()">
+            <input type="datetime-local" id="inv-date" class="ruled-cell cell-num" onchange="markInvoiceDirty()">
           </div>
+          <div id="inv-quick-party-chips" class="quick-chips"></div>
 
           <div id="quick-add-party-box" class="inline-subbox hidden">
             <div class="card-title-row"><strong id="quick-party-title">إضافة عميل جديد</strong><button type="button" class="link-btn" onclick="toggleQuickAddParty(false)">إغلاق</button></div>
@@ -576,9 +561,21 @@
               <button type="button" class="btn btn-outline btn-sm" onclick="toggleQuickAddParty(false)">إلغاء</button>
             </div>
           </div>
+        </div>
+
+        <!-- Compact Item Entry Card -->
+        <div class="card compact-card entry-dock-card">
+          <div class="invoice-entry-toolbar">
+            <strong>إضافة الأصناف</strong>
+            <div class="invoice-toolbar-actions">
+              <button type="button" class="invoice-tool-btn" onclick="addBatchRow()">+ صف إضافي</button>
+              <button type="button" class="invoice-tool-btn" onclick="toggleQuickAddStock()">+ صنف للمخزن</button>
+              <button type="button" class="invoice-tool-btn" onclick="toggleMultiStockPicker(true)">قائمة المخزون</button>
+            </div>
+          </div>
 
           <!-- Inline Quick-Add Inventory Sub-Form -->
-          <div id="quick-add-stock-box" class="inline-subbox hidden">
+          <div id="quick-add-stock-box" class="inline-subbox hidden" style="margin-bottom:6px;">
             <div class="ruled-grid-labels grid-quick-stock">
               <span>اسم الصنف الجديد *</span>
               <span>الكمية</span>
@@ -597,28 +594,38 @@
             </div>
           </div>
 
-          <!-- Compact Invoice Meta Row (RTL: الطرف | النوع | الرقم | التاريخ) -->
-          <div class="invoice-party-toolbar">
-            <strong id="invoice-party-caption">العميل</strong>
-            <button type="button" class="invoice-tool-btn" onclick="toggleQuickAddParty(true)">+ إضافة عميل / مورد</button>
+          <div class="ruled-grid-labels grid-invoice-batch-row">
+            <span>الإجمالي</span>
+            <span>الكمية</span>
+            <span>اسم الصنف</span>
+            <span>الوحدة</span>
+            <span></span>
           </div>
-          <div class="ruled-grid-labels grid-inv-meta-3" style="margin-top:4px;">
-            <span>العميل / المورد</span>
-            <span>رقم الفاتورة</span>
-            <span>التاريخ</span>
+
+          <div id="invoice-batch-rows" class="batch-rows-stack"></div>
+
+          <div class="btn-row" style="margin-top:5px;">
+            <button type="button" class="btn btn-success btn-compact" style="flex:1;" onclick="addBatchItemsToCart()">إضافة إلى الفاتورة</button>
+            <button type="button" id="btn-open-stock-picker" class="btn btn-outline-primary btn-compact" style="flex:1;" onclick="toggleMultiStockPicker(true)">عرض الأصناف</button>
           </div>
-          <div class="ruled-input-row grid-inv-meta-3">
-            <select id="inv-party" class="ruled-cell cell-select" onchange="onInvoicePartyChanged()"></select>
-            <select id="inv-type" class="ruled-cell cell-select" style="display:none" onchange="onInvoiceTypeChange()" aria-hidden="true" tabindex="-1">
-              <option value="CASH">بيع نقدي</option>
-              <option value="CREDIT">بيع آجل</option>
-              <option value="PURCHASE">شراء</option>
-            </select>
-            <input type="text" id="inv-number" lang="en" dir="ltr" inputmode="numeric" class="ruled-cell cell-num" placeholder="رقم الفاتورة" oninput="markInvoiceDirty()">
-            <input type="datetime-local" id="inv-date" class="ruled-cell cell-num" onchange="markInvoiceDirty()">
+          <div id="purchase-auto-stock-hint" class="quick-picker-hint hidden">
+            في فاتورة الشراء: أي صنف تكتبه يدوياً يُنشأ تلقائياً في المخزن عند حفظ الفاتورة، وتُضاف كميته وسعر شرائه. ويمكنك تعديل بقية بياناته من شاشة المخزون.
           </div>
-          <label id="party-label" class="hidden">العميل</label>
-          <div id="inv-quick-party-chips" class="quick-chips"></div>
+
+          <!-- Centered compact stock selection dialog -->
+          <div id="multi-stock-picker-box" class="stock-picker-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="stock-picker-title" onclick="if(event.target===this)toggleMultiStockPicker(false)">
+            <div class="stock-picker-dialog">
+              <div class="stock-picker-heading">
+                <div><strong id="stock-picker-title">صندوق عرض الأصناف</strong><small>اضغط على الصنف لإضافته مباشرة</small></div>
+                <button type="button" class="stock-picker-close" onclick="toggleMultiStockPicker(false)" aria-label="إغلاق">×</button>
+              </div>
+              <div class="ruled-input-row ruled-search-row stock-picker-search">
+                <input type="search" id="multi-stock-search" class="ruled-cell" placeholder="بحث سريع باسم الصنف..." oninput="renderMultiStockPicker()">
+              </div>
+              <div id="multi-stock-list" class="multi-stock-list"></div>
+              <div class="stock-picker-footer"><span id="stock-picker-count">0 صنف</span><span>كل ضغطة تضيف 1 وحدة</span></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -684,7 +691,7 @@
       <div class="invoice-dock">
         <div class="dock-row-primary">
           <button type="button" id="btn-save-invoice" class="btn btn-success btn-compact" onclick="saveInvoiceAction('NONE')">حفظ الفاتورة</button>
-          <button type="button" class="btn btn-primary btn-compact" onclick="saveInvoiceAction('THERMAL_PREVIEW')">معاينة وطباعة</button>
+          <button type="button" id="btn-invoice-preview-print" class="btn btn-primary btn-compact" onclick="saveInvoiceAction('THERMAL_PREVIEW')">معاينة وطباعة</button>
         </div>
         <div class="dock-row-secondary">
           <button type="button" class="chip-action chip-wa" onclick="toggleInvoiceWaMenu()">واتساب ▾</button>
@@ -761,12 +768,39 @@
       </div>
       <div class="card compact-card note-actions-card">
         <div class="btn-row">
+          <button type="button" id="btn-note-preview-toggle" class="btn btn-primary btn-compact" onclick="toggleNoteThermalPreview()">معاينة حرارية</button>
           <button type="button" class="btn btn-success btn-compact" onclick="printCurrentNote()">طباعة حرارية</button>
           <button type="button" class="btn btn-outline-primary btn-compact" onclick="exportCurrentNotePdf()">PDF</button>
-          <button type="button" class="btn btn-outline btn-compact" onclick="shareCurrentNoteWhatsApp()">مشاركة واتساب</button>
+          <button type="button" class="btn btn-outline btn-compact" onclick="shareCurrentNoteWhatsApp()">واتساب</button>
         </div>
-        <div class="muted-text" style="font-size:10px; margin-top:5px;">احفظ الملاحظة أولاً، ثم يمكنك طباعتها أو تصديرها أو مشاركتها.</div>
+        <div class="muted-text" style="font-size:10px; margin-top:5px;">تظهر المعاينة الحرارية للملاحظة بالأسفل؛ وللطباعة البلوتوث أو PDF احفظ الملاحظة أولاً.</div>
       </div>
+
+      <!-- Inline Thermal Print Preview inside Notes Screen -->
+      <div id="note-thermal-preview-card" class="card compact-card note-thermal-preview-card">
+        <div class="card-title-row" style="margin-bottom:4px;">
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <strong style="font-size:13px;">معاينة الطباعة الحرارية</strong>
+            <span id="note-preview-width-badge" class="badge badge-blue">58 مم</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <button type="button" id="note-preview-58-btn" class="invoice-tool-btn" onclick="switchNotePreviewWidth(58)">58 مم</button>
+            <button type="button" id="note-preview-80-btn" class="invoice-tool-btn" onclick="switchNotePreviewWidth(80)">80 مم</button>
+            <button type="button" class="invoice-tool-btn" onclick="openFullNoteThermalPreview()">تكبير</button>
+          </div>
+        </div>
+        <div id="note-preview-printer-status" class="info-pill" style="margin:0 0 6px;">جاري تجهيز المعاينة الحرارية...</div>
+        <div id="note-thermal-preview-body">
+          <div class="paper-receipt-frame note-paper-frame">
+            <img id="note-thermal-preview-img" src="" alt="معاينة الطباعة الحرارية للملاحظة">
+          </div>
+          <div class="btn-row" style="margin-top:6px;">
+            <button type="button" id="btn-note-print-now" class="btn btn-success btn-compact" onclick="printCurrentNote()">طباعة حرارية الآن</button>
+            <button type="button" class="btn btn-outline-primary btn-compact" onclick="saveNoteThermalImage()">حفظ الصورة</button>
+          </div>
+        </div>
+      </div>
+
       <div class="card compact-card">
         <div class="card-title-row"><h3>الملاحظات السابقة</h3><span class="muted-text" id="notes-count">0</span></div>
         <div id="notes-history-list"><div class="empty-state">لا توجد ملاحظات محفوظة بعد</div></div>
@@ -794,14 +828,30 @@
       <div id="reports-list"></div>
     </section>
 
-    <!-- 9. Settings, Store Info, Printer & Backup -->
+    <!-- 9. Advanced Settings (7 Sections: General, Invoices, Inventory, Customers/Suppliers, Reports, Printing/Sharing, Backup/Data) -->
     <section id="view-settings" class="view">
-      <div class="section-head">
-        <h2>الإعدادات والنظام</h2>
+      <div class="sticky-top-panel">
+        <div class="section-head">
+          <h2>الإعدادات المتقدمة والنظام</h2>
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveAllAdvancedSettings()">حفظ الكل</button>
+        </div>
+        <div class="pill-tabs settings-section-pills" id="settings-section-pills">
+          <button type="button" class="pill active" onclick="scrollToSettingsSection('set-sec-general', this)">العامة</button>
+          <button type="button" class="pill" onclick="scrollToSettingsSection('set-sec-invoices', this)">الفواتير</button>
+          <button type="button" class="pill" onclick="scrollToSettingsSection('set-sec-inventory', this)">المخزن</button>
+          <button type="button" class="pill" onclick="scrollToSettingsSection('set-sec-parties', this)">العملاء والموردين</button>
+          <button type="button" class="pill" onclick="scrollToSettingsSection('set-sec-reports', this)">التقارير</button>
+          <button type="button" class="pill" onclick="scrollToSettingsSection('set-sec-printing', this)">الطباعة والمشاركة</button>
+          <button type="button" class="pill" onclick="scrollToSettingsSection('set-sec-backup', this)">النسخ والبيانات</button>
+        </div>
       </div>
 
-      <div class="card compact-card">
-        <h3 style="margin-bottom:6px;">بيانات البقالة والعملة</h3>
+      <!-- Section 1: العامة -->
+      <div id="set-sec-general" class="card compact-card settings-card">
+        <div class="card-title-row">
+          <h3>١. الإعدادات العامة والمتجر</h3>
+          <span class="badge badge-blue">المظهر والهوية</span>
+        </div>
         <div class="ruled-grid-labels grid-set-store-first">
           <span>اسم البقالة / المتجر</span>
           <span>العملة</span>
@@ -812,19 +862,142 @@
         </div>
 
         <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
-          <span>العنوان</span>
+          <span>العنوان في الفاتورة</span>
           <span>رقم الهاتف</span>
         </div>
         <div class="ruled-input-row grid-cust-name-first">
           <input type="text" id="set-store-address" class="ruled-cell" placeholder="العنوان في الفاتورة...">
           <input type="tel" id="set-store-phone" class="ruled-cell cell-num" placeholder="77xxxxxxx">
         </div>
-        <button type="button" class="btn btn-primary btn-compact" style="margin-top:8px;" onclick="saveStoreSettings()">حفظ بيانات المتجر</button>
+
+        <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
+          <span>حجم الخط والعرض</span>
+          <span>كثافة القوائم</span>
+        </div>
+        <div class="settings-control-row">
+          <select id="set-ui-text-scale" class="ruled-cell cell-select">
+            <option value="SMALL">صغير مدمج</option>
+            <option value="NORMAL">عادي متوازن</option>
+            <option value="LARGE">كبير واضح</option>
+          </select>
+          <label class="settings-switch-row" for="set-compact-lists">
+            <input type="checkbox" id="set-compact-lists">
+            <span>قوائم مدمجة</span>
+          </label>
+        </div>
       </div>
 
-      <div class="card compact-card">
+      <!-- Section 2: الفواتير -->
+      <div id="set-sec-invoices" class="card compact-card settings-card">
         <div class="card-title-row">
-          <h3>الطابعة الحرارية (Bluetooth)</h3>
+          <h3>٢. إعدادات الفواتير</h3>
+          <span class="badge badge-green">نقطة البيع والشراء</span>
+        </div>
+        <div class="ruled-grid-labels grid-cust-name-first">
+          <span>نوع الفاتورة الافتراضي</span>
+          <span>عدد أزرار الأطراف السريعة</span>
+        </div>
+        <div class="ruled-input-row grid-cust-name-first">
+          <select id="set-default-invoice-type" class="ruled-cell cell-select">
+            <option value="CASH">بيع نقدي</option>
+            <option value="CREDIT">بيع آجل</option>
+            <option value="PURCHASE">شراء من مورد</option>
+          </select>
+          <input type="number" lang="en" dir="ltr" inputmode="numeric" id="set-quick-party-count" class="ruled-cell cell-num" min="3" max="12" step="1" placeholder="5">
+        </div>
+        <label class="settings-check-item" for="set-auto-fill-cash-paid">
+          <input type="checkbox" id="set-auto-fill-cash-paid">
+          <span>تعبئة المبلغ الواصل تلقائياً عند البيع النقدي</span>
+        </label>
+        <label class="settings-check-item" for="set-confirm-delete-invoice">
+          <input type="checkbox" id="set-confirm-delete-invoice">
+          <span>إظهار رسالة تأكيد قبل حذف أي فاتورة</span>
+        </label>
+      </div>
+
+      <!-- Section 3: المخزن -->
+      <div id="set-sec-inventory" class="card compact-card settings-card">
+        <div class="card-title-row">
+          <h3>٣. إعدادات المخزن</h3>
+          <span class="badge badge-amber">التنبيهات والتصنيف</span>
+        </div>
+        <div class="ruled-grid-labels grid-cust-name-first">
+          <span>حد تنبيه الكمية المنخفضة</span>
+          <span>الترتيب الافتراضي للمخزن</span>
+        </div>
+        <div class="ruled-input-row grid-cust-name-first">
+          <input type="number" lang="en" dir="ltr" inputmode="numeric" id="set-low-stock-threshold" class="ruled-cell cell-num" min="1" max="500" step="1" placeholder="10">
+          <select id="set-default-inventory-sort" class="ruled-cell cell-select">
+            <option value="NAME">حسب الاسم</option>
+            <option value="QTY_ASC">الكمية: الأقل أولاً</option>
+            <option value="QTY_DESC">الكمية: الأعلى أولاً</option>
+            <option value="VALUE_DESC">القيمة: الأعلى أولاً</option>
+          </select>
+        </div>
+
+        <div class="ruled-grid-labels grid-cust-name-first" style="margin-top:6px;">
+          <span>الوحدة الافتراضية للأصناف</span>
+          <span>الفئة الافتراضية للأصناف</span>
+        </div>
+        <div class="ruled-input-row grid-cust-name-first">
+          <input type="text" id="set-default-inventory-unit" class="ruled-cell" placeholder="حبة">
+          <input type="text" id="set-default-inventory-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
+        </div>
+      </div>
+
+      <!-- Section 4: العملاء والموردين -->
+      <div id="set-sec-parties" class="card compact-card settings-card">
+        <div class="card-title-row">
+          <h3>٤. إعدادات العملاء والموردين</h3>
+          <span class="badge badge-blue">الحسابات والديون</span>
+        </div>
+        <div class="ruled-grid-labels" style="grid-template-columns:1fr;">
+          <span>الترتيب الافتراضي لقوائم العملاء والموردين</span>
+        </div>
+        <div class="ruled-input-row" style="grid-template-columns:1fr;">
+          <select id="set-default-customer-sort" class="ruled-cell cell-select">
+            <option value="NAME">الاسم أبجدياً</option>
+            <option value="BALANCE_DESC">الرصيد: الأعلى أولاً</option>
+            <option value="BALANCE_ASC">الرصيد: الأقل أولاً</option>
+          </select>
+        </div>
+        <label class="settings-check-item" for="set-prompt-wa-tx">
+          <input type="checkbox" id="set-prompt-wa-tx">
+          <span>اقتراح مشاركة واتساب بعد تسجيل عملية سداد أو دين</span>
+        </label>
+        <label class="settings-check-item" for="set-show-zero-balance">
+          <input type="checkbox" id="set-show-zero-balance">
+          <span>عرض الحسابات الصفرية والمسددة بالكامل في القوائم</span>
+        </label>
+      </div>
+
+      <!-- Section 5: التقارير -->
+      <div id="set-sec-reports" class="card compact-card settings-card">
+        <div class="card-title-row">
+          <h3>٥. إعدادات التقارير</h3>
+          <span class="badge badge-blue">الأرباح والتحليلات</span>
+        </div>
+        <div class="ruled-grid-labels" style="grid-template-columns:1fr;">
+          <span>الفترة الافتراضية للتقرير المالي</span>
+        </div>
+        <div class="ruled-input-row" style="grid-template-columns:1fr;">
+          <select id="set-default-report-range" class="ruled-cell cell-select">
+            <option value="ALL">الكل</option>
+            <option value="TODAY">اليوم</option>
+            <option value="WEEK">آخر 7 أيام</option>
+            <option value="MONTH">هذا الشهر</option>
+          </select>
+        </div>
+        <label class="settings-check-item" for="set-show-uncosted-warning">
+          <input type="checkbox" id="set-show-uncosted-warning">
+          <span>إظهار تنبيه عند وجود مبيعات دون تكلفة شراء محفوظة</span>
+        </label>
+      </div>
+
+      <!-- Section 6: الطباعة والمشاركة -->
+      <div id="set-sec-printing" class="card compact-card settings-card">
+        <div class="card-title-row">
+          <h3>٦. الطباعة الحرارية والمشاركة</h3>
           <button type="button" class="link-btn" onclick="refreshBluetoothDevices()">تحديث الأجهزة</button>
         </div>
         <p id="printer-status-text" class="muted-text" style="margin: 4px 0;">حالة الطابعة: غير متصل</p>
@@ -837,15 +1010,48 @@
           <button type="button" class="btn btn-primary btn-compact" onclick="printTestReceipt()">طباعة إيصال تجريبي</button>
           <button type="button" id="btn-disconnect-printer" class="btn btn-outline btn-compact hidden" onclick="disconnectPrinter()">فصل الطابعة</button>
         </div>
+
+        <label class="settings-check-item" for="set-require-thermal-preview">
+          <input type="checkbox" id="set-require-thermal-preview">
+          <span>إلزام معاينة الإيصال الحراري قبل الطباعة البلوتوث (موصى به)</span>
+        </label>
+        <label class="settings-check-item" for="set-auto-save-thermal-img">
+          <input type="checkbox" id="set-auto-save-thermal-img">
+          <span>حفظ صورة الإيصال الحراري تلقائياً في بقاله العزي عند حفظ الفاتورة</span>
+        </label>
+        <label class="settings-check-item" for="set-auto-open-pdf">
+          <input type="checkbox" id="set-auto-open-pdf">
+          <span>فتح ملف PDF تلقائياً بعد تصديره</span>
+        </label>
+        <label class="settings-check-item" for="set-prefer-wa-direct">
+          <input type="checkbox" id="set-prefer-wa-direct">
+          <span>تفضيل تطبيق واتساب مباشرة عند مشاركة الفواتير والكشوفات</span>
+        </label>
       </div>
 
+      <!-- Actions Bar for Settings Sections 1-6 -->
       <div class="card compact-card">
-        <div class="card-title-row">
-          <h3>مجلد بقاله العزي والنسخ الاحتياطي</h3>
-          <button type="button" class="link-btn" onclick="refreshAppFolderFiles()">تحديث الملفات</button>
+        <div class="btn-row">
+          <button type="button" class="btn btn-success btn-compact" onclick="saveAllAdvancedSettings()">حفظ الإعدادات المتقدمة</button>
+          <button type="button" class="btn btn-outline btn-compact" onclick="askResetSettings(true)">الإعدادات الافتراضية</button>
         </div>
-        <div class="info-pill" id="app-folder-status-pill">المسار: التنزيلات (Download) / بقاله العزي</div>
-        <p class="muted-text" style="margin: 5px 0;">يُحفظ تلقائياً داخل هذا المجلد: النسخ الاحتياطية (JSON + SHA-256)، فواتير PDF، صور الفواتير والإيصالات، والتقارير.</p>
+        <div id="reset-settings-confirm" class="inline-confirm hidden" style="margin-top:8px;">
+          <span>هل تريد استعادة الإعدادات الافتراضية (دون مسح العملاء أو الفواتير أو الطابعة)؟</span>
+          <div class="btn-row-compact">
+            <button type="button" class="btn btn-primary btn-sm" onclick="confirmResetSettings()">نعم، استعادة الافتراضي</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="askResetSettings(false)">إلغاء</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 7: النسخ الاحتياطي والبيانات -->
+      <div id="set-sec-backup" class="card compact-card settings-card">
+        <div class="card-title-row">
+          <h3>٧. النسخ الاحتياطي والبيانات</h3>
+          <span class="badge badge-green">حفظ آمن</span>
+        </div>
+        <div class="info-pill" id="app-folder-status-pill">المسار: Download / بقاله العزي</div>
+        <p class="muted-text" style="margin: 5px 0;">تُحفظ النسخ الاحتياطية (JSON + SHA-256) والفواتير والتقارير داخل مجلد بقاله العزي في التنزيلات تلقائياً.</p>
 
         <div class="btn-row">
           <button type="button" class="btn btn-success btn-compact" onclick="exportBackupToFolder()">نسخ احتياطي في بقاله العزي</button>
@@ -856,18 +1062,20 @@
           <button type="button" id="btn-link-app-folder" class="btn btn-outline btn-compact" onclick="linkAppFolder()">ربط مجلد بقاله العزي</button>
         </div>
 
-        <div class="pill-tabs" id="folder-filter-tabs" style="margin-top:8px;">
-          <button type="button" class="pill active" onclick="setFolderFilter('ALL', this)">الكل</button>
-          <button type="button" class="pill" onclick="setFolderFilter('BACKUP', this)">النسخ الاحتياطية</button>
-          <button type="button" class="pill" onclick="setFolderFilter('PDF', this)">الفواتير PDF</button>
-          <button type="button" class="pill" onclick="setFolderFilter('IMAGE', this)">الصور</button>
-          <button type="button" class="pill" onclick="setFolderFilter('REPORT', this)">التقارير</button>
+        <div id="safety-backup-row" class="hidden" style="margin-top:8px;">
+          <button type="button" id="btn-restore-safety-backup" class="btn btn-outline-primary btn-compact" onclick="toggleSafetyRestoreConfirm(true)">استعادة نسخة الأمان قبل آخر استعادة</button>
+          <div id="restore-safety-confirm" class="inline-confirm hidden" style="margin-top:6px;">
+            <span>هل تريد الرجوع إلى نسخة الأمان التلقائية المحفوظة قبل آخر استعادة؟</span>
+            <div class="btn-row-compact">
+              <button type="button" class="btn btn-primary btn-sm" onclick="confirmRestoreSafetyBackup()">تأكيد الاستعادة</button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="toggleSafetyRestoreConfirm(false)">إلغاء</button>
+            </div>
+          </div>
         </div>
-        <div id="app-folder-files-list" style="margin-top:4px;"></div>
       </div>
 
       <div class="card compact-card danger-card">
-        <h3>إعادة ضبط البيانات</h3>
+        <h3>تصفير قاعدة البيانات</h3>
         <p class="muted-text" style="margin: 4px 0;">حذف جميع العملاء والموردين والأصناف والفواتير بشكل نهائي.</p>
         <button type="button" class="btn btn-danger btn-compact" onclick="toggleResetConfirm(true)">تصفير قاعدة البيانات</button>
         <div id="reset-db-confirm" class="inline-confirm hidden" style="margin-top: 8px;">
