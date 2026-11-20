@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.example.viewmodel.GroceryViewModel
 import java.util.Calendar
 import kotlin.math.abs
+import org.json.JSONObject
 
 data class LedgerEntryWithBalance(
   val transaction: TransactionEntity,
@@ -80,6 +81,21 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   private val inventoryDao = database.inventoryDao()
   private val invoiceDao = database.invoiceDao()
   private val transactionDao = database.transactionDao()
+
+  private fun purchaseInventoryUnitConfig(item: InvoiceItemEntity): String {
+    val label = item.unitLabel.trim()
+    val factor = item.unitFactor.coerceAtLeast(1)
+    if (label.isBlank() || factor <= 1) return "حبة"
+    // Preserve the invoiced package as a selectable stock unit. The owner can
+    // later add an intermediate pack/carton level from the inventory editor.
+    return JSONObject()
+      .put("base", "حبة")
+      .put("packName", label)
+      .put("packSize", factor)
+      .put("cartonName", "")
+      .put("cartonPacks", 1)
+      .toString()
+  }
 
   private fun sanitizeMoney(value: Double, label: String): Double {
     require(value.isFinite() && abs(value) <= GroceryViewModel.MAX_MONETARY_AMOUNT) { "$label خارج النطاق المسموح" }
@@ -447,7 +463,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
               quantity = baseQuantity,
               purchasePrice = baseUnitPrice,
               sellingPrice = 0.0,
-              unit = "حبة"
+              unit = purchaseInventoryUnitConfig(line)
             )
           )
         }
@@ -623,7 +639,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
                   quantity = 0,
                   purchasePrice = baseUnitPrice,
                   sellingPrice = 0.0,
-                  unit = "حبة"
+                  unit = purchaseInventoryUnitConfig(item)
                 )
               )
             }
