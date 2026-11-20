@@ -496,6 +496,9 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       val item = inventoryDao.getItemById(itemId) ?: error("الصنف غير موجود")
       val usedInInvoices = invoiceDao.getInvoiceItemsSnapshot().any { it.itemId == itemId }
       check(!usedInInvoices) { "لا يمكن حذف صنف مستخدم في فواتير محفوظة" }
+      check(inventoryAdjustmentDao.getAdjustmentsForItem(itemId).isEmpty()) {
+        "لا يمكن حذف صنف له سجل تسويات مخزون؛ احتفظ بسجل حركة الكمية للمراجعة"
+      }
       inventoryDao.deleteItem(item)
     }
   }
@@ -738,15 +741,19 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         }
       }
     }
-    if (oldInvoice.remainingAmount > 0.000001 && oldInvoice.partyId > 0) {
-      if (oldInvoice.type == "PURCHASE") {
-        check(supplierDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
-          "تعذر عكس رصيد المورد السابق"
-        }
-        transactionDao.deleteByInvoiceId(oldInvoice.id)
-      } else {
-        check(customerDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
-          "تعذر عكس رصيد العميل السابق"
+    if (oldInvoice.partyId > 0) {
+      val linkedTransactions = transactionDao.getTransactionsForInvoice(oldInvoice.id)
+      if (linkedTransactions.isNotEmpty()) {
+        if (oldInvoice.type == "PURCHASE") {
+          val reverseDelta = linkedTransactions.sumOf { -txDelta(it, debitIncreasesBalance = false) }
+          check(supplierDao.updateBalance(oldInvoice.partyId, reverseDelta) == 1) {
+            "تعذر عكس رصيد المورد السابق"
+          }
+        } else {
+          val reverseDelta = linkedTransactions.sumOf { -txDelta(it, debitIncreasesBalance = true) }
+          check(customerDao.updateBalance(oldInvoice.partyId, reverseDelta) == 1) {
+            "تعذر عكس رصيد العميل السابق"
+          }
         }
         transactionDao.deleteByInvoiceId(oldInvoice.id)
       }

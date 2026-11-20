@@ -780,12 +780,15 @@ function renderCustomerTransactions() {
     const cls = t.isDebit ? 'text-danger' : 'text-success';
     const signLabel = t.isDebit ? 'عليه' : 'له';
     const isConfirming = pendingDeleteCustomerTxId === t.id;
-    const actionHtml = isConfirming
-      ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteCustomerTx(${t.id})">تأكيد</button>
-         <button type="button" class="tbl-action-btn" onclick="askDeleteCustomerTx(0)">لا</button>`
-      : `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
-         <button type="button" class="tbl-action-btn" onclick="startEditCustomerTx(${t.id})">تعديل</button>
-         <button type="button" class="tbl-action-btn del" onclick="askDeleteCustomerTx(${t.id})">حذف</button>`;
+    const actionHtml = t.invoiceId
+      ? `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
+         <button type="button" class="tbl-action-btn" onclick="openEditInvoice(${t.invoiceId})">فتح الفاتورة</button>`
+      : isConfirming
+        ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteCustomerTx(${t.id})">تأكيد</button>
+           <button type="button" class="tbl-action-btn" onclick="askDeleteCustomerTx(0)">لا</button>`
+        : `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
+           <button type="button" class="tbl-action-btn" onclick="startEditCustomerTx(${t.id})">تعديل</button>
+           <button type="button" class="tbl-action-btn del" onclick="askDeleteCustomerTx(${t.id})">حذف</button>`;
     return `
       <tr>
         <td class="num-cell ${cls}" style="font-weight:800;">${signLabel} ${fmtMoney(t.amount)}</td>
@@ -1127,12 +1130,15 @@ function renderSupplierTransactions() {
     const cls = t.isCredit ? 'text-danger' : 'text-success';
     const label = t.isCredit ? 'له' : 'عليه';
     const isConfirming = pendingDeleteSupplierTxId === t.id;
-    const actionHtml = isConfirming
-      ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteSupplierTx(${t.id})">تأكيد</button>
-         <button type="button" class="tbl-action-btn" onclick="askDeleteSupplierTx(0)">لا</button>`
-      : `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
-         <button type="button" class="tbl-action-btn" onclick="startEditSupplierTx(${t.id})">تعديل</button>
-         <button type="button" class="tbl-action-btn del" onclick="askDeleteSupplierTx(${t.id})">حذف</button>`;
+    const actionHtml = t.invoiceId
+      ? `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
+         <button type="button" class="tbl-action-btn" onclick="openEditInvoice(${t.invoiceId})">فتح الفاتورة</button>`
+      : isConfirming
+        ? `<button type="button" class="tbl-action-btn del" onclick="confirmDeleteSupplierTx(${t.id})">تأكيد</button>
+           <button type="button" class="tbl-action-btn" onclick="askDeleteSupplierTx(0)">لا</button>`
+        : `<button type="button" class="tbl-action-btn" onclick="previewTransactionThermal(${t.id})">طباعة</button>
+           <button type="button" class="tbl-action-btn" onclick="startEditSupplierTx(${t.id})">تعديل</button>
+           <button type="button" class="tbl-action-btn del" onclick="askDeleteSupplierTx(${t.id})">حذف</button>`;
     return `
       <tr>
         <td class="num-cell ${cls}" style="font-weight:800;">${label} ${fmtMoney(t.amount)}</td>

@@ -180,6 +180,7 @@ class AndroidBridge(
               put("amount", t.amount)
               put("description", t.description)
               put("date", t.date)
+              put("invoiceId", t.invoiceId ?: 0L)
               put("runningBalance", entry.runningBalance)
             })
           }
@@ -550,6 +551,7 @@ class AndroidBridge(
               put("amount", t.amount)
               put("description", t.description)
               put("date", t.date)
+              put("invoiceId", t.invoiceId ?: 0L)
               put("runningBalance", entry.runningBalance)
             })
           }

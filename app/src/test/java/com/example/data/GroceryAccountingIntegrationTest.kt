@@ -405,6 +405,7 @@ class GroceryAccountingIntegrationTest {
       legacySqlite.execSQL("INSERT INTO invoice_items (id, invoiceId, itemId, itemName, quantity, unitPrice, totalPrice) VALUES (1, 1, 1, 'سكر 10ك', 2, 4500.0, 9000.0)")
       legacySqlite.execSQL("INSERT INTO invoice_items (id, invoiceId, itemId, itemName, quantity, unitPrice, totalPrice) VALUES (2, 2, 1, 'صنف خاص', 2, 5000.0, 10000.0)")
       legacySqlite.execSQL("INSERT INTO transactions (id, partyType, partyId, partyName, type, amount, description, date) VALUES (1, 'CUSTOMER', 1, 'فايز العزي', 'DEBIT (عليه)', 19000.0, 'رصيد مرحل', 1763312400000)")
+      legacySqlite.execSQL("INSERT INTO transactions (id, partyType, partyId, partyName, type, amount, description, date) VALUES (2, 'CUSTOMER', 1, 'فايز العزي', 'DEBIT (عليه)', 9000.0, 'فاتورة مبيعات رقم DUP-101', 1763312400000)")
       legacySqlite.execSQL("PRAGMA user_version = 1")
     } finally {
       legacySqlite.close()
@@ -429,7 +430,8 @@ class GroceryAccountingIntegrationTest {
       assertEquals(2, invoices.size)
       assertEquals(2, invoiceItems.size)
       assertTrue(invoiceItems.all { it.stockQuantity == 0 && it.unitFactor == 1 && it.unitLabel.isEmpty() })
-      assertEquals(1, txs.size)
+      assertEquals(2, txs.size)
+      assertEquals(1L, txs.single { it.id == 2L }.invoiceId)
 
       // Duplicate invoiceNumber row id=2 must be deduplicated cleanly to DUP-101-DUP-2
       val numbers = invoices.map { it.invoiceNumber }.toSet()
@@ -722,6 +724,23 @@ class GroceryAccountingIntegrationTest {
     assertEquals(-5, history.totalAdjusted)
     assertEquals("ADJUSTMENT", history.movements.single().invoiceType)
     assertEquals(-5, history.movements.single().deltaQty)
+  }
+
+
+  @Test
+  fun editingInvoiceWithPreviouslyRemovedLegacyLedgerRowDoesNotDoubleReverseBalance() = runBlocking {
+    val customerId = engine.saveCustomer(0L, "عميل حركة قديمة", "", "", 0.0)
+    val itemId = engine.saveInventoryItem(0L, "صنف حركة قديمة", "", 10, 5.0, 10.0, "حبة")
+    val invoiceId = engine.saveInvoice(0L, "ORPHAN-INV-01", "CREDIT", customerId, "عميل حركة قديمة",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف حركة قديمة", 2, 10.0, 20.0)), 0.0)
+    val oldTx = db.transactionDao().getTransactionsForInvoice(invoiceId).single()
+    db.transactionDao().deleteTransaction(oldTx)
+    db.customerDao().updateBalance(customerId, -20.0)
+    engine.saveInvoice(invoiceId, "ORPHAN-INV-01", "CREDIT", customerId, "عميل حركة قديمة",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف حركة قديمة", 3, 10.0, 30.0)), 0.0)
+    assertEquals(30.0, db.customerDao().getCustomerById(customerId)!!.balance, 0.01)
+    val newTx = db.transactionDao().getTransactionsForInvoice(invoiceId).single()
+    assertEquals(30.0, newTx.amount, 0.01)
   }
 
   private fun sha256Hex(value: String): String =

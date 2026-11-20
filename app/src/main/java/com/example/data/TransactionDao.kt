@@ -35,6 +35,9 @@ interface TransactionDao {
   @Delete
   suspend fun deleteTransaction(transaction: TransactionEntity)
 
+  @Query("SELECT * FROM transactions WHERE invoiceId = :invoiceId ORDER BY id ASC")
+  suspend fun getTransactionsForInvoice(invoiceId: Long): List<TransactionEntity>
+
   @Query("DELETE FROM transactions WHERE invoiceId = :invoiceId")
   suspend fun deleteByInvoiceId(invoiceId: Long): Int
 
