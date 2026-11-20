@@ -449,6 +449,29 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
+  fun twoPanelNotesCanBeSavedEditedListedAndDeleted() = runBlocking {
+    val now = System.currentTimeMillis()
+    val noteId = db.noteDao().insertNote(
+      NoteEntity(
+        id = 0L,
+        createdAt = now,
+        updatedAt = now,
+        rightRowsJson = """[{"qty":"12","detail":"سكر 10 كيلو"},{"qty":"3","detail":"زيت"}]""",
+        leftRowsJson = """[{"qty":"5","detail":"دقيق"}]"""
+      )
+    )
+    assertTrue(noteId > 0L)
+    val saved = db.noteDao().getNoteById(noteId)!!
+    assertEquals(2, org.json.JSONArray(saved.rightRowsJson).length())
+    assertEquals("دقيق", org.json.JSONArray(saved.leftRowsJson).getJSONObject(0).getString("detail"))
+    db.noteDao().updateNote(saved.copy(updatedAt = now + 1000L, rightRowsJson = """[{"qty":"7","detail":"سكر"}]"""))
+    assertEquals("7", org.json.JSONArray(db.noteDao().getNoteById(noteId)!!.rightRowsJson).getJSONObject(0).getString("qty"))
+    assertEquals(noteId, db.noteDao().getNotesSnapshot().first().id)
+    db.noteDao().deleteNoteById(noteId)
+    assertEquals(null, db.noteDao().getNoteById(noteId))
+  }
+
+  @Test
   fun largeMonetaryAmountsRoundingAndOverflowRejectionWorkCorrectly() = runBlocking {
     // Decimal rounding checks (HALF_UP at 2 decimals)
     assertEquals(123.46, com.example.viewmodel.GroceryViewModel.roundMoney(123.455), 0.0001)
