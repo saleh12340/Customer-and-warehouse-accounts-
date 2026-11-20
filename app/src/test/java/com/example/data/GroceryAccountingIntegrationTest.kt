@@ -85,7 +85,7 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
-  fun bulkPurchaseInvoiceExportLinksOnlyUnlinkedRowsAndNeverDuplicatesStock() = runBlocking {
+  fun purchaseInvoiceAutomaticallyCreatesAndLinksNewInventoryItemsWithoutDuplicateExport() = runBlocking {
     val supplierId = engine.saveSupplier(0L, "مورد الجملة", "771234567", "", 0.0)
     val existingItemId = engine.saveInventoryItem(0L, "سكر", "مواد غذائية", 5, 100.0, 130.0, "كيس")
 
@@ -104,30 +104,53 @@ class GroceryAccountingIntegrationTest {
       paidAmount = 1365.0
     )
 
-    // The linked sugar row was already added during invoice save; only unlinked rows are imported.
-    assertEquals(7, db.inventoryDao().getItemById(existingItemId)!!.quantity)
-    val firstExport = engine.exportUnlinkedPurchaseItemsToInventory()
-    assertEquals(3, firstExport.first)
-    assertEquals(2, firstExport.second)
+    // Existing and free-typed lines are applied immediately and linked to stock.
     assertEquals(10, db.inventoryDao().getItemById(existingItemId)!!.quantity)
     val rice = db.inventoryDao().getItemByName("أرز")!!
     assertEquals(4, rice.quantity)
+    assertEquals(200.0, rice.purchasePrice, 0.01)
     val water = db.inventoryDao().getItemByName("مياه")!!
     assertEquals(288, water.quantity)
+    assertEquals(50.0, water.purchasePrice, 0.01)
 
-    // A repeated export is a no-op because invoice rows were linked atomically.
-    val secondExport = engine.exportUnlinkedPurchaseItemsToInventory()
-    assertEquals(0, secondExport.first)
-    assertEquals(0, secondExport.second)
+    val savedLines = db.invoiceDao().getInvoiceWithItems(invoiceId)!!.items
+    assertTrue(savedLines.all { it.itemId > 0L })
+
+    // The legacy bulk-export action is now a safe no-op for newly saved invoices.
+    val exportResult = engine.exportUnlinkedPurchaseItemsToInventory()
+    assertEquals(0, exportResult.first)
+    assertEquals(0, exportResult.second)
     assertEquals(10, db.inventoryDao().getItemById(existingItemId)!!.quantity)
     assertEquals(4, db.inventoryDao().getItemById(rice.id)!!.quantity)
     assertEquals(288, db.inventoryDao().getItemById(water.id)!!.quantity)
 
-    // Linked imported rows remain part of the invoice and are reversed correctly on deletion.
+    // Deleting the invoice reverses every linked stock movement exactly.
     engine.deleteInvoice(invoiceId)
     assertEquals(5, db.inventoryDao().getItemById(existingItemId)!!.quantity)
     assertEquals(0, db.inventoryDao().getItemById(rice.id)!!.quantity)
     assertEquals(0, db.inventoryDao().getItemById(water.id)!!.quantity)
+  }
+
+  @Test
+  fun editingFreeTypedPurchaseInvoiceReversesAndReappliesStockExactly() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد التعديل", "770000001", "", 0.0)
+    val invoiceId = engine.saveInvoice(
+      0L, "PUR-EDIT-001", "PURCHASE", supplierId, "مورد التعديل",
+      listOf(InvoiceItemEntity(0L, 0L, 0L, "قطم سكر 10 كيلو", 2, 5000.0, 10000.0)),
+      10000.0
+    )
+    val sugar = db.inventoryDao().getItemByName("قطم سكر 10 كيلو")!!
+    assertEquals(2, sugar.quantity)
+    assertEquals(5000.0, sugar.purchasePrice, 0.01)
+
+    engine.saveInvoice(
+      invoiceId, "PUR-EDIT-001", "PURCHASE", supplierId, "مورد التعديل",
+      listOf(InvoiceItemEntity(0L, 0L, 0L, "قطم سكر 10 كيلو", 3, 5200.0, 15600.0)),
+      15600.0
+    )
+    assertEquals(3, db.inventoryDao().getItemById(sugar.id)!!.quantity)
+    assertEquals(5200.0, db.inventoryDao().getItemById(sugar.id)!!.purchasePrice, 0.01)
+    assertEquals(sugar.id, db.invoiceDao().getInvoiceWithItems(invoiceId)!!.items.single().itemId)
   }
 
   @Test
