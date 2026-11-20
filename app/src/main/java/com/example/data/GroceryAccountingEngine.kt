@@ -85,13 +85,15 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   private fun purchaseInventoryUnitConfig(item: InvoiceItemEntity): String {
     val label = item.unitLabel.trim()
     val factor = item.unitFactor.coerceAtLeast(1)
-    if (label.isBlank() || factor <= 1) return "حبة"
-    // Preserve the invoiced package as a selectable stock unit. The owner can
-    // later add an intermediate pack/carton level from the inventory editor.
+    if (label.isBlank()) return "حبة"
+    // A free-typed line with factor 1 is stocked in its selected base unit
+    // (for example, one carton or one bag). Converted package units retain
+    // their base-unit multiplier (for example, one carton = 48 pieces).
+    val baseUnit = if (factor <= 1) label else "حبة"
     return JSONObject()
-      .put("base", "حبة")
-      .put("packName", label)
-      .put("packSize", factor)
+      .put("base", baseUnit)
+      .put("packName", if (factor <= 1) "" else label)
+      .put("packSize", if (factor <= 1) 1 else factor)
       .put("cartonName", "")
       .put("cartonPacks", 1)
       .toString()
