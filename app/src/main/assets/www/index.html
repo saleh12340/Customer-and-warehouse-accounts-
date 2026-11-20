@@ -553,14 +553,14 @@
           <div id="multi-stock-picker-box" class="stock-picker-modal hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="stock-picker-title" onclick="if(event.target===this)toggleMultiStockPicker(false)">
             <div class="stock-picker-dialog">
               <div class="stock-picker-heading">
-                <div><strong id="stock-picker-title">اختيار صنف من المخزن</strong><small>اضغط إضافة لإدراج الصنف في الفاتورة</small></div>
+                <div><strong id="stock-picker-title">اختيار صنف من المخزن</strong><small>اضغط على الصنف لإضافته، وكرر الضغط لزيادة الكمية</small></div>
                 <button type="button" class="stock-picker-close" onclick="toggleMultiStockPicker(false)" aria-label="إغلاق">×</button>
               </div>
               <div class="ruled-input-row ruled-search-row stock-picker-search">
                 <input type="search" id="multi-stock-search" class="ruled-cell" placeholder="ابحث باسم الصنف أو القسم..." oninput="renderMultiStockPicker()">
               </div>
               <div id="multi-stock-list" class="multi-stock-list"></div>
-              <div class="stock-picker-footer"><span id="stock-picker-count">0 صنف</span><span>يمكنك إضافة عدة أصناف دون إغلاق النافذة</span></div>
+              <div class="stock-picker-footer"><span id="stock-picker-count">0 صنف</span><span>كل ضغطة تضيف وحدة واحدة</span></div>
             </div>
           </div>
 
