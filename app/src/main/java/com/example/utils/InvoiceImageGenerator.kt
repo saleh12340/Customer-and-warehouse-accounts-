@@ -48,7 +48,8 @@ object InvoiceImageGenerator {
         invoice = invoice,
         items = items,
         partyBalanceAfter = partyBalanceAfter,
-        paperWidthMm = if (settings.printerWidthMm == 80) 80 else 58
+        paperWidthMm = if (settings.printerWidthMm == 80) 80 else 58,
+        renderScale = 3
       )
       val dir = File(context.cacheDir, "shared_invoices").apply { mkdirs() }
       val safeNumber = invoice.invoiceNumber.replace(Regex("[^A-Za-z0-9_-]"), "_").take(48)
