@@ -13,6 +13,8 @@ class WhatsAppHelperTest {
     assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("967771234567"))
     assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("00967771234567"))
     assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("+967 771 234 567"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("٧٧١٢٣٤٥٦٧"))
+    assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("۰۷۷۱۲۳۴۵۶۷"))
   }
 
   @Test
