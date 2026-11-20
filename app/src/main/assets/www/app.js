@@ -125,24 +125,34 @@ let settingsLoadedOnce = false;
 let isSavingInvoice = false;
 
 
-// ---------------- Context-aware suggestions (shared across all screens) ----------------
+// ---------------- Compact context suggestions (shared across all screens) ----------------
 const SUGGESTION_LIST_IDS = {
   customers: 'suggest-customers', suppliers: 'suggest-suppliers', items: 'suggest-items',
   units: 'suggest-units', categories: 'suggest-categories',
   customerDescriptions: 'suggest-customer-descriptions', supplierDescriptions: 'suggest-supplier-descriptions'
 };
 const DEFAULT_UNIT_SUGGESTIONS = ['حبة', 'نص كيس', 'كيس', 'نص قطمة', 'قطمة', 'كرتون', 'شدة', 'دزة', 'باكت', 'كيلو', 'جرام', 'لتر', 'صندوق'];
+const MAX_CONTEXT_SUGGESTIONS = 3;
+const MIN_CONTEXT_QUERY_LENGTH = 2;
+let activeSuggestionInput = null;
+let activeSuggestionItems = [];
+let activeSuggestionIndex = -1;
+let suggestionHideFrame = 0;
 
+function normalizeSuggestionText(value) {
+  return String(value ?? '').trim().toLocaleLowerCase('ar')
+    .replace(/[\\u064B-\\u065F\\u0670]/g, '')
+    .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي');
+}
 function uniqueSuggestionValues(values) {
   const seen = new Set();
   return (values || []).map(v => String(v ?? '').trim()).filter(v => {
-    const key = v.toLocaleLowerCase('ar');
-    if (!v || seen.has(key)) return false;
+    const key = normalizeSuggestionText(v);
+    if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   }).sort((a, b) => a.localeCompare(b, 'ar'));
 }
-
 function suggestionValuesFor(kind) {
   if (kind === 'customers') return uniqueSuggestionValues(customersData.map(x => x.name));
   if (kind === 'suppliers') return uniqueSuggestionValues(suppliersData.map(x => x.name));
@@ -164,93 +174,150 @@ function suggestionValuesFor(kind) {
   if (kind === 'supplierDescriptions') return uniqueSuggestionValues((activeSupplierDetail?.transactions || []).map(x => x.description));
   return [];
 }
-
 function suggestionKindForInput(input) {
   if (!input || (input.tagName !== 'INPUT' && input.tagName !== 'TEXTAREA')) return '';
   const id = input.id || '';
-  if (id === 'cust-form-name') return 'customers';
-  if (id === 'supp-form-name') return 'suppliers';
-  if (/^(batch-name-\d+|note-detail|inv-item-form-name|inventory-quick-name|quick-stock-name)$/.test(id) ||
-      input.classList?.contains('note-detail')) return 'items';
-  if (id === 'inventory-quick-category' || id === 'inv-item-form-category') return 'categories';
-  if (id === 'inventory-quick-unit' || id === 'inv-item-form-unit' || id.includes('pack-name') || id.includes('carton-name')) return 'units';
-  if (id === 'tx-desc') return 'customerDescriptions';
-  if (id === 'supp-tx-desc') return 'supplierDescriptions';
+  if (id === 'cust-form-name' || input.matches('[data-suggest="customers"]')) return 'customers';
+  if (id === 'supp-form-name' || input.matches('[data-suggest="suppliers"]')) return 'suppliers';
+  if (/^(batch-name-\\d+|note-detail|inv-item-form-name|inventory-quick-name|quick-stock-name)$/.test(id) ||
+      input.classList?.contains('note-detail') || input.matches('[data-suggest="items"]')) return 'items';
+  if (id === 'inventory-quick-category' || id === 'inv-item-form-category' || input.matches('[data-suggest="categories"]')) return 'categories';
+  if (id === 'inventory-quick-unit' || id === 'inv-item-form-unit' || id.includes('pack-name') || id.includes('carton-name') ||
+      input.matches('[data-suggest="units"]')) return 'units';
+  if (id === 'tx-desc' || input.matches('[data-suggest="customerDescriptions"]')) return 'customerDescriptions';
+  if (id === 'supp-tx-desc' || input.matches('[data-suggest="supplierDescriptions"]')) return 'supplierDescriptions';
   return '';
 }
-
-// Suggestions are filtered while typing; never dump the full database into a field.
-const MAX_CONTEXT_SUGGESTIONS = 5;
-const MIN_CONTEXT_QUERY_LENGTH = 1;
-
-function ensureSuggestionList(kind) {
-  if (!document.body || !SUGGESTION_LIST_IDS[kind]) return null;
-  const id = SUGGESTION_LIST_IDS[kind];
-  let list = document.getElementById(id);
-  if (!list) { list = document.createElement('datalist'); list.id = id; document.body.appendChild(list); }
-  return list;
+function ensureCompactSuggestionPanel() {
+  let panel = document.getElementById('context-suggestion-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'context-suggestion-panel';
+    panel.className = 'context-suggestion-panel hidden';
+    panel.setAttribute('role', 'listbox');
+    panel.setAttribute('aria-label', 'اقتراحات');
+    document.body.appendChild(panel);
+  }
+  return panel;
 }
-
+function hideContextSuggestions() {
+  const panel = document.getElementById('context-suggestion-panel');
+  if (panel) { panel.classList.add('hidden'); panel.replaceChildren(); }
+  if (activeSuggestionInput) activeSuggestionInput.removeAttribute('aria-activedescendant');
+  activeSuggestionInput = null;
+  activeSuggestionItems = [];
+  activeSuggestionIndex = -1;
+}
+function positionContextSuggestions() {
+  const panel = document.getElementById('context-suggestion-panel');
+  if (!panel || panel.classList.contains('hidden') || !activeSuggestionInput?.isConnected) return;
+  const rect = activeSuggestionInput.getBoundingClientRect();
+  const gap = 3, maxHeight = Math.min(126, window.innerHeight * 0.24);
+  const below = window.innerHeight - rect.bottom;
+  const placeAbove = below < Math.min(maxHeight, 105) && rect.top > below;
+  panel.style.left = Math.max(6, Math.min(rect.left, window.innerWidth - Math.max(rect.width, 150) - 6)) + 'px';
+  panel.style.width = Math.min(Math.max(rect.width, 150), window.innerWidth - 12) + 'px';
+  panel.style.maxHeight = maxHeight + 'px';
+  panel.style.top = (placeAbove ? Math.max(6, rect.top - Math.min(panel.offsetHeight || maxHeight, maxHeight) - gap) : rect.bottom + gap) + 'px';
+}
+function chooseContextSuggestion(index) {
+  if (!activeSuggestionInput || !activeSuggestionItems[index]) return;
+  const input = activeSuggestionInput;
+  input.value = activeSuggestionItems[index];
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  hideContextSuggestions();
+  input.focus();
+}
 function refreshSuggestionListForInput(input) {
   const kind = suggestionKindForInput(input);
-  if (!kind) return;
-  const list = ensureSuggestionList(kind);
-  if (!list) return;
-  const query = String(input.value || '').trim().toLocaleLowerCase('ar');
-  if (query.length < MIN_CONTEXT_QUERY_LENGTH) {
-    list.replaceChildren();
-    return;
-  }
-  const matches = suggestionValuesFor(kind)
-    .map(value => ({ value, normalized: value.toLocaleLowerCase('ar') }))
-    .filter(item => item.normalized.startsWith(query) || item.normalized.includes(query))
+  if (!kind) { hideContextSuggestions(); return; }
+  const query = normalizeSuggestionText(input.value);
+  if (query.length < MIN_CONTEXT_QUERY_LENGTH) { hideContextSuggestions(); return; }
+  const matches = suggestionValuesFor(kind).map(value => ({
+    value, normalized: normalizeSuggestionText(value)
+  })).filter(item => item.normalized.startsWith(query) || item.normalized.includes(query))
     .sort((a, b) => {
-      const aStarts = a.normalized.startsWith(query) ? 0 : 1;
-      const bStarts = b.normalized.startsWith(query) ? 0 : 1;
-      return aStarts - bStarts || a.value.localeCompare(b.value, 'ar');
-    })
-    .slice(0, MAX_CONTEXT_SUGGESTIONS);
-  list.replaceChildren(...matches.map(item => {
-    const option = document.createElement('option');
-    option.value = item.value;
+      const ap = a.normalized.startsWith(query) ? 0 : 1;
+      const bp = b.normalized.startsWith(query) ? 0 : 1;
+      return ap - bp || a.value.localeCompare(b.value, 'ar');
+    }).slice(0, MAX_CONTEXT_SUGGESTIONS);
+  if (!matches.length) { hideContextSuggestions(); return; }
+  activeSuggestionInput = input;
+  activeSuggestionItems = matches.map(item => item.value);
+  activeSuggestionIndex = -1;
+  const panel = ensureCompactSuggestionPanel();
+  panel.replaceChildren(...activeSuggestionItems.map((value, index) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'context-suggestion-option';
+    option.id = 'context-suggestion-' + index;
+    option.setAttribute('role', 'option');
+    option.textContent = value;
+    option.addEventListener('pointerdown', event => { event.preventDefault(); chooseContextSuggestion(index); });
     return option;
   }));
+  panel.classList.remove('hidden');
+  positionContextSuggestions();
 }
-
-function attachContextSuggestion(input) {
-  const kind = suggestionKindForInput(input);
-  if (!kind) return;
-  input.setAttribute('list', SUGGESTION_LIST_IDS[kind]);
-  input.setAttribute('autocomplete', 'off');
-  input.setAttribute('spellcheck', 'false');
-  if (input.dataset.contextSuggestionBound !== 'true') {
-    input.dataset.contextSuggestionBound = 'true';
-    input.addEventListener('input', () => refreshSuggestionListForInput(input));
-    input.addEventListener('focus', () => refreshSuggestionListForInput(input));
-    input.addEventListener('blur', () => {
-      // Clear shared suggestions so another field never inherits stale matches.
-      const list = ensureSuggestionList(kind);
-      if (list) list.replaceChildren();
-    });
-  }
-}
-
 function refreshContextSuggestions(root) {
   const scope = root || document;
-  if (scope.matches) attachContextSuggestion(scope);
-  if (scope.querySelectorAll) scope.querySelectorAll('input,textarea').forEach(attachContextSuggestion);
+  if (scope.matches && scope.matches('input,textarea')) {
+    const kind = suggestionKindForInput(scope);
+    if (kind) { scope.setAttribute('autocomplete', 'off'); scope.setAttribute('spellcheck', 'false'); }
+  }
+  if (scope.querySelectorAll) scope.querySelectorAll('input,textarea').forEach(input => {
+    if (suggestionKindForInput(input)) {
+      input.setAttribute('autocomplete', 'off');
+      input.setAttribute('spellcheck', 'false');
+    }
+  });
 }
-
 function initializeContextSuggestions() {
   refreshContextSuggestions();
   if (typeof MutationObserver !== 'undefined' && document.documentElement) {
     const observer = new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => {
-      if (node.nodeType !== 1) return;
-      attachContextSuggestion(node);
-      if (node.querySelectorAll) node.querySelectorAll('input,textarea').forEach(attachContextSuggestion);
+      if (node.nodeType === 1) refreshContextSuggestions(node);
     })));
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
+  document.addEventListener('input', event => {
+    if (suggestionKindForInput(event.target)) refreshSuggestionListForInput(event.target);
+    else hideContextSuggestions();
+  }, true);
+  document.addEventListener('focusin', event => {
+    const input = event.target;
+    if (suggestionKindForInput(input) && normalizeSuggestionText(input.value).length >= MIN_CONTEXT_QUERY_LENGTH) {
+      refreshSuggestionListForInput(input);
+    } else hideContextSuggestions();
+  });
+  document.addEventListener('focusout', event => {
+    if (event.target === activeSuggestionInput) {
+      suggestionHideFrame = requestAnimationFrame(() => {
+        if (!document.getElementById('context-suggestion-panel')?.contains(document.activeElement)) hideContextSuggestions();
+      });
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (!activeSuggestionInput || !activeSuggestionItems.length) return;
+    if (event.key === 'Escape') { hideContextSuggestions(); return; }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      activeSuggestionIndex = (activeSuggestionIndex + (event.key === 'ArrowDown' ? 1 : -1) + activeSuggestionItems.length) % activeSuggestionItems.length;
+      document.querySelectorAll('.context-suggestion-option').forEach((el, i) => el.classList.toggle('is-active', i === activeSuggestionIndex));
+      return;
+    }
+    if (event.key === 'Enter' && activeSuggestionIndex >= 0) {
+      event.preventDefault();
+      chooseContextSuggestion(activeSuggestionIndex);
+    }
+  }, true);
+  document.addEventListener('pointerdown', event => {
+    if (activeSuggestionInput && event.target !== activeSuggestionInput &&
+        !document.getElementById('context-suggestion-panel')?.contains(event.target)) hideContextSuggestions();
+  }, true);
+  window.addEventListener('resize', positionContextSuggestions, { passive: true });
+  document.getElementById('main-scroll')?.addEventListener('scroll', positionContextSuggestions, { passive: true });
 }
 document.addEventListener('DOMContentLoaded', initializeContextSuggestions);
 
