@@ -1940,8 +1940,26 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
   }
 };
 
+function setInvoiceType(type) {
+  const select = document.getElementById('inv-type');
+  if (!select || !['CASH', 'CREDIT', 'PURCHASE'].includes(type)) return;
+  if (select.value !== type) { select.value = type; onInvoiceTypeChange(); }
+  else updateInvoiceModeUI();
+}
+
 function updateInvoiceModeUI() {
   const type = document.getElementById('inv-type').value;
+  document.querySelectorAll('.invoice-mode-btn').forEach(btn => {
+    const active = btn.dataset.invoiceMode === type;
+    btn.classList.toggle('active-cash', active && type === 'CASH');
+    btn.classList.toggle('active-credit', active && type === 'CREDIT');
+    btn.classList.toggle('active-purchase', active && type === 'PURCHASE');
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  const partyCaption = document.getElementById('invoice-party-caption');
+  if (partyCaption) partyCaption.textContent = type === 'PURCHASE' ? 'المورد' : 'العميل';
+  const addPartyButton = document.querySelector('.invoice-party-toolbar .invoice-tool-btn');
+  if (addPartyButton) addPartyButton.textContent = type === 'PURCHASE' ? '+ إضافة مورد' : '+ إضافة عميل';
   const modeLabel = type === 'PURCHASE' ? 'فاتورة شراء'
     : (type === 'CREDIT' ? 'فاتورة بيع آجل' : 'فاتورة بيع نقدي');
   const prefix = editingInvoiceId > 0 ? 'تعديل' : 'إصدار';
@@ -2345,6 +2363,52 @@ function toggleMultiStockPicker(forceState) {
   }
 }
 
+function toggleQuickAddParty(forceState) {
+  const box = document.getElementById('quick-add-party-box');
+  if (!box) return;
+  const type = document.getElementById('inv-type').value;
+  const show = typeof forceState === 'boolean' ? forceState : box.classList.contains('hidden');
+  box.classList.toggle('hidden', !show);
+  const title = document.getElementById('quick-party-title');
+  const extra = document.getElementById('quick-party-extra');
+  const name = document.getElementById('quick-party-name');
+  if (title) title.textContent = type === 'PURCHASE' ? 'إضافة مورد جديد' : 'إضافة عميل جديد';
+  if (extra) extra.placeholder = type === 'PURCHASE' ? 'اسم الشركة' : 'العنوان';
+  if (show && name) setTimeout(() => name.focus(), 40);
+}
+
+function submitQuickAddParty() {
+  const type = document.getElementById('inv-type').value;
+  const name = (document.getElementById('quick-party-name').value || '').trim();
+  const phone = (document.getElementById('quick-party-phone').value || '').trim();
+  const extra = (document.getElementById('quick-party-extra').value || '').trim();
+  if (!name) { showToast('أدخل الاسم أولاً', 'error'); return; }
+  if (!window.Android) return;
+  const isSupplier = type === 'PURCHASE';
+  const payload = isSupplier
+    ? { id: 0, name, company: extra, phone, balance: 0 }
+    : { id: 0, name, phone, address: extra, balance: 0 };
+  const reqId = nextReqId(created => {
+    if (!created || !created.id) {
+      showToast('تم الحفظ، حدّث قائمة الأطراف ثم اختر الاسم', 'success');
+      if (isSupplier) window.Android.getSuppliers(); else window.Android.getCustomers();
+      return;
+    }
+    toggleQuickAddParty(false);
+    ['quick-party-name','quick-party-phone','quick-party-extra'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    if (isSupplier) window.Android.getSuppliers(); else window.Android.getCustomers();
+    setTimeout(() => {
+      const select = document.getElementById('inv-party');
+      if (select) select.value = String(created.id);
+      updatePartyBalanceChip();
+      markInvoiceDirty();
+      showToast(isSupplier ? 'تمت إضافة المورد واختياره ✓' : 'تمت إضافة العميل واختياره ✓', 'success');
+    }, 220);
+  });
+  if (isSupplier) window.Android.saveSupplier(JSON.stringify(payload), reqId);
+  else window.Android.saveCustomer(JSON.stringify(payload), reqId);
+}
+
 function renderMultiStockPicker() {
   const container = document.getElementById('multi-stock-list');
   if (!container) return;
@@ -2367,11 +2431,20 @@ function renderMultiStockPicker() {
           <strong>${escapeHtml(i.name)}</strong>
           <span class="muted-text">${escapeHtml(i.category || 'عام')} · <b class="${stockClass}">المخزون ${fmtMoney(qty)}</b> · ${fmtMoney(price)} ${escapeHtml(appCurrency)}</span>
         </div>
-        <input type="number" class="qty-inline-input quick-stock-pick-qty" id="mstock-qty-${i.id}" min="1" step="1" value="1" aria-label="الكمية">
+        <div class="quantity-stepper quantity-stepper-picker">
+          <button type="button" aria-label="تقليل الكمية" onclick="stepPickerQty(${i.id}, -1)">−</button>
+          <input type="number" class="qty-inline-input quick-stock-pick-qty" id="mstock-qty-${i.id}" min="1" step="1" value="1" aria-label="الكمية">
+          <button type="button" aria-label="زيادة الكمية" onclick="stepPickerQty(${i.id}, 1)">+</button>
+        </div>
         <button type="button" class="btn btn-primary btn-sm quick-stock-pick-add" onclick="addInventoryItemQuick(${i.id})">إضافة</button>
       </div>
     `;
   }).join('');
+}
+
+function stepPickerQty(itemId, delta) {
+  const input = document.getElementById('mstock-qty-' + itemId);
+  if (input) input.value = String(Math.max(1, (parseInt(input.value, 10) || 1) + delta));
 }
 
 function addInventoryItemQuick(itemId) {
@@ -2471,6 +2544,12 @@ function submitQuickAddStock() {
   }), reqId);
 }
 
+function stepCartQty(idx, delta) {
+  const line = cartItems[idx];
+  if (!line) return;
+  updateCartQty(idx, Math.max(1, (parseInt(line.quantity, 10) || 1) + delta));
+}
+
 function updateCartQty(idx, newQtyVal) {
   const qty = parseInt(newQtyVal, 10);
   if (!Number.isFinite(qty) || qty <= 0) return;
@@ -2558,7 +2637,14 @@ function renderCart() {
     tbody.innerHTML = cartItems.map((item, idx) => `
       <tr>
         <td><input type="number" class="qty-inline-input" style="width:66px; color:var(--success-green);" min="0" step="0.01" value="${item.totalPrice}" onchange="updateCartLineTotal(${idx}, this.value)"></td>
-        <td><input type="number" class="qty-inline-input" min="1" value="${item.quantity}" onchange="updateCartQty(${idx}, this.value)"><small class="cart-unit-label">${escapeHtml(item.unitName || '')}</small></td>
+        <td>
+          <div class="quantity-stepper cart-quantity-stepper">
+            <button type="button" aria-label="تقليل الكمية" onclick="stepCartQty(${idx}, -1)">−</button>
+            <input type="number" class="qty-inline-input" min="1" step="1" value="${item.quantity}" onchange="updateCartQty(${idx}, this.value)">
+            <button type="button" aria-label="زيادة الكمية" onclick="stepCartQty(${idx}, 1)">+</button>
+          </div>
+          <small class="cart-unit-label">${escapeHtml(item.unitName || '')}</small>
+        </td>
         <td><input type="text" class="inline-name-input" value="${escapeHtml(item.itemName)}" onchange="updateCartItemName(${idx}, this.value)"></td>
         <td><input type="number" class="qty-inline-input" style="width:60px; color:var(--dark-header); background:#F5F8FF;" min="0" step="0.01" value="${item.unitPrice}" onchange="updateCartUnitPrice(${idx}, this.value)"></td>
         <td><button type="button" class="tbl-action-btn del" onclick="removeCartItem(${idx})">حذف</button></td>
