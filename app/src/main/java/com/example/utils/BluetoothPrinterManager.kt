@@ -596,25 +596,30 @@ object BluetoothPrinterManager {
     note: NoteEntity,
     paperWidthMm: Int = 58
   ): Bitmap {
-    val settings = StorePreferences.getSettings(context)
     val width = if (paperWidthMm == 80) 576 else 384
     val isWide = width >= 576
-    val pad = if (isWide) 7f else 4f
+
+    // Use nearly the full paper width: two equal item panels, with no store/title/date
+    // header, no panel captions, and no column-heading band.
+    val pad = 1f
     val contentW = width - pad * 2
-    val panelGap = if (isWide) 8f else 5f
+    val panelGap = if (isWide) 3f else 2f
     val panelW = (contentW - panelGap) / 2f
-    val qtyW = if (isWide) 62f else 48f
+    val qtyW = if (isWide) 58f else 43f
     val detailW = panelW - qtyW
 
-    val titlePaint = textPaint(context, if (isWide) 27f else 21f, bold = true)
-    val panelTitlePaint = textPaint(context, if (isWide) 18f else 14f, bold = true)
-    val bodyPaint = textPaint(context, if (isWide) 17f else 13f, bold = false)
-    val qtyPaint = textPaint(context, if (isWide) 17f else 13f, bold = true)
-    val metaPaint = textPaint(context, if (isWide) 17f else 13f, bold = true)
-    val headerWhite = textPaint(context, if (isWide) 16f else 11.5f, bold = true, color = Color.WHITE)
-    val heavyLine = Paint().apply { color = Color.BLACK; strokeWidth = 1.8f; style = Paint.Style.STROKE }
-    val ruleLine = Paint().apply { color = Color.BLACK; strokeWidth = 1f; style = Paint.Style.STROKE }
-    val solidBlack = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
+    val bodyPaint = textPaint(context, if (isWide) 22f else 17f, bold = true)
+    val qtyPaint = textPaint(context, if (isWide) 21f else 16.5f, bold = true)
+    val ruleLine = Paint().apply {
+      color = Color.BLACK
+      strokeWidth = if (isWide) 1.5f else 1.2f
+      style = Paint.Style.STROKE
+    }
+    val outerLine = Paint().apply {
+      color = Color.BLACK
+      strokeWidth = if (isWide) 2f else 1.6f
+      style = Paint.Style.STROKE
+    }
 
     fun parseRows(json: String): List<Pair<String, String>> {
       val arr = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
@@ -627,107 +632,82 @@ object BluetoothPrinterManager {
     }
 
     data class NotePrintRow(val qty: String, val detail: StaticLayout, val height: Int)
-    data class NotePrintPanel(val title: String, val rows: List<NotePrintRow>)
 
-    fun measurePanel(title: String, source: List<Pair<String, String>>): NotePrintPanel {
-      val rows = source.ifEmpty { listOf("" to "") }.map { (qty, detail) ->
+    fun measureRows(source: List<Pair<String, String>>): List<NotePrintRow> =
+      source.map { (qty, detail) ->
         val layout = buildRtlLayout(
-          text = detail.ifBlank { "—" },
+          text = detail,
           paint = bodyPaint,
           width = (detailW - 6f).toInt().coerceAtLeast(24),
           alignment = Layout.Alignment.ALIGN_NORMAL,
           maxLines = 40
         )
-        NotePrintRow(qty.ifBlank { "—" }, layout, maxOf(if (isWide) 25 else 22, layout.height + 5))
+        NotePrintRow(
+          qty = qty,
+          detail = layout,
+          height = maxOf(if (isWide) 34 else 29, layout.height + 8)
+        )
       }
-      return NotePrintPanel(title, rows)
-    }
 
-    // Match the Notes screen: first panel on the right, second panel on the left.
-    val rightPanel = measurePanel("الشق الأول", parseRows(note.rightRowsJson))
-    val leftPanel = measurePanel("الشق الثاني", parseRows(note.leftRowsJson))
-    val maxRows = maxOf(rightPanel.rows.size, leftPanel.rows.size)
-    val rowHeights = (0 until maxRows).map { index ->
+    // The first section stays on the right, matching the Notes screen.
+    val rightRows = measureRows(parseRows(note.rightRowsJson))
+    val leftRows = measureRows(parseRows(note.leftRowsJson))
+    val maxRows = maxOf(rightRows.size, leftRows.size)
+    val rowsHeight = (0 until maxRows).sumOf { index ->
       maxOf(
-        rightPanel.rows.getOrNull(index)?.height ?: 0,
-        leftPanel.rows.getOrNull(index)?.height ?: 0,
-        if (isWide) 25 else 22
+        rightRows.getOrNull(index)?.height ?: 0,
+        leftRows.getOrNull(index)?.height ?: 0,
+        if (isWide) 34 else 29
       )
     }
-    val panelTitleH = if (isWide) 25f else 21f
-    val tableHeaderH = if (isWide) 25f else 21f
-    val rowsHeight = rowHeights.sum()
-    val estimatedHeight = (145f + panelTitleH * 2 + tableHeaderH + rowsHeight).toInt()
-    val bitmap = Bitmap.createBitmap(width, estimatedHeight.coerceAtLeast(220), Bitmap.Config.ARGB_8888)
+
+    val emptyHeight = if (isWide) 140 else 120
+    val bitmapHeight = (rowsHeight + 6).coerceAtLeast(emptyHeight)
+    val bitmap = Bitmap.createBitmap(width, bitmapHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(Color.WHITE)
 
-    var y = 4f
-    y += drawRtl(canvas, settings.storeName, pad, y, contentW, titlePaint, Layout.Alignment.ALIGN_CENTER) + 2f
-    val bannerH = if (isWide) 29f else 24f
-    canvas.drawRect(pad, y, width - pad, y + bannerH, solidBlack)
-    val noteTitle = if (note.id > 0L) "ملاحظة #${note.id}" else "معاينة ملاحظة"
-    drawRtl(canvas, noteTitle, pad + 3f, y + 2f, contentW - 6f, headerWhite, Layout.Alignment.ALIGN_CENTER)
-    y += bannerH + 3f
-
-    val dateStr = SimpleDateFormat("yy/MM/dd HH:mm", Locale.US)
-      .format(Date(note.updatedAt.takeIf { it > 0L } ?: System.currentTimeMillis()))
-    y += drawRtl(canvas, "التاريخ: $dateStr", pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER) + 5f
-
     val leftX = pad
     val rightX = pad + panelW + panelGap
-    val panelTitlePaintFill = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
-    val panelTitleWhite = textPaint(context, if (isWide) 16f else 11.5f, bold = true, color = Color.WHITE)
+    var y = 2f
 
-    fun drawPanelHeader(x: Float, title: String) {
-      canvas.drawRect(x, y, x + panelW, y + panelTitleH, panelTitlePaintFill)
-      drawRtl(canvas, title, x + 2f, y + 2f, panelW - 4f, panelTitleWhite, Layout.Alignment.ALIGN_CENTER)
-    }
-    drawPanelHeader(rightX, rightPanel.title)
-    drawPanelHeader(leftX, leftPanel.title)
-    y += panelTitleH
-
-    fun drawTableHeader(x: Float) {
-      canvas.drawRect(x, y, x + panelW, y + tableHeaderH, solidBlack)
-      val qtyX = x + detailW
-      drawRtl(canvas, "الكمية", qtyX + 1f, y + 2f, qtyW - 2f, headerWhite, Layout.Alignment.ALIGN_CENTER)
-      drawRtl(canvas, "التفاصيل", x + 2f, y + 2f, detailW - 4f, headerWhite, Layout.Alignment.ALIGN_CENTER)
-      canvas.drawLine(qtyX, y, qtyX, y + tableHeaderH + rowsHeight, ruleLine)
-    }
-    drawTableHeader(rightX)
-    drawTableHeader(leftX)
-    y += tableHeaderH
-
-    for (index in 0 until maxRows) {
-      val rowH = rowHeights[index].toFloat()
-      fun drawRow(x: Float, row: NotePrintRow?) {
+    if (maxRows == 0) {
+      // Keep an intentionally blank, compact preview when there are no saved items.
+      canvas.drawLine(pad, y, width - pad, y, ruleLine)
+      y += 3f
+    } else {
+      fun drawRow(x: Float, row: NotePrintRow?, rowHeight: Float) {
         if (row != null) {
-          val textY = y + 3f
+          val textY = y + 4f
           val qtyX = x + detailW
-          drawRtl(canvas, row.qty, qtyX + 1f, textY, qtyW - 2f, qtyPaint, Layout.Alignment.ALIGN_CENTER)
+          drawRtl(
+            canvas, row.qty, qtyX + 1f, textY, qtyW - 2f,
+            qtyPaint, Layout.Alignment.ALIGN_CENTER
+          )
           canvas.save()
           canvas.translate(x + 3f, textY)
           row.detail.draw(canvas)
           canvas.restore()
         }
-        canvas.drawRect(x, y, x + panelW, y + rowH, ruleLine)
+        canvas.drawRect(x, y, x + panelW, y + rowHeight, ruleLine)
+        canvas.drawLine(x + detailW, y, x + detailW, y + rowHeight, ruleLine)
       }
-      drawRow(rightX, rightPanel.rows.getOrNull(index))
-      drawRow(leftX, leftPanel.rows.getOrNull(index))
-      y += rowH
+
+      for (index in 0 until maxRows) {
+        val rowHeight = maxOf(
+          rightRows.getOrNull(index)?.height ?: 0,
+          leftRows.getOrNull(index)?.height ?: 0,
+          if (isWide) 34 else 29
+        ).toFloat()
+        drawRow(rightX, rightRows.getOrNull(index), rowHeight)
+        drawRow(leftX, leftRows.getOrNull(index), rowHeight)
+        y += rowHeight
+      }
+      canvas.drawRect(rightX, 2f, rightX + panelW, y, outerLine)
+      canvas.drawRect(leftX, 2f, leftX + panelW, y, outerLine)
     }
 
-    canvas.drawRect(rightX, y - tableHeaderH - rowsHeight, rightX + panelW, y, heavyLine)
-    canvas.drawRect(leftX, y - tableHeaderH - rowsHeight, leftX + panelW, y, heavyLine)
-    y += 5f
-
-    val totalCount = parseRows(note.rightRowsJson).size + parseRows(note.leftRowsJson).size
-    y += drawRtl(canvas, "إجمالي البنود: $totalCount", pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER) + 3f
-    canvas.drawLine(pad, y, width - pad, y, ruleLine)
-    y += 3f
-    y += drawRtl(canvas, settings.storeName, pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER)
-
-    return tightCropBitmap(bitmap, width, y)
+    return tightCropBitmap(bitmap, width, y + 2f)
   }
 
   private fun tightCropBitmap(bitmap: Bitmap, width: Int, contentEndY: Float): Bitmap {
