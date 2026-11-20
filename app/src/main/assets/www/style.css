@@ -1710,8 +1710,13 @@ input[type="time"] {
 
 /* Final compact invoice columns: keep the unit selector deliberately narrow. */
 #view-create-invoice .grid-invoice-batch-row {
-  grid-template-columns: minmax(0,.68fr) minmax(0,1.5fr) minmax(0,.58fr) minmax(0,.88fr) 0 !important;
+  grid-template-columns: minmax(0,1.02fr) minmax(0,.62fr) minmax(0,1.55fr) minmax(0,.66fr) 0 !important;
 }
+#view-create-invoice .batch-entry-line { display:flex; flex-direction:column; gap:2px; padding-bottom:4px; border-bottom:1px solid var(--border-color); }
+#view-create-invoice .batch-derived-price { display:flex; align-items:center; justify-content:flex-start; gap:7px; padding-inline:4px; }
+#view-create-invoice .batch-derived-price label { color:var(--text-secondary); font-size:10px; white-space:nowrap; }
+#view-create-invoice .batch-derived-price input { width:112px; max-width:42%; height:26px; min-height:26px; padding:2px 6px; font-size:11px; font-weight:800; }
+#view-create-invoice .batch-total-input { background:#fff8e8; font-weight:800; }
 #view-create-invoice .grid-invoice-batch-row .batch-unit-select {
   min-width:0 !important;
   width:100%;
@@ -1722,10 +1727,13 @@ input[type="time"] {
 }
 @media (max-width:380px) {
   #view-create-invoice .grid-invoice-batch-row {
-    grid-template-columns:minmax(0,.62fr) minmax(0,1.4fr) minmax(0,.52fr) minmax(0,.82fr) 0 !important;
+    grid-template-columns:minmax(0,.92fr) minmax(0,.58fr) minmax(0,1.35fr) minmax(0,.62fr) 0 !important;
   }
   #view-create-invoice .grid-invoice-batch-row .batch-unit-select {
     font-size:8.5px !important;
     padding-inline:0 !important;
   }
 }
+
+/* Invoice entry: editable line total first; derived unit price below the input row. */
+#view-create-invoice .batch-derived-price input[readonly] { background:var(--surface-soft,#f4f7fb); color:var(--dark-header); border:1px solid var(--border-color); }
