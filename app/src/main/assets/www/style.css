@@ -1872,7 +1872,7 @@ body.invoice-cart-expanded { overflow:hidden; }
   flex:1 1 auto; min-height:0; max-height:none; height:auto; overflow:auto; overscroll-behavior:contain;
 }
 #view-create-invoice .invoice-cart-panel.is-fullscreen .invoice-cart-heading { flex-shrink:0; }
-#view-create-invoice .invoice-cart-panel.is-fullscreen .invoice-ruled-table { min-width:560px; }
+#view-create-invoice .invoice-cart-panel.is-fullscreen .invoice-ruled-table { min-width:0; width:100%; table-layout:fixed; }
 body.stock-picker-open { overflow:hidden; overscroll-behavior:none; }
 @media (max-width:420px) {
   .stock-picker-modal { padding:8px; }
