@@ -394,7 +394,7 @@ object BluetoothPrinterManager {
     y += 3f
     y += drawRtl(canvas, "شكراً لتعاملكم معنا • ${settings.storeName}", pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER)
 
-    return tightCropBitmap(bitmap, width, y)
+    return tightCropBitmap(bitmap, width * scale, y * scale)
   }
 
   /**
