@@ -97,6 +97,97 @@ let settingsData = {
   bluetoothEnabled: false
 };
 
+
+// ---------------- Context-aware suggestions (shared across all screens) ----------------
+const SUGGESTION_LIST_IDS = {
+  customers: 'suggest-customers', suppliers: 'suggest-suppliers', items: 'suggest-items',
+  units: 'suggest-units', categories: 'suggest-categories',
+  customerDescriptions: 'suggest-customer-descriptions', supplierDescriptions: 'suggest-supplier-descriptions'
+};
+const DEFAULT_UNIT_SUGGESTIONS = ['حبة', 'نص كيس', 'كيس', 'نص قطمة', 'قطمة', 'كرتون', 'شدة', 'دزة', 'باكت', 'كيلو', 'جرام', 'لتر', 'صندوق'];
+
+function uniqueSuggestionValues(values) {
+  const seen = new Set();
+  return (values || []).map(v => String(v ?? '').trim()).filter(v => {
+    const key = v.toLocaleLowerCase('ar');
+    if (!v || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a, b) => a.localeCompare(b, 'ar'));
+}
+
+function suggestionValuesFor(kind) {
+  if (kind === 'customers') return uniqueSuggestionValues(customersData.map(x => x.name));
+  if (kind === 'suppliers') return uniqueSuggestionValues(suppliersData.map(x => x.name));
+  if (kind === 'items') {
+    const values = (inventoryData || []).map(x => x.name);
+    (savedNotes || []).forEach(note => [...(note.rightRows || []), ...(note.leftRows || [])].forEach(row => values.push(row.detail)));
+    (cartItems || []).forEach(row => values.push(row.itemName || row.name));
+    (batchEntryRows || []).forEach(row => values.push(row.itemName));
+    return uniqueSuggestionValues(values);
+  }
+  if (kind === 'units') {
+    const values = [...DEFAULT_UNIT_SUGGESTIONS];
+    (inventoryData || []).forEach(item => values.push(item.unit, item.baseUnit, item.packName, item.cartonName));
+    return uniqueSuggestionValues(values);
+  }
+  if (kind === 'categories') return uniqueSuggestionValues((inventoryData || []).map(x => x.category));
+  if (kind === 'customerDescriptions') return uniqueSuggestionValues((activeCustomerDetail?.transactions || []).map(x => x.description));
+  if (kind === 'supplierDescriptions') return uniqueSuggestionValues((activeSupplierDetail?.transactions || []).map(x => x.description));
+  return [];
+}
+
+function suggestionKindForInput(input) {
+  if (!input || (input.tagName !== 'INPUT' && input.tagName !== 'TEXTAREA')) return '';
+  const id = input.id || '';
+  if (id === 'cust-form-name') return 'customers';
+  if (id === 'supp-form-name') return 'suppliers';
+  if (/^(batch-name-\d+|note-detail|inv-item-form-name|inventory-quick-name|quick-stock-name)$/.test(id) ||
+      input.classList?.contains('note-detail')) return 'items';
+  if (id === 'inventory-quick-category' || id === 'inv-item-form-category') return 'categories';
+  if (id === 'inventory-quick-unit' || id === 'inv-item-form-unit' || id.includes('pack-name') || id.includes('carton-name')) return 'units';
+  if (id === 'tx-desc') return 'customerDescriptions';
+  if (id === 'supp-tx-desc') return 'supplierDescriptions';
+  return '';
+}
+
+function ensureSuggestionLists() {
+  if (!document.body) return;
+  Object.entries(SUGGESTION_LIST_IDS).forEach(([kind, id]) => {
+    let list = document.getElementById(id);
+    if (!list) { list = document.createElement('datalist'); list.id = id; document.body.appendChild(list); }
+    list.replaceChildren(...suggestionValuesFor(kind).map(value => {
+      const option = document.createElement('option'); option.value = value; return option;
+    }));
+  });
+}
+
+function attachContextSuggestion(input) {
+  const kind = suggestionKindForInput(input);
+  if (!kind) return;
+  input.setAttribute('list', SUGGESTION_LIST_IDS[kind]);
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('spellcheck', 'false');
+}
+
+function refreshContextSuggestions(root) {
+  const scope = root || document;
+  if (scope.matches) attachContextSuggestion(scope);
+  if (scope.querySelectorAll) scope.querySelectorAll('input,textarea').forEach(attachContextSuggestion);
+  ensureSuggestionLists();
+}
+
+function initializeContextSuggestions() {
+  refreshContextSuggestions();
+  if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+    const observer = new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => {
+      if (node.nodeType === 1) refreshContextSuggestions(node);
+    })));
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+}
+document.addEventListener('DOMContentLoaded', initializeContextSuggestions);
+
 let customerFilter = 'ALL';
 let inventoryFilter = 'ALL';
 let inventoryCategoryFilter = 'ALL';
@@ -451,6 +542,7 @@ function openInventoryLowStock() {
 window.onCustomersData = function (jsonStr) {
   try {
     customersData = JSON.parse(jsonStr);
+    refreshContextSuggestions();
     if (currentView === 'customers') {
       renderCustomersList();
     }
@@ -822,6 +914,7 @@ function shareStatementWhatsAppPdf(partyType, partyId) {
 window.onSuppliersData = function (jsonStr) {
   try {
     suppliersData = JSON.parse(jsonStr);
+    refreshContextSuggestions();
     if (currentView === 'suppliers') {
       renderSuppliersList();
     }
@@ -1123,6 +1216,7 @@ function shareSupplierWhatsApp() {
 window.onInventoryData = function (jsonStr) {
   try {
     inventoryData = JSON.parse(jsonStr);
+    refreshContextSuggestions();
     populateInventoryCategoryFilter();
     populateInventoryCategorySuggestions();
     if (currentView === 'inventory') renderInventoryList();
@@ -2730,6 +2824,7 @@ function renderNoteRows(side) {
 }
 function renderNoteEditor() {
   renderNoteRows('right'); renderNoteRows('left');
+  refreshContextSuggestions();
   const status = document.getElementById('note-editor-status');
   if (status) status.textContent = noteEditorId ? 'تعديل ملاحظة محفوظة' : 'ملاحظة جديدة غير محفوظة';
 }
@@ -2769,6 +2864,7 @@ window.onNoteSaved = function (jsonStr) {
 window.onNotesData = function (jsonStr) {
   try {
     savedNotes = JSON.parse(jsonStr) || [];
+    refreshContextSuggestions();
     const count = document.getElementById('notes-count');
     if (count) count.textContent = String(savedNotes.length);
     const list = document.getElementById('notes-history-list');
