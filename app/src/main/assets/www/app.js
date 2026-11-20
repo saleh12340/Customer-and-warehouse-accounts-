@@ -2515,29 +2515,6 @@ function addInventoryItemQuick(itemId) {
   showToast(`تمت إضافة وحدة من ${item.name} ✓`, 'success');
 }
 
-function applyMultiStockSelection() {
-  const checks = Array.from(document.querySelectorAll('.multi-stock-check:checked'));
-  if (checks.length === 0) {
-    showToast('حدد صنفاً واحداً على الأقل من القائمة', 'error');
-    return;
-  }
-  checks.forEach(cb => {
-    const itemId = parseInt(cb.dataset.id, 10) || 0;
-    const itemName = cb.dataset.name || '';
-    const unitPrice = parseFloat(cb.dataset.price) || 0;
-    const qtyEl = document.getElementById(`mstock-qty-${itemId}`);
-    const qty = qtyEl ? (parseInt(qtyEl.value, 10) || 1) : 1;
-    appendItemLineToCart(itemId, itemName, qty, unitPrice, Math.round(qty * unitPrice * 100) / 100);
-  });
-  invoiceDirty = true;
-  if (document.getElementById('inv-type').value === 'CASH') {
-    const subtotal = cartItems.reduce((acc, cur) => acc + cur.totalPrice, 0);
-    document.getElementById('inv-paid').value = subtotal > 0 ? String(Math.round(subtotal * 100) / 100) : '';
-  }
-  toggleMultiStockPicker(false);
-  renderCart();
-  showToast(`تمت إضافة ${checks.length} أصناف دفعة واحدة ✓`, 'success');
-}
 
 function toggleQuickAddStock(forceState) {
   const box = document.getElementById('quick-add-stock-box');
