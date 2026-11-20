@@ -149,10 +149,13 @@ object BluetoothPrinterManager {
     invoice: InvoiceEntity,
     items: List<InvoiceItemEntity>,
     partyBalanceAfter: Double? = null,
-    paperWidthMm: Int = 58
+    paperWidthMm: Int = 58,
+    renderScale: Int = 1
   ): Bitmap {
     val settings = StorePreferences.getSettings(context)
-    val width = if (paperWidthMm == 80) 576 else 384
+    val baseWidth = if (paperWidthMm == 80) 576 else 384
+    val scale = renderScale.coerceIn(1, 4)
+    val width = baseWidth
     val isWide = width >= 576
     val pad = if (isWide) 4f else 2f
     val contentW = width - pad * 2
@@ -224,9 +227,10 @@ object BluetoothPrinterManager {
     val footerEst = (if (isWide) 132 else 110) + balanceH
     val estHeight = (headerEst + thH + rowsH + footerEst).coerceAtLeast(180)
 
-    val bitmap = Bitmap.createBitmap(width, estHeight, Bitmap.Config.ARGB_8888)
+    val bitmap = Bitmap.createBitmap(width * scale, estHeight * scale, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(Color.WHITE)
+    if (scale > 1) canvas.scale(scale.toFloat(), scale.toFloat())
 
     var y = 3f
     y += drawRtl(canvas, settings.storeName, pad, y, contentW, titlePaint, Layout.Alignment.ALIGN_CENTER) + 1f
@@ -307,7 +311,8 @@ object BluetoothPrinterManager {
     y += 3f
     y += drawRtl(canvas, "شكراً لتعاملكم معنا • ${settings.storeName}", pad, y, contentW, metaPaint, Layout.Alignment.ALIGN_CENTER)
 
-    return tightCropBitmap(bitmap, width, y)
+    val cropped = tightCropBitmap(bitmap, width * scale, y * scale)
+    return cropped
   }
 
   /**
@@ -873,6 +878,9 @@ object BluetoothPrinterManager {
   internal fun convertBitmapToEscPos(bitmap: Bitmap): ByteArray {
     val width = bitmap.width
     val height = bitmap.height
+    require(width == 384 || width == 576) {
+      "عرض صورة الطباعة يجب أن يساوي دقة الطابعة الأصلية (384 أو 576 نقطة)"
+    }
     val bytesWidth = (width + 7) / 8
     val pixels = IntArray(width * height)
     bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
@@ -887,26 +895,28 @@ object BluetoothPrinterManager {
     command.write(height and 0xFF)
     command.write((height shr 8) and 0xFF)
 
+    // Floyd–Steinberg error diffusion keeps Arabic letter edges smoother on a
+    // monochrome thermal head while retaining the printer's native dot width.
+    // Build packed raster bytes in a second pass using the same deterministic dither.
+    val raster = ByteArray(bytesWidth * height)
+    currentError = FloatArray(width + 2)
+    nextError = FloatArray(width + 2)
     for (y in 0 until height) {
-      val rowOffset = y * width
-      for (xBytes in 0 until bytesWidth) {
-        var byteVal = 0
-        for (bit in 0..7) {
-          val x = xBytes * 8 + bit
-          if (x < width) {
-            val pixel = pixels[rowOffset + x]
-            val red = (pixel shr 16) and 0xFF
-            val green = (pixel shr 8) and 0xFF
-            val blue = pixel and 0xFF
-            val luminance = (299 * red + 587 * green + 114 * blue) / 1000
-            if (luminance < 192) {
-              byteVal = byteVal or (1 shl (7 - bit))
-            }
-          }
-        }
-        command.write(byteVal)
+      for (x in 0 until width) {
+        val pixel = pixels[y * width + x]
+        val luminance = (((299 * ((pixel shr 16) and 0xFF) + 587 * ((pixel shr 8) and 0xFF) + 114 * (pixel and 0xFF)) / 1000f) + currentError[x + 1]).coerceIn(0f, 255f)
+        val black = luminance < 150f
+        val error = luminance - if (black) 0f else 255f
+        if (black) raster[y * bytesWidth + x / 8] = (raster[y * bytesWidth + x / 8].toInt() or (1 shl (7 - x % 8))).toByte()
+        currentError[x + 2] += error * (7f / 16f)
+        nextError[x] += error * (3f / 16f)
+        nextError[x + 1] += error * (5f / 16f)
+        nextError[x + 2] += error * (1f / 16f)
       }
+      currentError = nextError
+      nextError = FloatArray(width + 2)
     }
+    command.write(raster)
     return command.toByteArray()
   }
 }
