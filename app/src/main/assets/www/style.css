@@ -373,7 +373,7 @@ select.ruled-cell,
 }
 
 .grid-invoice-batch-row {
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 0.52fr) minmax(0, 0.72fr) minmax(0, 1.45fr) minmax(0, 0.82fr) 25px;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.55fr) minmax(0, 0.88fr) minmax(0, 0.92fr) 25px;
 }
 
 .grid-inv-meta {
