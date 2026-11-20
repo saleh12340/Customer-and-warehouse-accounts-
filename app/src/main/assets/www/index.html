@@ -53,6 +53,7 @@
       <li onclick="menuNavigate('suppliers')">الموردين والمشتريات</li>
       <li onclick="menuNavigate('inventory')">إدارة المخزن والأصناف</li>
       <li onclick="menuNavigate('invoices')">سجل الفواتير</li>
+      <li onclick="menuNavigate('notes')">الملاحظات والدفتر السريع</li>
       <li onclick="menuNavigate('reports')">التقارير والأرباح</li>
       <li onclick="menuNavigate('settings')">الإعدادات والطابعة والنسخ</li>
       <li onclick="menuNavigate('about')">حول التطبيق وسياسة الخصوصية</li>
@@ -75,6 +76,7 @@
           <button type="button" class="btn btn-primary btn-compact" onclick="openCustomerForm(0)">+ عميل</button>
           <button type="button" class="btn btn-outline-primary btn-compact" onclick="openInventoryForm(0)">+ صنف</button>
           <button type="button" class="btn btn-outline btn-compact" onclick="switchView('suppliers')">الموردين</button>
+          <button type="button" class="btn btn-outline btn-compact" onclick="switchView('notes')">الملاحظات</button>
         </div>
       </div>
 
@@ -693,6 +695,48 @@
         <div class="btn-row">
           <button type="button" id="btn-preview-back" class="btn btn-outline btn-compact" onclick="returnFromThermalPreview()">رجوع</button>
         </div>
+      </div>
+    </section>
+
+    <!-- Two-panel quantity/detail notes -->
+    <section id="view-notes" class="view">
+      <div class="sticky-top-panel">
+        <div class="section-head">
+          <h2>الملاحظات</h2>
+          <button type="button" class="btn btn-outline btn-sm" onclick="startNewNote()">ملاحظة جديدة</button>
+        </div>
+        <div class="notes-toolbar">
+          <span id="note-editor-status" class="muted-text">ملاحظة جديدة غير محفوظة</span>
+          <button type="button" class="btn btn-primary btn-compact" onclick="saveCurrentNote()">حفظ الملاحظة</button>
+        </div>
+      </div>
+      <div class="notes-two-panels" dir="rtl">
+        <div class="note-half-panel">
+          <div class="note-half-title">الشق الأول</div>
+          <table class="note-entry-table" aria-label="الشق الأول من الملاحظة">
+            <thead><tr><th>الكمية</th><th>التفاصيل</th></tr></thead>
+            <tbody id="note-right-rows"></tbody>
+          </table>
+        </div>
+        <div class="note-half-panel">
+          <div class="note-half-title">الشق الثاني</div>
+          <table class="note-entry-table" aria-label="الشق الثاني من الملاحظة">
+            <thead><tr><th>الكمية</th><th>التفاصيل</th></tr></thead>
+            <tbody id="note-left-rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card compact-card note-actions-card">
+        <div class="btn-row">
+          <button type="button" class="btn btn-success btn-compact" onclick="printCurrentNote()">طباعة حرارية</button>
+          <button type="button" class="btn btn-outline-primary btn-compact" onclick="exportCurrentNotePdf()">PDF</button>
+          <button type="button" class="btn btn-outline btn-compact" onclick="shareCurrentNoteWhatsApp()">مشاركة واتساب</button>
+        </div>
+        <div class="muted-text" style="font-size:10px; margin-top:5px;">احفظ الملاحظة أولاً، ثم يمكنك طباعتها أو تصديرها أو مشاركتها.</div>
+      </div>
+      <div class="card compact-card">
+        <div class="card-title-row"><h3>الملاحظات السابقة</h3><span class="muted-text" id="notes-count">0</span></div>
+        <div id="notes-history-list"><div class="empty-state">لا توجد ملاحظات محفوظة بعد</div></div>
       </div>
     </section>
 
