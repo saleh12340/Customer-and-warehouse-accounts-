@@ -547,17 +547,21 @@
             في فاتورة الشراء: أي صنف تكتبه يدوياً يُنشأ تلقائياً في المخزن عند حفظ الفاتورة، وتُضاف كميته وسعر شرائه. ويمكنك تعديل بقية بياناته من شاشة المخزون.
           </div>
 
-          <!-- Collapsible Multi-Item Stock Picker -->
-          <div id="multi-stock-picker-box" class="inline-subbox invoice-stock-picker hidden">
-            <div class="card-title-row" style="margin-bottom:2px;">
-              <strong style="font-size:12px;">اختر الصنف وأضفه مباشرة إلى الفاتورة</strong>
-              <button type="button" class="link-btn" onclick="toggleMultiStockPicker(false)">إغلاق</button>
+          <button type="button" id="btn-open-stock-picker" class="btn btn-outline-primary btn-compact stock-picker-open-btn" onclick="toggleMultiStockPicker(true)">اختيار صنف من المخزن</button>
+
+          <!-- Centered stock selection dialog -->
+          <div id="multi-stock-picker-box" class="stock-picker-modal hidden" role="dialog" aria-modal="true" aria-labelledby="stock-picker-title" onclick="if(event.target===this)toggleMultiStockPicker(false)">
+            <div class="stock-picker-dialog">
+              <div class="stock-picker-heading">
+                <div><strong id="stock-picker-title">اختيار صنف من المخزن</strong><small>اضغط إضافة لإدراج الصنف في الفاتورة</small></div>
+                <button type="button" class="stock-picker-close" onclick="toggleMultiStockPicker(false)" aria-label="إغلاق">×</button>
+              </div>
+              <div class="ruled-input-row ruled-search-row stock-picker-search">
+                <input type="search" id="multi-stock-search" class="ruled-cell" placeholder="ابحث باسم الصنف أو القسم..." oninput="renderMultiStockPicker()">
+              </div>
+              <div id="multi-stock-list" class="multi-stock-list"></div>
+              <div class="stock-picker-footer"><span id="stock-picker-count">0 صنف</span><span>يمكنك إضافة عدة أصناف دون إغلاق النافذة</span></div>
             </div>
-            <div class="ruled-input-row ruled-search-row" style="margin-bottom:4px;">
-              <input type="text" id="multi-stock-search" class="ruled-cell" placeholder="بحث في أصناف المخزن..." oninput="renderMultiStockPicker()">
-            </div>
-            <div id="multi-stock-list" class="multi-stock-list"></div>
-            <div class="quick-picker-hint">تُضاف الكمية المحددة فور الضغط على «إضافة»، ويمكن تكرار ذلك لأصناف متعددة.</div>
           </div>
 
           <div id="quick-add-party-box" class="inline-subbox hidden">
@@ -619,10 +623,13 @@
       </div>
 
       <!-- Ruled Invoice Display Box (Matching RTL Order: الإجمالي | الكمية | التفاصيل | سعر الواحدة | حذف) -->
-      <div class="card compact-card">
-        <div class="card-title-row" style="margin-bottom:4px;">
+      <div id="invoice-cart-panel" class="card compact-card invoice-cart-panel">
+        <div class="card-title-row invoice-cart-heading" style="margin-bottom:4px;">
           <h3 style="font-size:14px;">صندوق عرض الفاتورة</h3>
-          <span id="inv-items-count-badge" class="badge badge-blue">0 أصناف</span>
+          <div class="invoice-cart-heading-actions">
+            <span id="inv-items-count-badge" class="badge badge-blue">0 أصناف</span>
+            <button type="button" id="invoice-cart-expand-btn" class="invoice-cart-expand-btn" onclick="toggleInvoiceCartFullscreen()" aria-expanded="false">ملء الشاشة ⛶</button>
+          </div>
         </div>
 
         <div class="table-wrap">
