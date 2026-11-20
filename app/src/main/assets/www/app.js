@@ -2363,12 +2363,24 @@ function toggleMultiStockPicker(forceState) {
   if (!box) return;
   const nextShow = typeof forceState === 'boolean' ? forceState : box.classList.contains('hidden');
   box.classList.toggle('hidden', !nextShow);
-  const toggleButton = document.querySelector('.invoice-entry-toolbar .invoice-tool-btn');
-  if (toggleButton) toggleButton.textContent = nextShow ? 'إخفاء القائمة' : 'قائمة المخزون';
+  document.body.classList.toggle('stock-picker-open', nextShow);
   if (nextShow) {
     renderMultiStockPicker();
     const search = document.getElementById('multi-stock-search');
-    if (search) setTimeout(() => search.focus(), 40);
+    if (search) setTimeout(() => search.focus(), 80);
+  }
+}
+
+function toggleInvoiceCartFullscreen(forceState) {
+  const panel = document.getElementById('invoice-cart-panel');
+  const button = document.getElementById('invoice-cart-expand-btn');
+  if (!panel) return;
+  const expand = typeof forceState === 'boolean' ? forceState : !panel.classList.contains('is-fullscreen');
+  panel.classList.toggle('is-fullscreen', expand);
+  document.body.classList.toggle('invoice-cart-expanded', expand);
+  if (button) {
+    button.textContent = expand ? 'إغلاق التكبير ×' : 'ملء الشاشة ⛶';
+    button.setAttribute('aria-expanded', expand ? 'true' : 'false');
   }
 }
 
@@ -2423,8 +2435,10 @@ function renderMultiStockPicker() {
   const type = document.getElementById('inv-type').value;
   const list = inventoryData.filter(i => !query || (i.name || '').toLowerCase().includes(query) || (i.category || '').toLowerCase().includes(query));
 
+  const count = document.getElementById('stock-picker-count');
+  if (count) count.textContent = `${list.length} صنف`;
   if (list.length === 0) {
-    container.innerHTML = '<div class="muted-text" style="text-align:center;padding:10px;">لا توجد أصناف مطابقة. يمكنك إضافة صنف جديد للمخزن.</div>';
+    container.innerHTML = '<div class="muted-text" style="grid-column:1/-1;text-align:center;padding:24px 10px;">لا توجد أصناف مطابقة. يمكنك إضافة صنف جديد للمخزن.</div>';
     return;
   }
   container.innerHTML = list.map(i => {
@@ -2432,18 +2446,22 @@ function renderMultiStockPicker() {
     const qty = Number(i.quantity) || 0;
     const stockClass = qty <= 0 ? 'text-danger' : (qty <= 10 ? 'text-primary' : 'text-success');
     return `
-      <div class="quick-stock-pick-row">
+      <article class="quick-stock-pick-row">
         <div class="quick-stock-pick-info">
           <strong>${escapeHtml(i.name)}</strong>
-          <span class="muted-text">${escapeHtml(i.category || 'عام')} · <b class="${stockClass}">المخزون ${fmtMoney(qty)}</b> · ${fmtMoney(price)} ${escapeHtml(appCurrency)}</span>
+          <span class="muted-text">${escapeHtml(i.category || 'عام')}</span>
+          <span class="muted-text"><b class="${stockClass}">المخزون: ${fmtMoney(qty)}</b></span>
+          <span class="muted-text">السعر: <b>${fmtMoney(price)} ${escapeHtml(appCurrency)}</b></span>
         </div>
-        <div class="quantity-stepper quantity-stepper-picker">
-          <button type="button" aria-label="تقليل الكمية" onclick="stepPickerQty(${i.id}, -1)">−</button>
-          <input type="number" class="qty-inline-input quick-stock-pick-qty" id="mstock-qty-${i.id}" min="1" step="1" value="1" aria-label="الكمية">
-          <button type="button" aria-label="زيادة الكمية" onclick="stepPickerQty(${i.id}, 1)">+</button>
+        <div class="quick-stock-pick-controls">
+          <div class="quantity-stepper quantity-stepper-picker">
+            <button type="button" aria-label="تقليل الكمية" onclick="stepPickerQty(${i.id}, -1)">−</button>
+            <input type="number" class="qty-inline-input quick-stock-pick-qty" id="mstock-qty-${i.id}" min="1" step="1" value="1" aria-label="الكمية">
+            <button type="button" aria-label="زيادة الكمية" onclick="stepPickerQty(${i.id}, 1)">+</button>
+          </div>
         </div>
-        <button type="button" class="btn btn-primary btn-sm quick-stock-pick-add" onclick="addInventoryItemQuick(${i.id})">إضافة</button>
-      </div>
+        <button type="button" class="btn btn-primary btn-sm quick-stock-pick-add" onclick="addInventoryItemQuick(${i.id})">إضافة للفاتورة</button>
+      </article>
     `;
   }).join('');
 }
