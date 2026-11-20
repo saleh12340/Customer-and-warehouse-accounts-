@@ -1772,6 +1772,8 @@ function updateInvoiceModeUI() {
   }
   const saveButton = document.getElementById('btn-save-invoice');
   if (saveButton) saveButton.textContent = editingInvoiceId > 0 ? 'حفظ التعديل' : (type === 'PURCHASE' ? 'حفظ فاتورة الشراء' : 'حفظ فاتورة البيع');
+  const purchaseHint = document.getElementById('purchase-auto-stock-hint');
+  if (purchaseHint) purchaseHint.classList.toggle('hidden', type !== 'PURCHASE');
   const paidInput = document.getElementById('inv-paid');
   if (paidInput) paidInput.placeholder = type === 'PURCHASE' ? 'المدفوع للمورد' : 'المبلغ المستلم';
   const payFullButton = document.querySelector('#inv-paid + button');
@@ -2319,13 +2321,24 @@ function updateCartUnitPrice(idx, newPriceVal) {
 function updateCartItemName(idx, newNameVal) {
   const clean = (newNameVal || '').trim();
   if (!clean) return;
+  const line = cartItems[idx];
+  if (!line) return;
   const matched = inventoryData.find(x => (x.name || '').trim().toLowerCase() === clean.toLowerCase());
-  cartItems[idx].itemName = clean;
-  cartItems[idx].itemId = matched ? matched.id : 0;
-  cartItems[idx].unitFactor = 1;
-  cartItems[idx].stockQuantity = cartItems[idx].quantity;
-  cartItems[idx].unitName = matched ? parseInventoryUnitConfig(matched.unit).base : '';
+  line.itemName = clean;
+  line.itemId = matched ? matched.id : 0;
+  if (matched) {
+    // Preserve the selected package conversion when the replacement item supports it.
+    const options = getInventoryUnitOptions(matched);
+    const selected = options.find(o => o.name === line.unitName && o.factor === line.unitFactor) || options[0];
+    line.unitName = selected.name;
+    line.unitFactor = selected.factor;
+  } else {
+    line.unitName = 'حبة';
+    line.unitFactor = 1;
+  }
+  line.stockQuantity = line.quantity * (line.unitFactor || 1);
   invoiceDirty = true;
+  renderCart();
 }
 
 function removeCartItem(index) {
