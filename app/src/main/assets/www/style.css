@@ -1552,21 +1552,25 @@ nav.bottom-nav button.active::before {
 #multi-stock-picker-box { padding: 7px; }
 .multi-stock-list { max-height: min(34vh, 260px); gap: 4px; }
 .quick-stock-pick-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 52px 58px;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 7px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: #fff;
   min-width: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s ease, border-color .12s ease;
 }
-.quick-stock-pick-info { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.quick-stock-pick-row:active { background: var(--surface-soft,#eef4ff); border-color: var(--primary-blue); }
+.quick-stock-pick-row:focus-visible { outline: 2px solid var(--primary-blue); outline-offset: 1px; }
+.quick-stock-pick-info { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 2px; }
 .quick-stock-pick-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .quick-stock-pick-info .muted-text { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.quick-stock-pick-qty { width: 52px; height: 32px; text-align: center; }
-.quick-stock-pick-add { min-height: 32px; padding: 3px 5px; font-size: 11px; }
+.quick-stock-pick-selected { flex: 0 0 auto; max-width: 42%; color: var(--primary-blue); font-size: 10px; font-weight: 800; text-align: left; white-space: nowrap; }
 .quick-picker-hint { margin-top: 5px; color: var(--text-secondary); font-size: 10.5px; line-height: 1.5; }
 .inventory-row {
   display: grid;
@@ -1597,8 +1601,8 @@ nav.bottom-nav button.active::before {
   .inventory-row { grid-template-columns: minmax(0, 1.2fr) 46px minmax(82px, .8fr); gap: 4px; padding: 6px; }
   .inventory-item-title strong { font-size: 11.5px; }
   .inventory-row-prices { font-size: 9.5px; }
-  .quick-stock-pick-row { grid-template-columns: minmax(0, 1fr) 46px 54px; gap: 4px; padding: 5px; }
-  .quick-stock-pick-qty { width: 46px; }
+  .quick-stock-pick-row { gap: 5px; padding: 5px 6px; }
+  .quick-stock-pick-selected { font-size: 9px; }
 }
 
 @media (max-width: 380px) {
@@ -1792,8 +1796,8 @@ input[type="time"] {
 @media (max-width:380px) {
   #view-create-invoice .invoice-mode-btn { min-height:38px; font-size:11px; }
   #view-create-invoice .invoice-tool-btn { padding-inline:6px; font-size:9.5px; }
-  #view-create-invoice .quick-stock-pick-row { grid-template-columns:minmax(0,1fr) auto auto; gap:4px; padding:4px; }
-  #view-create-invoice .quick-stock-pick-add { grid-column:auto; width:auto; }
+  #view-create-invoice .quick-stock-pick-row { gap:4px; padding:4px 5px; }
+  #view-create-invoice .quick-stock-pick-selected { font-size:9px; }
 }
 
 
