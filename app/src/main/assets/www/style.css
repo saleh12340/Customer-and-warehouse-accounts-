@@ -1780,13 +1780,10 @@ input[type="time"] {
 #view-create-invoice .multi-stock-list { max-height:min(34vh,260px); overflow-y:auto; overscroll-behavior:contain; padding:2px 2px 4px; scrollbar-width:thin; }
 #view-create-invoice .quick-stock-pick-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:5px; border-radius:8px; margin:0; padding:5px 6px; }
 #view-create-invoice .quick-stock-pick-info strong { font-size:11.5px; }
-#view-create-invoice .quick-stock-pick-qty { width:36px; height:30px; padding:2px; border:0; background:transparent; }
 #view-create-invoice .quantity-stepper { display:inline-flex; align-items:center; justify-content:center; gap:2px; padding:2px; border:1px solid var(--border-color); border-radius:9px; background:var(--surface); }
 #view-create-invoice .quantity-stepper button { display:grid; place-items:center; width:29px; height:29px; min-width:29px; border:0; border-radius:7px; background:var(--surface-soft,#eef2f7); color:var(--dark-header); font-size:19px; line-height:1; font-weight:800; }
 #view-create-invoice .cart-quantity-stepper { gap:1px; margin:auto; }
 #view-create-invoice .cart-quantity-stepper input { width:36px; height:29px; min-height:29px; padding:2px; border:0; background:transparent; text-align:center; font-weight:800; }
-#view-create-invoice .quantity-stepper-picker { gap:0; }
-#view-create-invoice .quantity-stepper-picker button { width:25px; min-width:25px; height:28px; }
 #view-create-invoice .quick-party-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
 #view-create-invoice .quick-party-grid input:first-child { grid-column:1/-1; }
 #view-create-invoice .invoice-ruled-table { min-width:0; width:100%; table-layout:fixed; }
@@ -1834,7 +1831,6 @@ input[type="time"] {
 .quick-stock-pick-info .muted-text { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:9.5px; line-height:1.3; }
 .quick-stock-pick-controls { display:flex; align-items:center; justify-content:center; min-width:0; }
 .quick-stock-pick-row .quantity-stepper { justify-content:center; gap:0; padding:1px; }
-.quick-stock-pick-row .quick-stock-pick-add { width:auto; min-width:64px; min-height:30px; padding:3px 5px; border-radius:7px; font-size:10px; white-space:nowrap; }
 .stock-picker-footer { flex-shrink:0; display:flex; justify-content:space-between; gap:8px; padding:8px 2px 0; border-top:1px solid var(--border-color); color:var(--text-secondary); font-size:10px; }
 .stock-picker-footer #stock-picker-count { color:var(--primary-blue); font-weight:800; }
 
@@ -1886,8 +1882,6 @@ body.stock-picker-open { overflow:hidden; overscroll-behavior:none; }
   .quick-stock-pick-info strong { font-size:10.5px; }
   .quick-stock-pick-info .muted-text { font-size:9px; }
   .quick-stock-pick-row .quantity-stepper button { width:21px; min-width:21px; height:25px; }
-  .quick-stock-pick-row .quantity-stepper-picker input { width:29px; height:25px; }
-  .quick-stock-pick-row .quick-stock-pick-add { min-width:58px; font-size:9px; padding-inline:3px; }
   .stock-picker-footer { font-size:9px; }
   .invoice-cart-panel .invoice-ruled-table th,
   .invoice-cart-panel .invoice-ruled-table td { padding:3px 1px; font-size:9.5px; }
