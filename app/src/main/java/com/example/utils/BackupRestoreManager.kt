@@ -108,6 +108,17 @@ object BackupRestoreManager {
             })
           }
         })
+        put("notes", JSONArray().apply {
+          db.noteDao().getNotesSnapshot().forEach { n ->
+            put(JSONObject().apply {
+              put("id", n.id)
+              put("createdAt", n.createdAt)
+              put("updatedAt", n.updatedAt)
+              put("rightRowsJson", n.rightRowsJson)
+              put("leftRowsJson", n.leftRowsJson)
+            })
+          }
+        })
         put("settings", JSONObject().apply {
           put("storeName", settings.storeName)
           put("storePhone", settings.storePhone)
@@ -300,6 +311,23 @@ object BackupRestoreManager {
       throw IllegalArgumentException("بيانات جدول الحركات المالية في النسخة الاحتياطية غير مكتملة أو تالفة")
     }
 
+    val notes = payload.optJSONArray("notes")?.let { array ->
+      (0 until array.length()).map { index ->
+        val o = array.getJSONObject(index)
+        NoteEntity(
+          id = o.getLong("id"),
+          createdAt = o.getLong("createdAt").also { require(it > 0L) { "تاريخ الملاحظة غير صالح" } },
+          updatedAt = o.getLong("updatedAt").also { require(it > 0L) { "تاريخ تحديث الملاحظة غير صالح" } },
+          rightRowsJson = o.optString("rightRowsJson", "[]"),
+          leftRowsJson = o.optString("leftRowsJson", "[]")
+        )
+      }
+    }.orEmpty()
+    require(notes.all { it.id > 0L && runCatching { JSONArray(it.rightRowsJson); JSONArray(it.leftRowsJson) }.isSuccess }) {
+      "توجد بيانات ملاحظات غير صالحة في النسخة الاحتياطية"
+    }
+    require(notes.map { it.id }.distinct().size == notes.size) { "معرفات ملاحظات مكررة" }
+
     require(customers.all { it.name.isNotBlank() } && suppliers.all { it.name.isNotBlank() } &&
       inventory.all { it.name.isNotBlank() }) { "يوجد سجل باسم فارغ في النسخة الاحتياطية" }
     require(customers.map { it.name.trim().lowercase(Locale.ROOT) }.distinct().size == customers.size) {
@@ -327,7 +355,8 @@ object BackupRestoreManager {
       inventory.map { it.id },
       invoices.map { it.id },
       invoiceItems.map { it.id },
-      transactions.map { it.id }
+      transactions.map { it.id },
+      notes.map { it.id }
     ).all { ids -> ids.all { it > 0 } && ids.distinct().size == ids.size }) {
       "توجد معرفات سجلات غير صحيحة أو مكررة"
     }
@@ -374,6 +403,7 @@ object BackupRestoreManager {
     db.withTransaction {
       db.invoiceDao().clearInvoiceItems()
       db.transactionDao().clearTransactions()
+      db.noteDao().clearNotes()
       db.invoiceDao().clearInvoices()
       db.inventoryDao().clearItems()
       db.customerDao().clearCustomers()
@@ -384,6 +414,7 @@ object BackupRestoreManager {
       db.invoiceDao().restoreInvoices(invoices)
       db.invoiceDao().restoreInvoiceItems(invoiceItems)
       db.transactionDao().restoreTransactions(transactions)
+      db.noteDao().restoreNotes(notes)
     }
 
     payload.optJSONObject("settings")?.let { sObj ->
