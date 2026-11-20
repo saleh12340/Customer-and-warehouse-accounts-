@@ -179,15 +179,42 @@ function suggestionKindForInput(input) {
   return '';
 }
 
-function ensureSuggestionLists() {
-  if (!document.body) return;
-  Object.entries(SUGGESTION_LIST_IDS).forEach(([kind, id]) => {
-    let list = document.getElementById(id);
-    if (!list) { list = document.createElement('datalist'); list.id = id; document.body.appendChild(list); }
-    list.replaceChildren(...suggestionValuesFor(kind).map(value => {
-      const option = document.createElement('option'); option.value = value; return option;
-    }));
-  });
+// Suggestions are filtered while typing; never dump the full database into a field.
+const MAX_CONTEXT_SUGGESTIONS = 5;
+const MIN_CONTEXT_QUERY_LENGTH = 1;
+
+function ensureSuggestionList(kind) {
+  if (!document.body || !SUGGESTION_LIST_IDS[kind]) return null;
+  const id = SUGGESTION_LIST_IDS[kind];
+  let list = document.getElementById(id);
+  if (!list) { list = document.createElement('datalist'); list.id = id; document.body.appendChild(list); }
+  return list;
+}
+
+function refreshSuggestionListForInput(input) {
+  const kind = suggestionKindForInput(input);
+  if (!kind) return;
+  const list = ensureSuggestionList(kind);
+  if (!list) return;
+  const query = String(input.value || '').trim().toLocaleLowerCase('ar');
+  if (query.length < MIN_CONTEXT_QUERY_LENGTH) {
+    list.replaceChildren();
+    return;
+  }
+  const matches = suggestionValuesFor(kind)
+    .map(value => ({ value, normalized: value.toLocaleLowerCase('ar') }))
+    .filter(item => item.normalized.startsWith(query) || item.normalized.includes(query))
+    .sort((a, b) => {
+      const aStarts = a.normalized.startsWith(query) ? 0 : 1;
+      const bStarts = b.normalized.startsWith(query) ? 0 : 1;
+      return aStarts - bStarts || a.value.localeCompare(b.value, 'ar');
+    })
+    .slice(0, MAX_CONTEXT_SUGGESTIONS);
+  list.replaceChildren(...matches.map(item => {
+    const option = document.createElement('option');
+    option.value = item.value;
+    return option;
+  }));
 }
 
 function attachContextSuggestion(input) {
@@ -196,13 +223,22 @@ function attachContextSuggestion(input) {
   input.setAttribute('list', SUGGESTION_LIST_IDS[kind]);
   input.setAttribute('autocomplete', 'off');
   input.setAttribute('spellcheck', 'false');
+  if (input.dataset.contextSuggestionBound !== 'true') {
+    input.dataset.contextSuggestionBound = 'true';
+    input.addEventListener('input', () => refreshSuggestionListForInput(input));
+    input.addEventListener('focus', () => refreshSuggestionListForInput(input));
+    input.addEventListener('blur', () => {
+      // Clear shared suggestions so another field never inherits stale matches.
+      const list = ensureSuggestionList(kind);
+      if (list) list.replaceChildren();
+    });
+  }
 }
 
 function refreshContextSuggestions(root) {
   const scope = root || document;
   if (scope.matches) attachContextSuggestion(scope);
   if (scope.querySelectorAll) scope.querySelectorAll('input,textarea').forEach(attachContextSuggestion);
-  ensureSuggestionLists();
 }
 
 function initializeContextSuggestions() {
