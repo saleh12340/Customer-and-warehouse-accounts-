@@ -375,6 +375,7 @@ function loadViewData(view) {
   } else if (view === 'invoices') {
     window.Android.getInvoices();
   } else if (view === 'notes') {
+    renderNoteEditor();
     window.Android.getNotes();
   } else if (view === 'reports') {
     loadReports();
