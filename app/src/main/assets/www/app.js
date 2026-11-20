@@ -83,6 +83,7 @@ let storeName = 'بقالة العزي للمواد الغذائية';
 let customersData = [];
 let suppliersData = [];
 let inventoryData = [];
+let activeInventoryHistoryItemId = 0;
 let invoicesData = [];
 let settingsData = {
   storeName: 'بقالة العزي للمواد الغذائية',
@@ -1415,6 +1416,7 @@ function submitInventoryQuickAdd() {
 
 function openInventoryHistory(itemId) {
   if (!window.Android || !itemId) return;
+  activeInventoryHistoryItemId = Number(itemId) || 0;
   window.Android.getInventoryHistory(itemId, nextReqId());
 }
 
@@ -1694,6 +1696,8 @@ function deleteInvoiceWithConfirmation(id) {
       window.Android.getCustomerDetail(customerId);
     } else if (view === 'supplier-detail' && supplierId && window.Android.getSupplierDetail) {
       window.Android.getSupplierDetail(supplierId);
+    } else if (view === 'inventory' && activeInventoryHistoryItemId && window.Android.getInventoryHistory) {
+      window.Android.getInventoryHistory(activeInventoryHistoryItemId, nextReqId());
     }
     pendingDeleteInvoiceId = 0;
   });
