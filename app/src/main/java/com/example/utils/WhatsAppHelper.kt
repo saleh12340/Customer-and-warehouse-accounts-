@@ -122,7 +122,7 @@ object WhatsAppHelper {
           type = mimeType
           setPackage(whatsAppPkg)
           putExtra(Intent.EXTRA_STREAM, fileUri)
-          clipData = ClipData.newRawUri("", fileUri)
+          clipData = ClipData.newUri(context.contentResolver, "مرفق الفاتورة", fileUri)
           if (message.isNotBlank()) putExtra(Intent.EXTRA_TEXT, message)
           if (normalizedPhone.startsWith("+")) {
             putExtra("jid", "${normalizedPhone.removePrefix("+")}@s.whatsapp.net")
@@ -139,7 +139,7 @@ object WhatsAppHelper {
       val chooserIntent = Intent(Intent.ACTION_SEND).apply {
         type = mimeType
         putExtra(Intent.EXTRA_STREAM, fileUri)
-        clipData = ClipData.newRawUri("", fileUri)
+        clipData = ClipData.newUri(context.contentResolver, "مرفق الفاتورة", fileUri)
         if (message.isNotBlank()) putExtra(Intent.EXTRA_TEXT, message)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
