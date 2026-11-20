@@ -661,7 +661,7 @@ object BluetoothPrinterManager {
       )
     }
 
-    val emptyHeight = if (isWide) 140 else 120
+    val emptyHeight = 140
     val bitmapHeight = (rowsHeight + 6).coerceAtLeast(emptyHeight)
     val bitmap = Bitmap.createBitmap(width, bitmapHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
