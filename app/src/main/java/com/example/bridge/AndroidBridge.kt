@@ -434,7 +434,7 @@ class AndroidBridge(
         getAppFolderFiles()
         activity.runOnUiThread {
           val opened = WhatsAppHelper.openPdf(activity, uri)
-          notifyResult(reqId, true, if (opened) "تم حفظ وفتح ملف الملاحظة PDF ✓" else "تم حفظ ملف الملاحظة في ${saved.displayPath} ✓")
+          notifyResult(reqId, true, if (opened) "تم حفظ وفتح ملف الملاحظة PDF ✓" else "تم حفظ ملف الملاحظة في ${saved?.displayPath ?: "مجلد ملفات التطبيق"} ✓")
         }
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر إنشاء ملف الملاحظة PDF")
@@ -466,7 +466,7 @@ class AndroidBridge(
             message = "ملاحظة من ${StorePreferences.getSettings(activity).storeName}",
             preferWhatsApp = true
           )
-          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة الملاحظة عبر واتساب ✓" else "تعذر فتح واتساب؛ تم حفظ الملف في ${saved.displayPath}")
+          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة الملاحظة عبر واتساب ✓" else "تعذر فتح واتساب؛ تم حفظ الملف في ${saved?.displayPath ?: "مجلد ملفات التطبيق"}")
         }
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذرت مشاركة الملاحظة")
