@@ -122,6 +122,7 @@ function suggestionValuesFor(kind) {
   if (kind === 'items') {
     const values = (inventoryData || []).map(x => x.name);
     (savedNotes || []).forEach(note => [...(note.rightRows || []), ...(note.leftRows || [])].forEach(row => values.push(row.detail)));
+    [...(noteRightRows || []), ...(noteLeftRows || [])].forEach(row => values.push(row.detail));
     (cartItems || []).forEach(row => values.push(row.itemName || row.name));
     (batchEntryRows || []).forEach(row => values.push(row.itemName));
     return uniqueSuggestionValues(values);
@@ -2858,7 +2859,7 @@ function saveCurrentNote() {
   window.Android.saveNote(JSON.stringify({ id: noteEditorId, rightRows, leftRows }), nextReqId());
 }
 window.onNoteSaved = function (jsonStr) {
-  try { noteEditorId = Number(JSON.parse(jsonStr).id) || 0; renderNoteEditor(); }
+  try { noteEditorId = Number(JSON.parse(jsonStr).id) || 0; renderNoteEditor(); refreshContextSuggestions(); }
   catch (e) { console.error(e); }
 };
 window.onNotesData = function (jsonStr) {
