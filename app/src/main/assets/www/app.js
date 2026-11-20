@@ -1634,7 +1634,13 @@ document.addEventListener('input', event => {
 });
 
 function getInventoryUnitOptions(item) {
-  if (!item) return [{ name: 'حبة', factor: 1 }];
+  if (!item) return [
+    { name: 'حبة', factor: 1 }, { name: 'كيس', factor: 1 },
+    { name: 'باكت', factor: 1 }, { name: 'كرتون', factor: 1 },
+    { name: 'قطمة', factor: 1 }, { name: 'كيلو', factor: 1 },
+    { name: 'جرام', factor: 1 }, { name: 'لتر', factor: 1 },
+    { name: 'صندوق', factor: 1 }
+  ];
   const v = parseInventoryUnitConfig(item.unit), options = [{ name: v.base, factor: 1 }];
   if (v.packName && v.packSize > 1) options.push({ name: v.packName, factor: v.packSize });
   if (v.cartonName && v.cartonPacks > 0) {
@@ -1904,15 +1910,14 @@ function renderBatchEntryRows() {
   }
   container.innerHTML = batchEntryRows.slice(0, 1).map((row, idx) => `
     <div class="ruled-input-row grid-invoice-batch-row">
-      <input type="number" id="batch-total-${idx}" class="ruled-cell cell-num" placeholder="الإجمالي" step="0.01" min="0"
-        value="${escapeHtml(row.total)}" oninput="onBatchRowTotalInput(${idx}, this.value)">
-      <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="1" min="1"
+      <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="الكمية" min="1"
         value="${escapeHtml(row.qty)}" oninput="onBatchRowQtyInput(${idx}, this.value)">
-      <select id="batch-unit-${idx}" class="ruled-cell batch-unit-select" onchange="onBatchRowUnitChange(${idx}, this.value)"></select>
       <input type="text" id="batch-name-${idx}" class="ruled-cell" list="inv-items-datalist"
-        placeholder="اسم الصنف (${idx + 1})..." value="${escapeHtml(row.itemName)}"
+        placeholder="اسم الصنف..." value="${escapeHtml(row.itemName)}"
         oninput="onBatchRowNameInput(${idx}, this.value)" onchange="onBatchRowNameInput(${idx}, this.value)">
-      <input type="number" id="batch-price-${idx}" class="ruled-cell cell-num cell-auto" placeholder="آلي" step="0.01" min="0"
+      <select id="batch-unit-${idx}" class="ruled-cell batch-unit-select" aria-label="الوحدة أو نوع الوحدة"
+        onchange="onBatchRowUnitChange(${idx}, this.value)"></select>
+      <input type="number" id="batch-price-${idx}" class="ruled-cell cell-num cell-auto" placeholder="سعر الوحدة" step="0.01" min="0"
         value="${escapeHtml(row.unitPrice)}" oninput="onBatchRowUnitPriceInput(${idx}, this.value)">
       <button type="button" class="row-remove-cell" onclick="removeBatchRow(${idx})" aria-label="حذف صف">×</button>
     </div>
@@ -1984,7 +1989,9 @@ function onBatchRowNameInput(idx, val) {
       if (totalEl) totalEl.value = row.total;
     }
   } else {
-    row.itemId = 0; row.unitName = 'حبة'; row.unitFactor = 1; updateBatchUnitOptions(idx);
+    row.itemId = 0;
+    if (!row.unitName) { row.unitName = 'حبة'; row.unitFactor = 1; }
+    updateBatchUnitOptions(idx);
   }
 }
 
@@ -2104,8 +2111,8 @@ function addBatchItemsToCart() {
     const matched = inventoryData.find(x => (x.name || '').trim().toLowerCase() === name.toLowerCase());
     const resolvedId = r.itemId > 0 ? r.itemId : (matched ? matched.id : 0);
 
-    const unitFactor = resolvedId > 0 ? (r.unitFactor || 1) : 1;
-    const unitName = resolvedId > 0 ? (r.unitName || (matched ? parseInventoryUnitConfig(matched.unit).base : 'حبة')) : '';
+    const unitFactor = r.unitFactor || 1;
+    const unitName = (r.unitName || (matched ? parseInventoryUnitConfig(matched.unit).base : 'حبة')).trim();
     pendingLines.push({ itemId: resolvedId, itemName: name, qty, unitPrice, totalPrice, unitName, unitFactor });
   }
 
