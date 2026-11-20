@@ -899,8 +899,8 @@ object BluetoothPrinterManager {
     // monochrome thermal head while retaining the printer's native dot width.
     // Build packed raster bytes in a second pass using the same deterministic dither.
     val raster = ByteArray(bytesWidth * height)
-    currentError = FloatArray(width + 2)
-    nextError = FloatArray(width + 2)
+    var currentError = FloatArray(width + 2)
+    var nextError = FloatArray(width + 2)
     for (y in 0 until height) {
       for (x in 0 until width) {
         val pixel = pixels[y * width + x]
