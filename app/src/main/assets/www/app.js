@@ -1909,6 +1909,8 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
     document.getElementById('btn-save-invoice').textContent = 'حفظ التعديل';
     document.getElementById('invoice-saved-badge').classList.remove('hidden');
     document.getElementById('inv-number').value = inv.invoiceNumber;
+    const stockPicker = document.getElementById('multi-stock-picker-box');
+    if (stockPicker) stockPicker.classList.remove('hidden');
     document.getElementById('inv-type').value = inv.type === 'SALE' ? 'CASH' : inv.type;
     lastInvoiceType = document.getElementById('inv-type').value;
     const invDateEl = document.getElementById('inv-date');
