@@ -1851,7 +1851,7 @@ function openCreateInvoice(presetType, presetPartyId) {
   if (invDateEl) invDateEl.value = toDateTimeLocalValue(Date.now());
   document.getElementById('quick-add-stock-box').classList.add('hidden');
   const multiBox = document.getElementById('multi-stock-picker-box');
-  if (multiBox) multiBox.classList.remove('hidden');
+  if (multiBox) toggleMultiStockPicker(true);
   document.getElementById('exchange-calc-box').classList.add('hidden');
 
   if (window.Android) {
@@ -1910,7 +1910,7 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
     document.getElementById('invoice-saved-badge').classList.remove('hidden');
     document.getElementById('inv-number').value = inv.invoiceNumber;
     const stockPicker = document.getElementById('multi-stock-picker-box');
-    if (stockPicker) stockPicker.classList.remove('hidden');
+    if (stockPicker) toggleMultiStockPicker(true);
     document.getElementById('inv-type').value = inv.type === 'SALE' ? 'CASH' : inv.type;
     lastInvoiceType = document.getElementById('inv-type').value;
     const invDateEl = document.getElementById('inv-date');
@@ -2363,6 +2363,8 @@ function toggleMultiStockPicker(forceState) {
   if (!box) return;
   const nextShow = typeof forceState === 'boolean' ? forceState : box.classList.contains('hidden');
   box.classList.toggle('hidden', !nextShow);
+  const toggleButton = document.querySelector('.invoice-entry-toolbar .invoice-tool-btn');
+  if (toggleButton) toggleButton.textContent = nextShow ? 'إخفاء القائمة' : 'قائمة المخزون';
   if (nextShow) {
     renderMultiStockPicker();
     const search = document.getElementById('multi-stock-search');
