@@ -16,6 +16,7 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
   private val inventoryDao = database.inventoryDao()
   private val invoiceDao = database.invoiceDao()
   private val transactionDao = database.transactionDao()
+  private val inventoryAdjustmentDao = database.inventoryAdjustmentDao()
 
   val customers = customerDao.getAllCustomers().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
   val suppliers = supplierDao.getAllSuppliers().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -201,11 +202,36 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun updateInventoryItem(item: InventoryItemEntity) {
-    viewModelScope.launch { inventoryDao.updateItem(item) }
+    viewModelScope.launch {
+      database.withTransaction {
+        val previous = inventoryDao.getItemById(item.id) ?: error("الصنف غير موجود")
+        if (previous.quantity != item.quantity) {
+          inventoryAdjustmentDao.insertAdjustment(
+            InventoryAdjustmentEntity(
+              itemId = item.id, itemName = item.name,
+              previousQuantity = previous.quantity, newQuantity = item.quantity,
+              deltaQuantity = item.quantity - previous.quantity,
+              reason = "تسوية يدوية من شاشة بيانات الصنف", date = System.currentTimeMillis()
+            )
+          )
+        }
+        inventoryDao.updateItem(item)
+      }
+    }
   }
 
   fun deleteInventoryItem(item: InventoryItemEntity) {
-    viewModelScope.launch { inventoryDao.deleteItem(item) }
+    viewModelScope.launch {
+      database.withTransaction {
+        check(invoiceDao.getInvoiceItemsSnapshot().none { it.itemId == item.id }) {
+          "لا يمكن حذف صنف مستخدم في فواتير محفوظة"
+        }
+        check(inventoryAdjustmentDao.getAdjustmentsForItem(item.id).isEmpty()) {
+          "لا يمكن حذف صنف له سجل تسويات مخزون محفوظ"
+        }
+        inventoryDao.deleteItem(item)
+      }
+    }
   }
 
   fun loadInvoiceForEdit(invoiceId: Long, onLoaded: (InvoiceWithItems?) -> Unit) {
@@ -262,21 +288,25 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
             }
           }
 
-          if (oldInvoice.remainingAmount > 0.000001 && oldInvoice.partyId > 0) {
-            if (oldInvoice.type == "PURCHASE") {
-              check(supplierDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
-                "تعذر عكس رصيد المورد السابق"
+          if (oldInvoice.partyId > 0) {
+            val linkedTransactions = transactionDao.getTransactionsForInvoice(oldInvoice.id)
+            if (linkedTransactions.isNotEmpty()) {
+              if (oldInvoice.type == "PURCHASE") {
+                val reverseDelta = linkedTransactions.sumOf {
+                  if (it.type.startsWith("CREDIT")) -it.amount else it.amount
+                }
+                check(supplierDao.updateBalance(oldInvoice.partyId, reverseDelta) == 1) {
+                  "تعذر عكس رصيد المورد السابق"
+                }
+              } else {
+                val reverseDelta = linkedTransactions.sumOf {
+                  if (it.type.startsWith("DEBIT")) -it.amount else it.amount
+                }
+                check(customerDao.updateBalance(oldInvoice.partyId, reverseDelta) == 1) {
+                  "تعذر عكس رصيد العميل السابق"
+                }
               }
-              transactionDao.deleteByDescription(
-                "SUPPLIER", oldInvoice.partyId, "فاتورة مشتريات رقم ${oldInvoice.invoiceNumber}"
-              )
-            } else {
-              check(customerDao.updateBalance(oldInvoice.partyId, -oldInvoice.remainingAmount) == 1) {
-                "تعذر عكس رصيد العميل السابق"
-              }
-              transactionDao.deleteByDescription(
-                "CUSTOMER", oldInvoice.partyId, "فاتورة مبيعات رقم ${oldInvoice.invoiceNumber}"
-              )
+              transactionDao.deleteByInvoiceId(oldInvoice.id)
             }
           }
 
@@ -294,12 +324,19 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
           )
           invoiceDao.updateInvoice(updated)
           invoiceDao.deleteItemsForInvoice(invoiceId)
-          invoiceDao.insertItems(normalizedItems.map { it.copy(invoiceId = invoiceId) })
+          val persistedItems = normalizedItems.map { item ->
+            val stockQty = item.stockQuantity.takeIf { it > 0 } ?: item.quantity
+            val cost = if (normalizedType == "PURCHASE" || item.itemId <= 0L) null
+              else inventoryDao.getItemById(item.itemId)?.purchasePrice ?: error("الصنف غير موجود: ${item.itemName}")
+            item.copy(invoiceId = invoiceId, stockQuantity = stockQty, costPriceAtSale = cost)
+          }
+          invoiceDao.insertItems(persistedItems)
 
           val newStockSign = if (normalizedType == "PURCHASE") 1 else -1
-          normalizedItems.forEach { item ->
+          persistedItems.forEach { item ->
             if (item.itemId > 0L) {
-              check(inventoryDao.adjustQuantity(item.itemId, newStockSign * item.quantity) == 1) {
+              val stockQty = item.stockQuantity.takeIf { it > 0 } ?: item.quantity
+              check(inventoryDao.adjustQuantity(item.itemId, newStockSign * stockQty) == 1) {
                 "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
               }
             }
@@ -310,13 +347,13 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
               check(supplierDao.updateBalance(partyId, validation.remainingAmount) == 1) { "المورد المحدد غير موجود" }
               transactionDao.insertTransaction(
                 TransactionEntity(0L, "SUPPLIER", partyId, partyName.trim(), "CREDIT (له)",
-                  validation.remainingAmount, "فاتورة مشتريات رقم ${updated.invoiceNumber}", now)
+                  validation.remainingAmount, "فاتورة مشتريات رقم ${updated.invoiceNumber}", now, invoiceId)
               )
             } else {
               check(customerDao.updateBalance(partyId, validation.remainingAmount) == 1) { "العميل المحدد غير موجود" }
               transactionDao.insertTransaction(
                 TransactionEntity(0L, "CUSTOMER", partyId, partyName.trim(), "DEBIT (عليه)",
-                  validation.remainingAmount, "فاتورة مبيعات رقم ${updated.invoiceNumber}", now)
+                  validation.remainingAmount, "فاتورة مبيعات رقم ${updated.invoiceNumber}", now, invoiceId)
               )
             }
           }
@@ -371,13 +408,20 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
           )
 
           val invoiceId = invoiceDao.insertInvoice(invoice)
-          invoiceDao.insertItems(normalizedItems.map { it.copy(invoiceId = invoiceId) })
+          val persistedItems = normalizedItems.map { item ->
+            val stockQty = item.stockQuantity.takeIf { it > 0 } ?: item.quantity
+            val cost = if (normalizedType == "PURCHASE" || item.itemId <= 0L) null
+              else inventoryDao.getItemById(item.itemId)?.purchasePrice ?: error("الصنف غير موجود: ${item.itemName}")
+            item.copy(invoiceId = invoiceId, stockQuantity = stockQty, costPriceAtSale = cost)
+          }
+          invoiceDao.insertItems(persistedItems)
 
           // Every non-purchase invoice leaves stock; purchases add stock.
           val stockDeltaSign = if (normalizedType == "PURCHASE") 1 else -1
-          for (item in normalizedItems) {
+          for (item in persistedItems) {
             if (item.itemId > 0L) {
-              val changedRows = inventoryDao.adjustQuantity(item.itemId, stockDeltaSign * item.quantity)
+              val stockQty = item.stockQuantity.takeIf { it > 0 } ?: item.quantity
+              val changedRows = inventoryDao.adjustQuantity(item.itemId, stockDeltaSign * stockQty)
               check(changedRows == 1) {
                 "الكمية غير متوفرة للصنف: ${item.itemName} أو أن الصنف غير موجود"
               }
@@ -397,7 +441,8 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
                     type = "DEBIT (عليه)",
                     amount = remainingAmount,
                     description = "فاتورة مبيعات رقم ${invoice.invoiceNumber}",
-                    date = invoice.date
+                    date = invoice.date,
+                    invoiceId = invoiceId
                   )
                 )
               }
@@ -412,7 +457,8 @@ class GroceryViewModel(application: Application) : AndroidViewModel(application)
                     type = "CREDIT (له)",
                     amount = remainingAmount,
                     description = "فاتورة مشتريات رقم ${invoice.invoiceNumber}",
-                    date = invoice.date
+                    date = invoice.date,
+                    invoiceId = invoiceId
                   )
                 )
               }
