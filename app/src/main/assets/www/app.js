@@ -1641,10 +1641,18 @@ document.addEventListener('input', event => {
 
 function getInventoryUnitOptions(item) {
   if (!item) return [
-    { name: 'حبة', factor: 1 }, { name: 'كيس', factor: 1 },
-    { name: 'باكت', factor: 1 }, { name: 'كرتون', factor: 1 },
-    { name: 'قطمة', factor: 1 }, { name: 'كيلو', factor: 1 },
-    { name: 'جرام', factor: 1 }, { name: 'لتر', factor: 1 },
+    { name: 'حبة', factor: 1 },
+    { name: 'نص كيس', factor: 1 },
+    { name: 'كيس', factor: 1 },
+    { name: 'نص قطمة', factor: 1 },
+    { name: 'قطمة', factor: 1 },
+    { name: 'كرتون', factor: 1 },
+    { name: 'شدة', factor: 1 },
+    { name: 'دزة', factor: 1 },
+    { name: 'باكت', factor: 1 },
+    { name: 'كيلو', factor: 1 },
+    { name: 'جرام', factor: 1 },
+    { name: 'لتر', factor: 1 },
     { name: 'صندوق', factor: 1 }
   ];
   const v = parseInventoryUnitConfig(item.unit), options = [{ name: v.base, factor: 1 }];
