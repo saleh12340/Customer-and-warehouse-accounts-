@@ -99,6 +99,7 @@ class GroceryAccountingIntegrationTest {
         InvoiceItemEntity(0L, 0L, existingItemId, "سكر", 2, 110.0, 220.0),
         InvoiceItemEntity(0L, 0L, 0L, "أرز", 4, 200.0, 800.0),
         InvoiceItemEntity(0L, 0L, 0L, "سكر", 3, 115.0, 345.0),
+        InvoiceItemEntity(0L, 0L, 0L, "دقيق", 3, 150.0, 450.0, 3, "كيس", 1),
         InvoiceItemEntity(0L, 0L, 0L, "مياه", 2, 7200.0, 14400.0, 288, "كرتون", 144)
       ),
       paidAmount = 1365.0
@@ -109,6 +110,9 @@ class GroceryAccountingIntegrationTest {
     val rice = db.inventoryDao().getItemByName("أرز")!!
     assertEquals(4, rice.quantity)
     assertEquals(200.0, rice.purchasePrice, 0.01)
+    val flour = db.inventoryDao().getItemByName("دقيق")!!
+    assertEquals(3, flour.quantity)
+    assertEquals("كيس", org.json.JSONObject(flour.unit).getString("base"))
     val water = db.inventoryDao().getItemByName("مياه")!!
     assertEquals(288, water.quantity)
     assertEquals(50.0, water.purchasePrice, 0.01)
@@ -125,12 +129,14 @@ class GroceryAccountingIntegrationTest {
     assertEquals(0, exportResult.second)
     assertEquals(10, db.inventoryDao().getItemById(existingItemId)!!.quantity)
     assertEquals(4, db.inventoryDao().getItemById(rice.id)!!.quantity)
+    assertEquals(3, db.inventoryDao().getItemById(flour.id)!!.quantity)
     assertEquals(288, db.inventoryDao().getItemById(water.id)!!.quantity)
 
     // Deleting the invoice reverses every linked stock movement exactly.
     engine.deleteInvoice(invoiceId)
     assertEquals(5, db.inventoryDao().getItemById(existingItemId)!!.quantity)
     assertEquals(0, db.inventoryDao().getItemById(rice.id)!!.quantity)
+    assertEquals(0, db.inventoryDao().getItemById(flour.id)!!.quantity)
     assertEquals(0, db.inventoryDao().getItemById(water.id)!!.quantity)
   }
 
