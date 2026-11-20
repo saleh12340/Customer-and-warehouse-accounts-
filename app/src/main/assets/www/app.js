@@ -3366,7 +3366,8 @@ function saveNoteThermalImage() {
 function printCurrentNote() {
   if (!window.Android || !requireSavedNote()) return;
   thermalReturnView = 'notes';
-  window.Android.printNote(noteEditorId, nextReqId());
+  // Always open the full thermal preview first; printing happens only from its Print button.
+  window.Android.previewGenericThermal('NOTE', noteEditorId, '', 0, 0, nextReqId());
 }
 function exportCurrentNotePdf() { if (window.Android && requireSavedNote()) window.Android.exportNotePdf(noteEditorId, nextReqId()); }
 function shareCurrentNoteWhatsApp() { if (window.Android && requireSavedNote()) window.Android.shareNoteWhatsApp(noteEditorId, nextReqId()); }
