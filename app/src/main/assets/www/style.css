@@ -1707,3 +1707,25 @@ input[type="time"] {
   .note-cell { font-size:10px; padding-inline:2px; }
   .note-actions-card .btn { font-size:9.5px; }
 }
+
+/* Final compact invoice columns: keep the unit selector deliberately narrow. */
+#view-create-invoice .grid-invoice-batch-row {
+  grid-template-columns: minmax(0,.68fr) minmax(0,1.5fr) minmax(0,.58fr) minmax(0,.88fr) 0 !important;
+}
+#view-create-invoice .grid-invoice-batch-row .batch-unit-select {
+  min-width:0 !important;
+  width:100%;
+  padding-inline:1px !important;
+  font-size:9px !important;
+  letter-spacing:-.25px;
+  text-overflow:clip;
+}
+@media (max-width:380px) {
+  #view-create-invoice .grid-invoice-batch-row {
+    grid-template-columns:minmax(0,.62fr) minmax(0,1.4fr) minmax(0,.52fr) minmax(0,.82fr) 0 !important;
+  }
+  #view-create-invoice .grid-invoice-batch-row .batch-unit-select {
+    font-size:8.5px !important;
+    padding-inline:0 !important;
+  }
+}
