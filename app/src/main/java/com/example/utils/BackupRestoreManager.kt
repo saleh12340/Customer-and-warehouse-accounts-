@@ -464,6 +464,7 @@ object BackupRestoreManager {
       db.noteDao().restoreNotes(notes)
     }
 
+    try {
     payload.optJSONObject("settings")?.let { sObj ->
       val currentSettings = StorePreferences.getSettings(context)
       val merged = StoreSettings(
@@ -501,6 +502,25 @@ object BackupRestoreManager {
       if (savedAddr.isNotBlank()) {
         StorePreferences.saveDefaultPrinter(context, savedAddr, savedName)
       }
+    }
+    } catch (settingsError: Exception) {
+      if (!createSafetyBackup) {
+        throw IllegalStateException(
+          "تعذر استعادة إعدادات النسخة الاحتياطية أثناء محاولة التراجع: ${settingsError.message ?: "خطأ غير معروف"}",
+          settingsError
+        )
+      }
+      val rollback = runCatching { restoreFromSafetyBackup(context) }
+      if (rollback.isSuccess) {
+        throw IllegalStateException(
+          "فشل حفظ إعدادات النسخة الاحتياطية؛ تمت إعادة قاعدة البيانات والإعدادات إلى حالتهما قبل الاستعادة. لم تُعتمد الاستعادة.",
+          settingsError
+        )
+      }
+      throw IllegalStateException(
+        "فشل حفظ إعدادات النسخة الاحتياطية، كما فشلت محاولة التراجع التلقائي. لا تتابع استخدام البيانات قبل استعادة ملف الأمان: ${rollback.exceptionOrNull()?.message ?: settingsError.message}",
+        rollback.exceptionOrNull() ?: settingsError
+      )
     }
 
     "تمت الاستعادة بنجاح: ${customers.size} عميل، ${suppliers.size} مورد، ${inventory.size} صنف، ${invoices.size} فاتورة"
