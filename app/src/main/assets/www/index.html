@@ -90,6 +90,11 @@
         </div>
       </div>
 
+      <div class="dashboard-entry-actions">
+        <button type="button" class="btn btn-primary" onclick="quickCustomerOperation()">إضافة عملية عميل</button>
+        <button type="button" class="btn btn-success" onclick="quickCreateInvoice()">فاتورة جديدة</button>
+      </div>
+
       <div id="dash-low-stock-alert" class="alert-strip hidden" onclick="openInventoryLowStock()"></div>
 
       <div class="metrics-grid">
@@ -1161,14 +1166,6 @@
     </section>
 
   </main>
-
-  <div id="quick-action-backdrop" class="quick-action-backdrop hidden" onclick="closeQuickActions()"></div>
-  <div id="quick-action-sheet" class="quick-action-sheet hidden" role="dialog" aria-modal="true" aria-label="الإجراءات السريعة">
-    <div class="quick-sheet-handle"></div><div class="quick-sheet-title">إجراء سريع</div>
-    <button type="button" class="quick-sheet-option" onclick="quickCustomerOperation()"><span class="quick-sheet-icon quick-blue">↔</span><span><strong>عملية حساب عميل</strong><small>تسجيل دين أو دفعة على حساب عميل</small></span></button>
-    <button type="button" class="quick-sheet-option" onclick="quickCreateInvoice()"><span class="quick-sheet-icon quick-green">＋</span><span><strong>فاتورة سريعة</strong><small>فتح شاشة إنشاء فاتورة مباشرة</small></span></button>
-  </div>
-  <button type="button" id="quick-action-fab" class="quick-action-fab" onclick="toggleQuickActions()" aria-label="إجراء سريع">＋</button>
 
   <!-- Fixed Bottom Navigation -->
   <nav class="bottom-nav" aria-label="التنقل السفلي">
