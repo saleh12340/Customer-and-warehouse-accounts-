@@ -858,6 +858,7 @@ class GroceryAccountingIntegrationTest {
     val updated = engine.getInventoryMovementHistory(itemId)!!.movements.single()
     assertEquals(12, updated.adjustmentNewQuantity)
     assertEquals("تصحيح الكمية", updated.partyName)
+    assertEquals(adjustment.date, updated.date)
 
     engine.deleteInventoryAdjustment(adjustment.adjustmentId)
     assertEquals(5, db.inventoryDao().getItemById(itemId)!!.quantity)
