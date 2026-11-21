@@ -643,6 +643,16 @@ document.addEventListener('keydown', event => {
 });
 
 window.handleAndroidBack = function () {
+  const quickSheet = document.getElementById('quick-action-sheet');
+  if (quickSheet && !quickSheet.classList.contains('hidden')) {
+    closeQuickActions();
+    return 'HANDLED';
+  }
+  const overflowMenu = document.getElementById('header-overflow-menu');
+  if (overflowMenu && !overflowMenu.classList.contains('hidden')) {
+    toggleHeaderMenu(false);
+    return 'HANDLED';
+  }
   const stockPicker = document.getElementById('multi-stock-picker-box');
   if (stockPicker && !stockPicker.classList.contains('hidden')) {
     toggleMultiStockPicker(false);
