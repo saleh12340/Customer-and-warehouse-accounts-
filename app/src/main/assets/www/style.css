@@ -2073,3 +2073,29 @@ body.compact-lists table.data-table td { padding: 4px 3px; }
 .activity-menu{position:absolute;z-index:5;top:35px;left:7px;display:flex;flex-direction:column;min-width:112px;padding:4px;border:1px solid var(--border-color);border-radius:8px;background:var(--surface);box-shadow:0 5px 16px rgba(0,0,0,.16)}
 .activity-menu.hidden{display:none!important}.activity-menu button{padding:8px;border:0;background:transparent;color:var(--text-primary);text-align:right;font-size:11px}
 @media(max-width:370px){.dashboard-launcher-grid{gap:9px 3px;padding:10px 3px}.launcher-icon{width:46px;height:46px}.activity-shortcut{padding:4px 6px}}
+
+
+/* Dedicated customer operation entry and compact one-line ledger. */
+.customer-op-fields{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(105px,1fr);gap:7px;direction:rtl}
+.customer-op-fields input{width:100%;min-width:0}
+.customer-op-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.customer-op-actions .btn{margin-top:0;min-height:42px;font-size:14px}
+.customer-op-suggestions{position:relative;z-index:20;display:flex;flex-direction:column;gap:3px;margin-top:5px;max-height:150px;overflow:auto;background:var(--surface);border:1px solid var(--border-color);border-radius:9px;padding:4px}
+.customer-op-suggestions.hidden{display:none}
+.customer-op-suggestion{width:100%;text-align:right;border:0;border-bottom:1px solid var(--border-color);background:var(--surface);padding:9px 8px;color:var(--text-primary);font-weight:700}
+.customer-op-suggestion:last-child{border-bottom:0}
+#op-customer-selected{margin-top:7px;font-weight:700}
+.customer-op-tools{margin:0 0 7px}
+.customer-op-history{display:flex;flex-direction:column;gap:3px;max-height:55vh;overflow-y:auto}
+.customer-op-row{display:grid;grid-template-columns:minmax(54px,.72fr) minmax(68px,.9fr) minmax(0,1.45fr) minmax(64px,.85fr) 30px;align-items:center;gap:4px;min-height:39px;padding:4px 3px;border-bottom:1px solid var(--border-color);font-size:11px;direction:rtl}
+.customer-op-row:last-child{border-bottom:0}
+.customer-op-row .op-date,.customer-op-row .op-amount,.customer-op-row .op-balance{white-space:nowrap;font-variant-numeric:tabular-nums}
+.customer-op-row .op-detail{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.customer-op-row .op-amount{font-weight:800}
+.customer-op-row .op-amount.debit{color:var(--danger-red)}
+.customer-op-row .op-amount.credit{color:var(--primary-blue)}
+.customer-op-row .op-menu{width:28px;height:28px;border:1px solid var(--border-color);border-radius:7px;background:var(--surface-alt);font-weight:800}
+.customer-op-expanded{padding:7px 9px;margin:0 0 4px;border-right:3px solid var(--primary-blue);background:var(--surface-alt);font-size:11px;line-height:1.7}
+.customer-op-menu{display:flex;flex-wrap:wrap;gap:5px;padding:5px 2px}
+.customer-op-menu button{border:1px solid var(--border-color);background:var(--surface);border-radius:7px;padding:5px 8px;font-size:11px;font-weight:700}
+@media(max-width:360px){.customer-op-row{grid-template-columns:48px 67px minmax(0,1fr) 58px 27px;font-size:10px;gap:2px}.customer-op-fields{grid-template-columns:minmax(0,1.55fr) minmax(92px,1fr)}}
