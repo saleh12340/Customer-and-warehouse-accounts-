@@ -853,7 +853,7 @@ class GroceryAccountingIntegrationTest {
     assertEquals(3, adjustment.deltaQty)
     assertEquals(8, history.item.quantity)
 
-    engine.updateInventoryAdjustment(adjustment.adjustmentId, 12, "تصحيح الكمية", 2000L)
+    engine.updateInventoryAdjustment(adjustment.adjustmentId, 12, "تصحيح الكمية")
     assertEquals(12, db.inventoryDao().getItemById(itemId)!!.quantity)
     val updated = engine.getInventoryMovementHistory(itemId)!!.movements.single()
     assertEquals(12, updated.adjustmentNewQuantity)
