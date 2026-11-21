@@ -106,8 +106,8 @@ class AndroidBridge(
         }
         database.inventoryAdjustmentDao().getAllAdjustmentsSnapshot().forEach { adj ->
           combined += ActivityRow(adj.date, 2, JSONObject().apply {
-            put("kind", "STOCK"); put("id", adj.itemId); put("partyId", adj.itemId)
-            put("adjustmentId", adj.id); put("title", "تسوية مخزون: " + adj.itemName)
+            put("kind", "STOCK"); put("id", adj.id); put("partyId", adj.itemId)
+            put("adjustmentId", adj.id); put("itemId", adj.itemId); put("title", "تسوية مخزون: " + adj.itemName)
             put("subtitle", adj.reason + " • الكمية: " + adj.previousQuantity + " ← " + adj.newQuantity)
             put("description", adj.reason); put("amount", 0); put("date", adj.date)
           })
@@ -355,6 +355,47 @@ class AndroidBridge(
         notifyResult(reqId, true, "تم حذف الحركة وعكس أثرها على الرصيد ✓")
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر حذف الحركة")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun shareTransactionWhatsApp(txId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val snap = engine.getTransactionReceiptSnapshot(txId) ?: error("العملية غير موجودة")
+        val tx = snap.transaction
+        val settings = StorePreferences.getSettings(activity)
+        val isCustomer = tx.partyType == "CUSTOMER"
+        val isDebit = tx.type.startsWith("DEBIT")
+        val action = when {
+          isCustomer && isDebit -> "دين على العميل"
+          isCustomer -> "دفعة من العميل"
+          isDebit -> "دفعة للمورد"
+          else -> "مستحق للمورد"
+        }
+        val previous = if (snap.previousBalance > 0.01) "عليه ${formatNum(snap.previousBalance)}"
+          else if (snap.previousBalance < -0.01) "له ${formatNum(-snap.previousBalance)}" else "رصيد صفر"
+        val current = if (snap.currentBalance > 0.01) "عليه ${formatNum(snap.currentBalance)}"
+          else if (snap.currentBalance < -0.01) "له ${formatNum(-snap.currentBalance)}" else "رصيد صفر"
+        val dateText = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(Date(tx.date))
+        val msg = buildString {
+          appendLine(settings.storeName)
+          appendLine("سند حركة حساب")
+          appendLine("الطرف: ${tx.partyName}")
+          appendLine("نوع الحركة: $action")
+          appendLine("المبلغ: ${formatNum(tx.amount)} ${settings.currency}")
+          appendLine("البيان: ${tx.description}")
+          appendLine("التاريخ: $dateText")
+          appendLine("الرصيد قبل الحركة: $previous ${settings.currency}")
+          append("الرصيد بعد الحركة: $current ${settings.currency}")
+        }
+        activity.runOnUiThread {
+          val ok = WhatsAppHelper.shareText(activity, snap.partyPhone, msg)
+          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة سند الحركة ✓" else "تعذر فتح مشاركة سند الحركة")
+        }
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذرت مشاركة الحركة المحددة")
       }
     }
   }
