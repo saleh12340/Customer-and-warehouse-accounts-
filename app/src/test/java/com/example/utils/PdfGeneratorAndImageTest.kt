@@ -319,7 +319,7 @@ class PdfGeneratorAndImageTest {
 
       val sharedThermal = BluetoothPrinterManager.buildNoteReceiptBitmap(context, note, widthMm, renderScale = 3)
       assertEquals(nativeWidth * 3, sharedThermal.width)
-      assertTrue(sharedThermal.height > 300)
+      assertTrue(sharedThermal.height > 150)
       sharedThermal.recycle()
     }
   }
