@@ -2099,3 +2099,6 @@ body.compact-lists table.data-table td { padding: 4px 3px; }
 .customer-op-menu{display:flex;flex-wrap:wrap;gap:5px;padding:5px 2px}
 .customer-op-menu button{border:1px solid var(--border-color);background:var(--surface);border-radius:7px;padding:5px 8px;font-size:11px;font-weight:700}
 @media(max-width:360px){.customer-op-row{grid-template-columns:48px 67px minmax(0,1fr) 58px 27px;font-size:10px;gap:2px}.customer-op-fields{grid-template-columns:minmax(0,1.55fr) minmax(92px,1fr)}}
+
+.dashboard-entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 9px}
+.dashboard-entry-actions .btn{margin-top:0;min-height:43px;font-size:13px}
