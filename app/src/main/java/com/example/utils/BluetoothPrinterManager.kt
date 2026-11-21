@@ -599,10 +599,12 @@ object BluetoothPrinterManager {
   fun buildNoteReceiptBitmap(
     context: Context,
     note: NoteEntity,
-    paperWidthMm: Int = 58
+    paperWidthMm: Int = 58,
+    renderScale: Int = 1
   ): Bitmap {
     val width = if (paperWidthMm == 80) 576 else 384
     val isWide = width >= 576
+    val scale = renderScale.coerceIn(1, 3)
 
     // Use nearly the full paper width: two equal item panels, with no store/title/date
     // header, no panel captions, and no column-heading band.
@@ -613,8 +615,8 @@ object BluetoothPrinterManager {
     val qtyW = if (isWide) 58f else 43f
     val detailW = panelW - qtyW
 
-    val bodyPaint = textPaint(context, if (isWide) 22f else 17f, bold = true)
-    val qtyPaint = textPaint(context, if (isWide) 21f else 16.5f, bold = true)
+    val bodyPaint = textPaint(context, if (isWide) 23f else 18.5f, bold = true)
+    val qtyPaint = textPaint(context, if (isWide) 22f else 18f, bold = true)
     val ruleLine = Paint().apply {
       color = Color.BLACK
       strokeWidth = if (isWide) 1.5f else 1.2f
@@ -650,7 +652,7 @@ object BluetoothPrinterManager {
         NotePrintRow(
           qty = qty,
           detail = layout,
-          height = maxOf(if (isWide) 34 else 29, layout.height + 8)
+          height = maxOf(if (isWide) 36 else 32, layout.height + 8)
         )
       }
 
@@ -662,14 +664,15 @@ object BluetoothPrinterManager {
       maxOf(
         rightRows.getOrNull(index)?.height ?: 0,
         leftRows.getOrNull(index)?.height ?: 0,
-        if (isWide) 34 else 29
+        if (isWide) 36 else 32
       )
     }
 
     val emptyHeight = 140
     val bitmapHeight = (rowsHeight + 6).coerceAtLeast(emptyHeight)
-    val bitmap = Bitmap.createBitmap(width, bitmapHeight, Bitmap.Config.ARGB_8888)
+    val bitmap = Bitmap.createBitmap(width * scale, bitmapHeight * scale, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
+    canvas.scale(scale.toFloat(), scale.toFloat())
     canvas.drawColor(Color.WHITE)
 
     val leftX = pad
@@ -702,7 +705,7 @@ object BluetoothPrinterManager {
         val rowHeight = maxOf(
           rightRows.getOrNull(index)?.height ?: 0,
           leftRows.getOrNull(index)?.height ?: 0,
-          if (isWide) 34 else 29
+          if (isWide) 36 else 32
         ).toFloat()
         drawRow(rightX, rightRows.getOrNull(index), rowHeight)
         drawRow(leftX, leftRows.getOrNull(index), rowHeight)
@@ -712,7 +715,7 @@ object BluetoothPrinterManager {
       canvas.drawRect(leftX, 2f, leftX + panelW, y, outerLine)
     }
 
-    return tightCropBitmap(bitmap, width, y + 2f)
+    return tightCropBitmap(bitmap, width * scale, (y + 2f) * scale)
   }
 
   private fun tightCropBitmap(bitmap: Bitmap, width: Int, contentEndY: Float): Bitmap {

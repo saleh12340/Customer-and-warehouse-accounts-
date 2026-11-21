@@ -27,21 +27,21 @@ object NotePdfGenerator {
     val rightRows = JSONArray(note.rightRowsJson).toRows()
     val leftRows = JSONArray(note.leftRowsJson).toRows()
     val total = maxOf(rightRows.size, leftRows.size, 1)
-    val rowsPerPage = 21
+    val rowsPerPage = 18
     val pageCount = (total + rowsPerPage - 1) / rowsPerPage
     val doc = PdfDocument()
     val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       color = Color.rgb(170, 180, 192)
       strokeWidth = 0.8f
     }
-    val title = textPaint(17f, Color.rgb(25, 55, 90), true)
-    val header = textPaint(10.5f, Color.WHITE, true)
-    val body = textPaint(10.5f, Color.BLACK)
-    val muted = textPaint(9f, Color.DKGRAY)
+    val title = textPaint(context, 20f, Color.rgb(25, 55, 90), true)
+    val header = textPaint(context, 12f, Color.WHITE, true)
+    val body = textPaint(context, 13.5f, Color.BLACK)
+    val muted = textPaint(context, 10.5f, Color.DKGRAY)
     val headerFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(35, 76, 119) }
-    val halfGap = 12f
+    val halfGap = 14f
     val halfW = (PAGE_W - MARGIN * 2 - halfGap) / 2f
-    val qtyW = 48f
+    val qtyW = 54f
     val detailW = halfW - qtyW
     val date = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US).format(Date(note.updatedAt))
     val output = File(context.filesDir, "notes/note_${note.id}.pdf").apply { parentFile?.mkdirs() }
@@ -75,13 +75,13 @@ object NotePdfGenerator {
     x: Float, top: Float, width: Float, qtyW: Float, detailW: Float,
     fill: Paint, header: TextPaint, body: TextPaint, line: Paint
   ) {
-    val headerH = 25f
-    val rowH = 29f
+    val headerH = 30f
+    val rowH = 37f
     val qtyX = x + width - qtyW
     val detailX = x
     canvas.drawRect(x, top, x + width, top + headerH, fill)
-    drawRtl(canvas, "التفاصيل", detailX + 5f, top + 5f, detailW - 10f, header)
-    drawRtl(canvas, "الكمية", qtyX + 2f, top + 5f, qtyW - 4f, header, Layout.Alignment.ALIGN_CENTER)
+    drawRtl(canvas, "التفاصيل", detailX + 5f, top + 7f, detailW - 10f, header)
+    drawRtl(canvas, "الكمية", qtyX + 2f, top + 7f, qtyW - 4f, header, Layout.Alignment.ALIGN_CENTER)
     val from = pageIndex * pageSize
     for (r in 0 until pageSize) {
       val y = top + headerH + r * rowH
@@ -106,12 +106,11 @@ object NotePdfGenerator {
       if (qty.isBlank() && detail.isBlank()) null else qty to detail
     }
 
-  private fun textPaint(size: Float, color: Int, bold: Boolean = false) =
+  private fun textPaint(context: Context, size: Float, color: Int, bold: Boolean = false) =
     TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
       textSize = size
       this.color = color
-      typeface = if (bold) android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
-      else android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+      typeface = if (bold) ArabicFontHelper.getBold(context) else ArabicFontHelper.getRegular(context)
     }
 
   private fun drawRtl(

@@ -291,6 +291,39 @@ class PdfGeneratorAndImageTest {
     }
   }
 
+
+  @Test
+  fun notesExportHdImagesAndKeepNativeThermalPrintWidths() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val note = com.example.data.NoteEntity(
+      id = 71L,
+      createdAt = 1763312400000L,
+      updatedAt = 1763312400000L,
+      rightRowsJson = """[{"qty":"12","detail":"سكر 10 كيلو - صنف ممتاز"},{"qty":"4","detail":"زيت دوار الشمس"}]""",
+      leftRowsJson = """[{"qty":"3","detail":"دقيق أبيض"}]"""
+    )
+
+    val hdFile = NoteImageGenerator.generate(context, note)
+    assertTrue(hdFile.exists() && hdFile.length() > 1000)
+    val hdBitmap = BitmapFactory.decodeFile(hdFile.absolutePath)
+    assertNotNull(hdBitmap)
+    assertEquals(1190, hdBitmap.width)
+    assertTrue(hdBitmap.height > 300)
+    hdBitmap.recycle()
+
+    for ((widthMm, nativeWidth) in listOf(58 to 384, 80 to 576)) {
+      val thermal = BluetoothPrinterManager.buildNoteReceiptBitmap(context, note, widthMm)
+      assertEquals(nativeWidth, thermal.width)
+      assertTrue(BluetoothPrinterManager.convertBitmapToEscPos(thermal).size > 200)
+      thermal.recycle()
+
+      val sharedThermal = BluetoothPrinterManager.buildNoteReceiptBitmap(context, note, widthMm, renderScale = 3)
+      assertEquals(nativeWidth * 3, sharedThermal.width)
+      assertTrue(sharedThermal.height > 300)
+      sharedThermal.recycle()
+    }
+  }
+
   @Test
   fun normalizesYemeniAndArabicIndicPhoneNumbersForWhatsApp() {
     assertEquals("+967771234567", WhatsAppHelper.normalizeYemeniPhone("771234567"))

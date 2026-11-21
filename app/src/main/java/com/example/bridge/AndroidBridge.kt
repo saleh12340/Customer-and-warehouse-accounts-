@@ -566,6 +566,59 @@ class AndroidBridge(
   }
 
   @JavascriptInterface
+  fun exportNoteImageHd(noteId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val note = database.noteDao().getNoteById(noteId) ?: error("الملاحظة غير موجودة")
+        val file = NoteImageGenerator.generate(activity, note)
+        val saved = AppDownloadsFolderManager.saveFile(
+          context = activity,
+          subfolder = AppDownloadsFolderManager.SUB_IMAGES,
+          sourceFile = file,
+          displayName = "note_${note.id}_HD.png",
+          mimeType = "image/png",
+          overwriteExisting = true
+        )
+        notifyResult(reqId, true, "تم حفظ صورة الملاحظة HD بدقة عالية في ${saved?.displayPath ?: "مجلد الصور"} ✓")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر إنشاء صورة الملاحظة HD")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun shareNoteImageWhatsApp(noteId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val note = database.noteDao().getNoteById(noteId) ?: error("احفظ الملاحظة أولاً")
+        val file = NoteImageGenerator.generate(activity, note)
+        val saved = AppDownloadsFolderManager.saveFile(
+          context = activity,
+          subfolder = AppDownloadsFolderManager.SUB_IMAGES,
+          sourceFile = file,
+          displayName = "note_${note.id}_HD.png",
+          mimeType = "image/png",
+          overwriteExisting = true
+        )
+        val uri = PdfGenerator.getUriForFile(activity, file)
+        val settings = StorePreferences.getSettings(activity)
+        activity.runOnUiThread {
+          val ok = WhatsAppHelper.shareFile(
+            context = activity,
+            fileUri = uri,
+            mimeType = "image/png",
+            message = "صورة ملاحظة من ${settings.storeName} - HD",
+            preferWhatsApp = settings.preferWhatsAppDirect
+          )
+          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة صورة الملاحظة HD ✓" else "تعذرت المشاركة؛ تم حفظ الصورة في ${saved?.displayPath ?: "مجلد الصور"}")
+        }
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذرت مشاركة صورة الملاحظة")
+      }
+    }
+  }
+
+  @JavascriptInterface
   fun previewNoteThermalDraft(noteJson: String, reqId: String) {
     scope.launch(Dispatchers.IO) {
       try {
@@ -1506,7 +1559,12 @@ class AndroidBridge(
     scope.launch(Dispatchers.IO) {
       try {
         val settings = StorePreferences.getSettings(activity)
-        val (_, _, bmp) = renderGenericThermalBitmap(kind, targetId, extraStr, startMillis, endMillis, settings.printerWidthMm)
+        val bmp = if (kind.equals("NOTE", ignoreCase = true)) {
+          val note = database.noteDao().getNoteById(targetId) ?: error("الملاحظة غير موجودة")
+          BluetoothPrinterManager.buildNoteReceiptBitmap(activity, note, settings.printerWidthMm, renderScale = 3)
+        } else {
+          renderGenericThermalBitmap(kind, targetId, extraStr, startMillis, endMillis, settings.printerWidthMm).third
+        }
         val prefix = "thermal_${kind.lowercase(Locale.US)}_$targetId"
         val saved = BluetoothPrinterManager.saveThermalBitmapToDownloads(activity, bmp, prefix)
         notifyResult(reqId, true, "تم حفظ صورة الإيصال في ${saved.displayPath} ✓")
