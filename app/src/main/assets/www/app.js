@@ -178,6 +178,7 @@ function suggestionKindForInput(input) {
   if (!input || (input.tagName !== 'INPUT' && input.tagName !== 'TEXTAREA')) return '';
   const id = input.id || '';
   if (id === 'cust-form-name' || input.matches('[data-suggest="customers"]')) return 'customers';
+  if (id === 'quick-party-name') return invoiceType === 'PURCHASE' ? 'suppliers' : 'customers';
   if (id === 'supp-form-name' || input.matches('[data-suggest="suppliers"]')) return 'suppliers';
   if (/^(batch-name-\d+|note-detail|inv-item-form-name|inventory-quick-name|quick-stock-name)$/.test(id) ||
       input.classList?.contains('note-detail') || input.matches('[data-suggest="items"]')) return 'items';
@@ -233,11 +234,14 @@ function refreshSuggestionListForInput(input) {
   const kind = suggestionKindForInput(input);
   if (!kind) { hideContextSuggestions(); return; }
   const query = normalizeSuggestionText(input.value);
-  if (query.length < MIN_CONTEXT_QUERY_LENGTH) { hideContextSuggestions(); return; }
-  const matches = suggestionValuesFor(kind).map(value => ({
+  const allValues = suggestionValuesFor(kind);
+  // On focus/tap show a short useful list; as soon as the user types, filter it live.
+  const matches = allValues.map(value => ({
     value, normalized: normalizeSuggestionText(value)
-  })).filter(item => item.normalized.startsWith(query) || item.normalized.includes(query))
+  })).filter(item => !query ||
+      (item.normalized !== query && (item.normalized.startsWith(query) || item.normalized.includes(query))))
     .sort((a, b) => {
+      if (!query) return a.value.localeCompare(b.value, 'ar');
       const ap = a.normalized.startsWith(query) ? 0 : 1;
       const bp = b.normalized.startsWith(query) ? 0 : 1;
       return ap - bp || a.value.localeCompare(b.value, 'ar');
@@ -254,7 +258,11 @@ function refreshSuggestionListForInput(input) {
     option.id = 'context-suggestion-' + index;
     option.setAttribute('role', 'option');
     option.textContent = value;
-    option.addEventListener('pointerdown', event => { event.preventDefault(); chooseContextSuggestion(index); });
+    option.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      chooseContextSuggestion(index);
+    });
+    option.addEventListener('click', event => event.preventDefault());
     return option;
   }));
   panel.classList.remove('hidden');
@@ -287,7 +295,7 @@ function initializeContextSuggestions() {
   }, true);
   document.addEventListener('focusin', event => {
     const input = event.target;
-    if (suggestionKindForInput(input) && normalizeSuggestionText(input.value).length >= MIN_CONTEXT_QUERY_LENGTH) {
+    if (suggestionKindForInput(input)) {
       refreshSuggestionListForInput(input);
     } else hideContextSuggestions();
   });
@@ -317,6 +325,8 @@ function initializeContextSuggestions() {
         !document.getElementById('context-suggestion-panel')?.contains(event.target)) hideContextSuggestions();
   }, true);
   window.addEventListener('resize', positionContextSuggestions, { passive: true });
+  window.visualViewport?.addEventListener('resize', positionContextSuggestions, { passive: true });
+  window.visualViewport?.addEventListener('scroll', positionContextSuggestions, { passive: true });
   document.getElementById('main-scroll')?.addEventListener('scroll', positionContextSuggestions, { passive: true });
 }
 document.addEventListener('DOMContentLoaded', initializeContextSuggestions);
