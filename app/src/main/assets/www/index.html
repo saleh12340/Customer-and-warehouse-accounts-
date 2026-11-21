@@ -193,6 +193,33 @@
       </div>
     </section>
 
+    <!-- Dedicated customer operation entry; reuses the existing Room-backed customer ledger. -->
+    <section id="view-customer-operation" class="view">
+      <div class="sticky-top-panel">
+        <div class="section-head"><h2>إضافة عملية عميل</h2></div>
+        <div class="card compact-card customer-op-entry">
+          <div class="customer-op-fields">
+            <input id="op-customer-name" type="text" class="ruled-cell" placeholder="ابحث عن اسم العميل..." autocomplete="off" aria-label="اسم العميل">
+            <input id="op-customer-amount" type="text" class="ruled-cell cell-num" placeholder="المبلغ" inputmode="numeric" pattern="[0-9]*" data-english-only="true" lang="en-US" dir="ltr" autocomplete="off" aria-label="المبلغ">
+          </div>
+          <div id="op-customer-suggestions" class="customer-op-suggestions hidden" role="listbox"></div>
+          <div class="customer-op-actions">
+            <button type="button" class="btn btn-success" onclick="saveCustomerOperation(false)">له</button>
+            <button type="button" class="btn btn-danger" onclick="saveCustomerOperation(true)">عليه</button>
+          </div>
+          <div id="op-customer-selected" class="muted-text" aria-live="polite">اختر عميلاً لعرض حسابه وعملياته</div>
+        </div>
+        <div class="btn-row customer-op-tools">
+          <button type="button" class="btn btn-outline-primary btn-compact" onclick="exportCustomerOperationPdf()">تصدير كشف الحساب PDF</button>
+          <button type="button" class="btn btn-outline btn-compact" onclick="openSelectedCustomerLedger()">فتح حساب العميل</button>
+        </div>
+      </div>
+      <div class="card compact-card">
+        <div class="card-title-row"><h3>العمليات والفواتير</h3><span id="op-customer-balance" class="muted-text"></span></div>
+        <div id="op-customer-history" class="customer-op-history"><div class="empty-state">اختر عميلاً لعرض سجله</div></div>
+      </div>
+    </section>
+
     <!-- 3. Customer Detail & Account Ledger -->
     <section id="view-customer-detail" class="view">
       <div class="natural-top-panel">
@@ -1168,5 +1195,6 @@
   </nav>
 
   <script src="app.js"></script>
+  <script src="customer-operation.js"></script>
 </body>
 </html>
