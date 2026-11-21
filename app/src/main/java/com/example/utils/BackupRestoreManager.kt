@@ -496,12 +496,10 @@ object BackupRestoreManager {
         autoSaveThermalImage = sObj.optBoolean("autoSaveThermalImage", currentSettings.autoSaveThermalImage),
         linkedFolderUri = currentSettings.linkedFolderUri
       )
-      StorePreferences.saveAdvancedSettings(context, merged)
+      check(StorePreferences.saveAdvancedSettingsChecked(context, merged)) { "تعذر حفظ إعدادات التطبيق على الجهاز" }
       val savedAddr = sObj.optString("defaultPrinterAddress", "")
       val savedName = sObj.optString("defaultPrinterName", "")
-      if (savedAddr.isNotBlank()) {
-        StorePreferences.saveDefaultPrinter(context, savedAddr, savedName)
-      }
+      check(StorePreferences.saveDefaultPrinterChecked(context, savedAddr, savedName)) { "تعذر حفظ إعدادات الطابعة" }
     }
     } catch (settingsError: Exception) {
       if (!createSafetyBackup) {

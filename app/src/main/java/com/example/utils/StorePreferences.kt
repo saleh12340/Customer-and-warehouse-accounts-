@@ -135,8 +135,16 @@ object StorePreferences {
   }
 
   fun saveAdvancedSettings(context: Context, settings: StoreSettings) {
+    advancedSettingsEditor(context, settings).apply()
+  }
+
+  /** Synchronous persistence for critical backup/restore operations. */
+  fun saveAdvancedSettingsChecked(context: Context, settings: StoreSettings): Boolean =
+    advancedSettingsEditor(context, settings).commit()
+
+  private fun advancedSettingsEditor(context: Context, settings: StoreSettings): android.content.SharedPreferences.Editor {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    prefs.edit()
+    return prefs.edit()
       .putString(KEY_STORE_NAME, settings.storeName.trim().ifBlank { "بقالة العزي للمواد الغذائية" })
       .putString(KEY_STORE_PHONE, settings.storePhone.trim())
       .putString(KEY_STORE_ADDRESS, settings.storeAddress.trim())
@@ -161,7 +169,6 @@ object StorePreferences {
       .putBoolean(KEY_AUTO_OPEN_PDF, settings.autoOpenPdfAfterExport)
       .putBoolean(KEY_PREFER_WA_DIRECT, settings.preferWhatsAppDirect)
       .putBoolean(KEY_AUTO_SAVE_THERMAL_IMAGE, settings.autoSaveThermalImage)
-      .apply()
   }
 
   fun resetAdvancedSettings(context: Context) {
@@ -188,6 +195,13 @@ object StorePreferences {
       .putString(KEY_PRINTER_NAME, name)
       .apply()
   }
+
+  fun saveDefaultPrinterChecked(context: Context, address: String, name: String): Boolean =
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .edit()
+      .putString(KEY_PRINTER_ADDRESS, address)
+      .putString(KEY_PRINTER_NAME, name)
+      .commit()
 
   fun saveLinkedFolderUri(context: Context, uriString: String) {
     context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
