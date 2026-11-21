@@ -836,4 +836,20 @@ class GroceryAccountingIntegrationTest {
     java.security.MessageDigest.getInstance("SHA-256")
       .digest(value.toByteArray(Charsets.UTF_8))
       .joinToString("") { "%02x".format(it) }
+
+  @Test
+  fun inventoryAdjustmentKeepsItsOwnRecordIdSeparateFromItemId() = runBlocking {
+    val itemId = engine.saveInventoryItem(0L, "صنف تسوية معرف", "عام", 5, 100.0, 120.0, "حبة")
+    engine.saveInventoryItem(itemId, "صنف تسوية معرف", "عام", 8, 100.0, 120.0, "حبة")
+
+    val history = engine.getInventoryMovementHistory(itemId)!!
+    val adjustment = history.movements.single()
+
+    assertEquals("ADJUSTMENT", adjustment.invoiceType)
+    assertEquals(0L, adjustment.invoiceId)
+    assertTrue(adjustment.adjustmentId > 0L)
+    assertEquals(3, adjustment.deltaQty)
+    assertEquals(8, history.item.quantity)
+  }
+
 }
