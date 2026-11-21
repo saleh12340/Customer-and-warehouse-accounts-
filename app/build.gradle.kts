@@ -62,7 +62,17 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all {
+        // Robolectric fetches its instrumented Android runtime separately from Gradle.
+        // Use Maven Central's canonical hostname to avoid intermittent repo1 checksum/404 failures in CI.
+        it.systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
+        it.systemProperty("robolectric.dependency.repo.id", "mavenCentral")
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
