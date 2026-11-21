@@ -84,7 +84,7 @@ class AndroidBridge(
         database.invoiceDao().getInvoicesSnapshot().forEach { inv ->
           val purchase = inv.type == "PURCHASE"
           combined += ActivityRow(inv.date, 0, JSONObject().apply {
-            put("kind", "INVOICE"); put("id", inv.id); put("partyId", inv.partyId)
+            put("kind", "INVOICE"); put("id", inv.id); put("recordId", inv.id); put("partyId", inv.partyId)
             put("partyType", if (purchase) "SUPPLIER" else "CUSTOMER")
             put("invoiceType", inv.type); put("invoiceNumber", inv.invoiceNumber)
             put("title", (if (purchase) "فاتورة شراء #" else "فاتورة بيع #") + inv.invoiceNumber)
@@ -98,7 +98,7 @@ class AndroidBridge(
           val label = if (customer) { if (debit) "دين على العميل" else "دفعة من العميل" }
                       else { if (debit) "دفعة للمورد" else "مستحق للمورد" }
           combined += ActivityRow(tx.date, 1, JSONObject().apply {
-            put("kind", if (customer) "CUSTOMER_TX" else "SUPPLIER_TX"); put("id", tx.id)
+            put("kind", if (customer) "CUSTOMER_TX" else "SUPPLIER_TX"); put("id", tx.id); put("recordId", tx.id)
             put("partyId", tx.partyId); put("partyType", tx.partyType); put("title", label)
             put("subtitle", tx.partyName + " • " + tx.description); put("description", tx.description)
             put("partyName", tx.partyName); put("amount", tx.amount); put("date", tx.date)
@@ -106,7 +106,7 @@ class AndroidBridge(
         }
         database.inventoryAdjustmentDao().getAllAdjustmentsSnapshot().forEach { adj ->
           combined += ActivityRow(adj.date, 2, JSONObject().apply {
-            put("kind", "STOCK"); put("id", adj.id); put("partyId", adj.itemId)
+            put("kind", "STOCK"); put("id", adj.id); put("recordId", adj.id); put("partyId", adj.itemId)
             put("adjustmentId", adj.id); put("itemId", adj.itemId); put("title", "تسوية مخزون: " + adj.itemName)
             put("subtitle", adj.reason + " • الكمية: " + adj.previousQuantity + " ← " + adj.newQuantity)
             put("description", adj.reason); put("amount", 0); put("date", adj.date)
