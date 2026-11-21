@@ -205,7 +205,7 @@ function renderCustomerOperationHistory() {
       const tx = linked.get(Number(inv.id));
       return { kind: 'INV', id: Number(inv.id), date: inv.date, amount: Number(inv.totalAmount || 0), debit: true, balance: tx?.runningBalance, detail: 'فاتورة #' + (inv.invoiceNumber || inv.id), source: inv };
     })
-  ].sort((a,b) => opDateNumber(b.date)-opDateNumber(a.date) || b.id-a.id);
+  ].sort((a,b) => opDateNumber(b.date)-opDateNumber(a.date) || b.id-a.id || a.kind.localeCompare(b.kind));
 
   if (!records.length) {
     box.innerHTML = '<div class="empty-state">لا توجد عمليات أو فواتير لهذا العميل</div>';
