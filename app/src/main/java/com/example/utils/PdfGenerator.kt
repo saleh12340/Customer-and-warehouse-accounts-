@@ -242,7 +242,8 @@ object PdfGenerator {
     var current = mutableListOf<MeasuredStatementRow>()
     var curY = 178f + 32f
     for (row in measured) {
-      if (current.isNotEmpty() && curY + row.rowH > BOTTOM_LIMIT - 60f) {
+      // Reserve enough room for the expanded debit/credit and closing-balance summary.
+      if (current.isNotEmpty() && curY + row.rowH > BOTTOM_LIMIT - 76f) {
         pages.add(current)
         current = mutableListOf()
         curY = 92f + 32f
