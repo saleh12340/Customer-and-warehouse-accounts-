@@ -106,7 +106,7 @@ class AndroidBridge(
         }
         database.inventoryAdjustmentDao().getAllAdjustmentsSnapshot().forEach { adj ->
           combined += ActivityRow(adj.date, 2, JSONObject().apply {
-            put("kind", "STOCK"); put("id", adj.id); put("recordId", adj.id); put("partyId", adj.itemId)
+            put("kind", "STOCK"); put("id", adj.id); put("recordId", adj.id)
             put("adjustmentId", adj.id); put("itemId", adj.itemId); put("title", "تسوية مخزون: " + adj.itemName)
             put("subtitle", adj.reason + " • الكمية: " + adj.previousQuantity + " ← " + adj.newQuantity)
             put("description", adj.reason); put("amount", 0); put("date", adj.date)
