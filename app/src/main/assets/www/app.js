@@ -178,7 +178,7 @@ function suggestionKindForInput(input) {
   if (!input || (input.tagName !== 'INPUT' && input.tagName !== 'TEXTAREA')) return '';
   const id = input.id || '';
   if (id === 'cust-form-name' || input.matches('[data-suggest="customers"]')) return 'customers';
-  if (id === 'quick-party-name') return invoiceType === 'PURCHASE' ? 'suppliers' : 'customers';
+  if (id === 'quick-party-name') return (document.getElementById('inv-type')?.value || 'CASH') === 'PURCHASE' ? 'suppliers' : 'customers';
   if (id === 'supp-form-name' || input.matches('[data-suggest="suppliers"]')) return 'suppliers';
   if (/^(batch-name-\d+|note-detail|inv-item-form-name|inventory-quick-name|quick-stock-name)$/.test(id) ||
       input.classList?.contains('note-detail') || input.matches('[data-suggest="items"]')) return 'items';
