@@ -234,8 +234,15 @@ function refreshSuggestionListForInput(input) {
   const kind = suggestionKindForInput(input);
   if (!kind) { hideContextSuggestions(); return; }
   const query = normalizeSuggestionText(input.value);
+  // Invoice item names are selected from the item box by default.
+  // Show autocomplete suggestions only after the user has typed at least two characters.
+  const isInvoiceItemName = /^batch-name-\\d+$/.test(input.id || '');
+  if (isInvoiceItemName && query.length < MIN_CONTEXT_QUERY_LENGTH) {
+    hideContextSuggestions();
+    return;
+  }
   const allValues = suggestionValuesFor(kind);
-  // On focus/tap show a short useful list; as soon as the user types, filter it live.
+  // Other supported fields retain focus suggestions; invoice items require a two-character query.
   const matches = allValues.map(value => ({
     value, normalized: normalizeSuggestionText(value)
   })).filter(item => !query ||
