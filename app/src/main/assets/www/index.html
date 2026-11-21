@@ -122,7 +122,7 @@
 
     <section id="view-activity-log" class="view">
       <div class="sticky-top-panel">
-        <div class="section-head"><h2>سجل العمليات الشامل</h2><button type="button" class="btn btn-outline btn-sm" onclick="loadActivityLog()">تحديث</button></div>
+        <div class="section-head"><h2>سجل العمليات</h2><button type="button" class="btn btn-outline btn-sm" onclick="loadActivityLog()">تحديث</button></div>
         <div class="activity-filter-row">
           <input id="activity-search" class="ruled-cell" type="search" placeholder="بحث في السجل..." oninput="renderActivityLog()">
           <select id="activity-filter" class="ruled-cell" onchange="renderActivityLog()">
@@ -130,7 +130,7 @@
             <option value="CUSTOMER_TX">حسابات العملاء</option><option value="SUPPLIER_TX">حسابات الموردين</option><option value="STOCK">حركات المخزون</option>
           </select>
         </div>
-        <div id="activity-summary" class="muted-text"></div>
+        <div class="muted-text activity-scope-note">يعرض الفواتير وحركات الحساب اليدوية وتسويات المخزون المحفوظة في قاعدة البيانات.</div><div id="activity-summary" class="muted-text"></div>
       </div>
       <div id="activity-log-list"><div class="empty-state">جارٍ تحميل السجل...</div></div>
     </section>
