@@ -2049,6 +2049,8 @@ function deleteInvoiceWithConfirmation(id) {
       window.Android.getSupplierDetail(supplierId);
     } else if (view === 'inventory' && activeInventoryHistoryItemId && window.Android.getInventoryHistory) {
       window.Android.getInventoryHistory(activeInventoryHistoryItemId, nextReqId());
+    } else if (view === 'customer-operation' && customerId && window.Android.getCustomerDetail) {
+      window.Android.getCustomerDetail(customerId);
     }
     pendingDeleteInvoiceId = 0;
   });
