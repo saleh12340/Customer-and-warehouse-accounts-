@@ -14,6 +14,16 @@ function toEnglishDigits(value) {
 
 function normalizeNumericField(el) {
   if (!el || !el.matches || !el.matches(NUMERIC_FIELD_SELECTOR)) return;
+  // Dedicated English-only fields opt out of the app-wide Arabic-digit conversion.
+  if (el.hasAttribute('data-english-only')) {
+    el.setAttribute('lang', 'en-US');
+    el.setAttribute('dir', 'ltr');
+    el.style.direction = 'ltr';
+    el.style.unicodeBidi = 'isolate';
+    el.style.fontFamily = 'Arial, Roboto, sans-serif';
+    el.style.fontVariantNumeric = 'lining-nums tabular-nums';
+    return;
+  }
   const wasNumber = el.type === 'number';
   const step = el.getAttribute('step') || '1';
   if (wasNumber) {
