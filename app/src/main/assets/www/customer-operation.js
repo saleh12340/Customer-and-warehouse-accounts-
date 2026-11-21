@@ -142,7 +142,15 @@ function addCustomerOperationRecord(customerId, amount, isDebit, createdInThisSa
     opSaving = false;
     // If the newly-created customer could not receive its first transaction, remove the empty record.
     if (createdInThisSave && window.Android.deleteCustomer) {
-      window.Android.deleteCustomer(Number(customerId), nextReqId());
+      const rollbackReq = nextReqId(() => {
+        if (Number(opSelectedCustomerId) === Number(customerId)) {
+          opSelectedCustomerId = 0;
+          activeCustomerId = null;
+          const history = document.getElementById('op-customer-history');
+          if (history) history.innerHTML = '<div class="empty-state">لم يتم تسجيل العملية؛ اختر عميلاً آخر أو أعد المحاولة</div>';
+        }
+      }, () => showToast('تعذر إلغاء سجل العميل الجديد بعد فشل العملية؛ راجع الحساب قبل إعادة المحاولة', 'error'));
+      window.Android.deleteCustomer(Number(customerId), rollbackReq);
     }
   };
   const reqId = nextReqId(done, failed);
