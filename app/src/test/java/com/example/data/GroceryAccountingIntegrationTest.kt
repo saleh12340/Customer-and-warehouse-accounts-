@@ -263,6 +263,8 @@ class GroceryAccountingIntegrationTest {
 
     val restoreMsg = BackupRestoreManager.restoreFromUri(context, uri)
     assertTrue(restoreMsg.contains("1 عميل"))
+    assertTrue(restoreMsg.contains("ملخص المطابقة"))
+    assertTrue(restoreMsg.contains("لا يتم تعديل الأرصدة تلقائياً"))
     assertEquals(1, appDb.customerDao().getCustomersSnapshot().size)
     assertEquals(250.0, appDb.customerDao().getCustomerById(cid)!!.balance, 0.01)
 

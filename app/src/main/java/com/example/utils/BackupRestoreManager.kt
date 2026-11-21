@@ -523,7 +523,19 @@ object BackupRestoreManager {
       )
     }
 
-    "تمت الاستعادة بنجاح: ${customers.size} عميل، ${suppliers.size} مورد، ${inventory.size} صنف، ${invoices.size} فاتورة"
+    val debitTotal = transactions.filter { it.type.startsWith("DEBIT") }.sumOf { it.amount }
+    val creditTotal = transactions.filter { it.type.startsWith("CREDIT") }.sumOf { it.amount }
+    val invoiceTotal = invoices.sumOf { it.totalAmount }
+    val invoiceRemaining = invoices.sumOf { it.remainingAmount }
+    val customerBalanceTotal = customers.sumOf { it.balance }
+    val supplierBalanceTotal = suppliers.sumOf { it.balance }
+    val stockQuantityTotal = inventory.sumOf { it.quantity.toLong() }
+    val adjustmentDeltaTotal = inventoryAdjustments.sumOf { it.deltaQuantity }
+    val reconciliation = buildString {
+      append("ملخص المطابقة: أرصدة العملاء ${GroceryViewModel.roundMoney(customerBalanceTotal)}، أرصدة الموردين ${GroceryViewModel.roundMoney(supplierBalanceTotal)}، إجمالي الفواتير ${GroceryViewModel.roundMoney(invoiceTotal)}، متبقي الفواتير ${GroceryViewModel.roundMoney(invoiceRemaining)}، الحركات المدينة ${GroceryViewModel.roundMoney(debitTotal)}، الحركات الدائنة ${GroceryViewModel.roundMoney(creditTotal)}، كمية المخزون ${stockQuantityTotal}، صافي التسويات ${adjustmentDeltaTotal}.")
+      append(" لا يتم تعديل الأرصدة تلقائياً؛ قد تتضمن الأرصدة افتتاحيات أو بيانات تاريخية صحيحة.")
+    }
+    "تمت الاستعادة بنجاح: ${customers.size} عميل، ${suppliers.size} مورد، ${inventory.size} صنف، ${invoices.size} فاتورة.\n${reconciliation}"
   }
 
   private fun JSONObject.requiredArray(key: String): JSONArray =
