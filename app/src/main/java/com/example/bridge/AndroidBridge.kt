@@ -606,7 +606,7 @@ class AndroidBridge(
           val ok = WhatsAppHelper.shareFile(
             context = activity,
             fileUri = uri,
-            mimeType = "image/png",
+            mimeType = "application/octet-stream",
             message = "صورة ملاحظة من ${settings.storeName} - HD",
             preferWhatsApp = settings.preferWhatsAppDirect
           )
@@ -614,6 +614,43 @@ class AndroidBridge(
         }
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذرت مشاركة صورة الملاحظة")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun shareNoteThermalImageWhatsApp(noteId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        val note = database.noteDao().getNoteById(noteId) ?: error("احفظ الملاحظة أولاً")
+        val settings = StorePreferences.getSettings(activity)
+        val bitmap = BluetoothPrinterManager.buildNoteReceiptBitmap(
+          activity, note, settings.printerWidthMm, renderScale = 3
+        )
+        val file = java.io.File(activity.cacheDir, "thermal_note_${note.id}_HD.png")
+        java.io.FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        val saved = AppDownloadsFolderManager.saveFile(
+          context = activity,
+          subfolder = AppDownloadsFolderManager.SUB_IMAGES,
+          sourceFile = file,
+          displayName = "thermal_note_${note.id}_HD.png",
+          mimeType = "image/png",
+          overwriteExisting = true
+        )
+        val uri = PdfGenerator.getUriForFile(activity, file)
+        activity.runOnUiThread {
+          val ok = WhatsAppHelper.shareFile(
+            context = activity,
+            fileUri = uri,
+            mimeType = "application/octet-stream",
+            message = "صورة حرارية للملاحظة من ${settings.storeName} - HD",
+            preferWhatsApp = settings.preferWhatsAppDirect
+          )
+          notifyResult(reqId, ok, if (ok) "تم فتح مشاركة صورة الملاحظة الحرارية HD ✓" else "تعذرت المشاركة؛ تم حفظ الصورة في ${saved?.displayPath ?: "مجلد الصور"}")
+        }
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذرت مشاركة صورة الملاحظة الحرارية")
       }
     }
   }
@@ -1642,7 +1679,7 @@ class AndroidBridge(
         val settings = StorePreferences.getSettings(activity)
         val msg = "${settings.storeName} - فاتورة رقم ${inv.invoiceNumber} بإجمالي ${formatNum(inv.totalAmount)} ${settings.currency}"
         activity.runOnUiThread {
-          val ok = WhatsAppHelper.shareFile(activity, uri, "image/png", msg, phone, preferWhatsApp = settings.preferWhatsAppDirect)
+          val ok = WhatsAppHelper.shareFile(activity, uri, "application/octet-stream", msg, phone, preferWhatsApp = settings.preferWhatsAppDirect)
           notifyResult(reqId, ok, if (ok) "تم تجهيز صورة الفاتورة للمشاركة ✓" else "تعذر مشاركة صورة الفاتورة")
         }
       } catch (e: Exception) {

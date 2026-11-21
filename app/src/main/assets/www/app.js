@@ -3340,7 +3340,7 @@ function shareActivePreviewImage() {
   } else if (st.kind === 'REPORT') {
     window.Android.shareReportWhatsAppPdf(st.startMillis, st.endMillis, st.extraStr, nextReqId());
   } else if (st.kind === 'NOTE' && st.targetId) {
-    window.Android.shareNoteWhatsApp(st.targetId, nextReqId());
+    window.Android.shareNoteThermalImageWhatsApp(st.targetId, nextReqId());
   }
 }
 
