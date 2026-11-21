@@ -78,14 +78,14 @@ window.onCustomersData = function(jsonStr) {
 const previousCustomerDetailHandler = window.onCustomerDetailData;
 window.onCustomerDetailData = function(jsonStr) {
   if (typeof previousCustomerDetailHandler === 'function') previousCustomerDetailHandler(jsonStr);
-  if (currentView !== 'customer-operation' || !activeCustomerDetail) return;
-  if (Number(activeCustomerDetail.customer?.id) !== Number(opSelectedCustomerId)) return;
-  renderCustomerOperationHistory();
-  if (opPendingDeleteTxId) {
+  if (opPendingDeleteTxId && activeCustomerDetail) {
     const id = opPendingDeleteTxId;
     opPendingDeleteTxId = 0;
     askDeleteCustomerTx(id);
   }
+  if (currentView !== 'customer-operation' || !activeCustomerDetail) return;
+  if (Number(activeCustomerDetail.customer?.id) !== Number(opSelectedCustomerId)) return;
+  renderCustomerOperationHistory();
 };
 
 function saveCustomerOperation(isDebit) {
