@@ -963,6 +963,7 @@ class AndroidBridge(
             snap.movements.forEach { m ->
               put(JSONObject().apply {
                 put("invoiceId", m.invoiceId)
+                put("adjustmentId", m.adjustmentId)
                 put("invoiceNumber", m.invoiceNumber)
                 put("invoiceType", m.invoiceType)
                 put("partyName", m.partyName)

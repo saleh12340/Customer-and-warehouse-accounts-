@@ -88,6 +88,7 @@ let customersData = [];
 let suppliersData = [];
 let inventoryData = [];
 let activeInventoryHistoryItemId = 0;
+let pendingInventoryAdjustmentId = 0;
 let invoicesData = [];
 let settingsData = {
   storeName: 'بقالة العزي للمواد الغذائية',
@@ -710,9 +711,9 @@ function quickCreateInvoice(){closeQuickActions();openCreateInvoice();}
 function quickCustomerOperation(){closeQuickActions();pendingQuickCustomerOperation=true;switchView('customers');showToast('اختر العميل لفتح نموذج تسجيل الحركة مباشرة','info');}
 function loadActivityLog(){if(!window.Android||!window.Android.getActivityLog){const box=document.getElementById('activity-log-list');if(box)box.innerHTML='<div class="empty-state">سجل العمليات غير متاح في هذا الإصدار</div>';return;}const box=document.getElementById('activity-log-list');if(box)box.innerHTML='<div class="empty-state">جارٍ تحميل العمليات المسجلة...</div>';window.Android.getActivityLog();}
 window.onActivityLogData=function(jsonStr){try{activityLogData=JSON.parse(jsonStr)||[];renderActivityLog();}catch(e){console.error(e);}};
-function renderActivityLog(){const box=document.getElementById('activity-log-list');if(!box)return;const q=(document.getElementById('activity-search')?.value||'').trim().toLocaleLowerCase(),f=document.getElementById('activity-filter')?.value||'ALL';const rows=activityLogData.filter(x=>(f==='ALL'||x.kind===f)&&(!q||[x.title,x.subtitle,x.description,x.partyName,x.invoiceNumber].join(' ').toLocaleLowerCase().includes(q)));const summary=document.getElementById('activity-summary');if(summary)summary.textContent='عدد العمليات المعروضة: '+rows.length+' من '+activityLogData.length+' • الأحدث أولاً';if(!rows.length){box.innerHTML='<div class="empty-state">لا توجد عمليات مطابقة في السجلات الحالية</div>';return;}box.innerHTML=rows.map(x=>{const id=Number(x.id),pid=Number(x.partyId||0),kind=x.kind,can=kind!=='STOCK',icon=kind==='INVOICE'?'▤':kind==='CUSTOMER_TX'?'👤':kind==='SUPPLIER_TX'?'♙':'▦';return `<article class="activity-item"><div class="activity-kind-icon">${icon}</div><div class="activity-main" onclick="openActivityRecord('${kind}',${id},${pid},'${x.partyType||''}')"><div class="activity-title-row"><span class="activity-title">${escapeHtml(x.title||'عملية مسجلة')}</span><span class="activity-date">${fmtShortDate(x.date)}</span></div><div class="activity-subtitle">${escapeHtml(x.subtitle||x.description||'')}</div>${Number(x.amount||0)>0?'<div class="activity-amount">'+fmtMoney(x.amount)+' '+escapeHtml(appCurrency)+'</div>':''}</div><button class="activity-menu-btn" type="button" onclick="toggleActivityMenu(event,'${kind}-${id}')">⋮</button><div id="activity-menu-${kind}-${id}" class="activity-menu hidden"><button onclick="openActivityRecord('${kind}',${id},${pid},'${x.partyType||''}')">${kind==='STOCK'?'عرض سجل الصنف':'فتح وتعديل'}</button>${can?'<button onclick="activityPrint(\''+kind+'\','+id+')">طباعة سريعة</button><button onclick="activityShare(\''+kind+'\','+id+','+pid+',\''+(x.partyType||'')+'\')">مشاركة واتساب</button>':''}</div><div class="activity-actions"><button onclick="openActivityRecord('${kind}',${id},${pid},'${x.partyType||''}')">${kind==='STOCK'?'عرض الحركات':'فتح السجل'}</button>${can?'<button onclick="activityPrint(\''+kind+'\','+id+')">طباعة</button><button onclick="activityShare(\''+kind+'\','+id+','+pid+',\''+(x.partyType||'')+'\')">واتساب</button>':''}</div></article>`;}).join('');}
+function renderActivityLog(){const box=document.getElementById('activity-log-list');if(!box)return;const q=(document.getElementById('activity-search')?.value||'').trim().toLocaleLowerCase(),f=document.getElementById('activity-filter')?.value||'ALL';const rows=activityLogData.filter(x=>(f==='ALL'||x.kind===f)&&(!q||[x.title,x.subtitle,x.description,x.partyName,x.invoiceNumber].join(' ').toLocaleLowerCase().includes(q)));const summary=document.getElementById('activity-summary');if(summary)summary.textContent='عدد العمليات المعروضة: '+rows.length+' من '+activityLogData.length+' • الأحدث أولاً';if(!rows.length){box.innerHTML='<div class="empty-state">لا توجد عمليات مطابقة في السجلات الحالية</div>';return;}box.innerHTML=rows.map(x=>{const id=Number(x.id),pid=Number(x.partyId||0),kind=x.kind,can=kind!=='STOCK',icon=kind==='INVOICE'?'▤':kind==='CUSTOMER_TX'?'👤':kind==='SUPPLIER_TX'?'♙':'▦';return `<article class="activity-item"><div class="activity-kind-icon">${icon}</div><div class="activity-main" onclick="openActivityRecord('${kind}',${id},${pid},'${x.partyType||''}',${Number(x.adjustmentId||0)})"><div class="activity-title-row"><span class="activity-title">${escapeHtml(x.title||'عملية مسجلة')}</span><span class="activity-date">${fmtShortDate(x.date)}</span></div><div class="activity-subtitle">${escapeHtml(x.subtitle||x.description||'')}</div>${Number(x.amount||0)>0?'<div class="activity-amount">'+fmtMoney(x.amount)+' '+escapeHtml(appCurrency)+'</div>':''}</div><button class="activity-menu-btn" type="button" onclick="toggleActivityMenu(event,'${kind}-${id}')">⋮</button><div id="activity-menu-${kind}-${id}" class="activity-menu hidden"><button onclick="openActivityRecord('${kind}',${id},${pid},'${x.partyType||''}',${Number(x.adjustmentId||0)})">${kind==='STOCK'?'عرض سجل الصنف':'فتح وتعديل'}</button>${can?'<button onclick="activityPrint(\''+kind+'\','+id+')">طباعة سريعة</button><button onclick="activityShare(\''+kind+'\','+id+','+pid+',\''+(x.partyType||'')+'\')">مشاركة واتساب</button>':''}</div><div class="activity-actions"><button onclick="openActivityRecord('${kind}',${id},${pid},'${x.partyType||''}',${Number(x.adjustmentId||0)})">${kind==='STOCK'?'عرض الحركات':'فتح السجل'}</button>${can?'<button onclick="activityPrint(\''+kind+'\','+id+')">طباعة</button><button onclick="activityShare(\''+kind+'\','+id+','+pid+',\''+(x.partyType||'')+'\')">واتساب</button>':''}</div></article>`;}).join('');}
 function toggleActivityMenu(event,key){event.stopPropagation();document.querySelectorAll('.activity-menu').forEach(m=>{if(m.id!=='activity-menu-'+key)m.classList.add('hidden');});document.getElementById('activity-menu-'+key)?.classList.toggle('hidden');}
-function openActivityRecord(kind,id,partyId,partyType){if(kind==='INVOICE'){openEditInvoice(id);return;}if(kind==='CUSTOMER_TX'){pendingActivityTxToEdit=id;pendingActivityPartyType='CUSTOMER';openCustomerDetail(partyId);return;}if(kind==='SUPPLIER_TX'){pendingActivityTxToEdit=id;pendingActivityPartyType='SUPPLIER';openSupplierDetail(partyId);return;}if(kind==='STOCK'){switchView('inventory');openInventoryHistory(partyId||id);}}
+function openActivityRecord(kind,id,partyId,partyType,adjustmentId){if(kind==='INVOICE'){openEditInvoice(id);return;}if(kind==='CUSTOMER_TX'){pendingActivityTxToEdit=id;pendingActivityPartyType='CUSTOMER';openCustomerDetail(partyId);return;}if(kind==='SUPPLIER_TX'){pendingActivityTxToEdit=id;pendingActivityPartyType='SUPPLIER';openSupplierDetail(partyId);return;}if(kind==='STOCK'){pendingInventoryAdjustmentId=Number(adjustmentId||id)||0;switchView('inventory');openInventoryHistory(partyId||id);}}
 function activityPrint(kind,id){if(kind==='INVOICE')quickThermalPreview(id);else if(kind==='CUSTOMER_TX'||kind==='SUPPLIER_TX')previewTransactionThermal(id);}
 function activityShare(kind,id,partyId){if(kind==='INVOICE')quickShareImage(id);else if((kind==='CUSTOMER_TX'||kind==='SUPPLIER_TX')&&window.Android&&window.Android.shareTransactionWhatsApp)window.Android.shareTransactionWhatsApp(id,nextReqId());}
 
@@ -1740,7 +1741,7 @@ window.onInventoryHistoryData = function (jsonStr) {
           const qtyStr = isAdd ? `+${m.deltaQty}` : String(m.deltaQty);
           const invoiceCell = isAdjustment ? '<strong>تسوية مخزون</strong>' : `<strong>#${escapeHtml(m.invoiceNumber)}</strong>`;
           const actions = isAdjustment ? '<span class="muted-text">حركة تسوية</span>' : `<button type="button" class="tbl-action-btn" onclick="openEditInvoice(${m.invoiceId})">تعديل</button><button type="button" class="tbl-action-btn del" onclick="deleteInvoiceWithConfirmation(${m.invoiceId})">حذف</button>`;
-          return `<tr>
+          return `<tr ${isAdjustment ? `id="inventory-adjustment-${Number(m.adjustmentId||0)}"` : ''}>
             <td ${isAdjustment ? '' : `onclick="openEditInvoice(${m.invoiceId})"`}>${invoiceCell}</td>
             <td>${escapeHtml(m.partyName)}</td>
             <td class="num-cell ${cls}" style="font-weight:800;">${qtyStr}</td>
@@ -1765,6 +1766,16 @@ window.onInventoryHistoryData = function (jsonStr) {
       ${rowsHtml}
     `;
     box.classList.remove('hidden');
+    if (pendingInventoryAdjustmentId) {
+      const selectedAdjustment = document.getElementById('inventory-adjustment-' + pendingInventoryAdjustmentId);
+      if (selectedAdjustment) {
+        selectedAdjustment.style.outline = '2px solid var(--primary)';
+        selectedAdjustment.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        showToast('تم فتح سجل الصنف، لكن سجل التسوية المحدد غير موجود ضمن الحركات المعروضة', 'warning');
+      }
+      pendingInventoryAdjustmentId = 0;
+    }
     const scroll = document.getElementById('main-scroll');
     if (scroll) scroll.scrollTop = 0;
   } catch (e) {

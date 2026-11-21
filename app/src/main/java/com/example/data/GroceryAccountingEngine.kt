@@ -58,7 +58,8 @@ data class StockMovementEntry(
   val deltaQty: Int,
   val unitPrice: Double,
   val totalPrice: Double,
-  val date: Long
+  val date: Long,
+  val adjustmentId: Long = 0L
 )
 
 data class InventoryMovementSnapshot(
@@ -524,7 +525,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     }
     val adjustments = inventoryAdjustmentDao.getAdjustmentsForItem(itemId).map { a ->
       StockMovementEntry(0L, "تسوية مخزون", "ADJUSTMENT", a.reason, a.deltaQuantity,
-        item.purchasePrice, kotlin.math.abs(a.deltaQuantity).toDouble() * item.purchasePrice, a.date)
+        item.purchasePrice, kotlin.math.abs(a.deltaQuantity).toDouble() * item.purchasePrice, a.date, a.id)
     }
     val totalAdjusted = adjustments.sumOf { it.deltaQty }
     val movements = (invoiceMovements + adjustments).sortedByDescending { it.date }
