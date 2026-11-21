@@ -1725,7 +1725,7 @@ function saveInventoryAdjustment(adjustmentId) {
   const reqId = nextReqId(() => {
     if (activeInventoryHistoryItemId) window.Android.getInventoryHistory(activeInventoryHistoryItemId, nextReqId());
   });
-  window.Android.updateInventoryAdjustment(adjustmentId, quantity, reason, Date.now(), reqId);
+  window.Android.updateInventoryAdjustment(adjustmentId, quantity, reason, reqId);
 }
 
 function toggleInventoryAdjustmentDeleteConfirm(adjustmentId, show) {

@@ -514,13 +514,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
   suspend fun updateInventoryAdjustment(
     adjustmentId: Long,
     newQuantity: Int,
-    reason: String,
-    dateMillis: Long
+    reason: String
   ) {
     require(newQuantity in 0..10_000_000) { "الكمية الجديدة خارج النطاق المسموح" }
     val cleanReason = reason.trim()
     require(cleanReason.isNotEmpty()) { "سبب التسوية مطلوب" }
-    require(dateMillis > 0L) { "تاريخ التسوية غير صالح" }
     database.withTransaction {
       val adjustment = inventoryAdjustmentDao.getAdjustmentById(adjustmentId) ?: error("سجل التسوية غير موجود")
       val item = inventoryDao.getItemById(adjustment.itemId) ?: error("الصنف المرتبط بالتسوية غير موجود")
@@ -533,7 +531,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         newQuantity = newQuantity,
         deltaQuantity = newDelta,
         reason = cleanReason,
-        date = dateMillis
+        date = adjustment.date
       )) == 1) { "تعذر تحديث سجل التسوية" }
     }
   }

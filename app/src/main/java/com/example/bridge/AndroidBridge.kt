@@ -986,10 +986,10 @@ class AndroidBridge(
   }
 
   @JavascriptInterface
-  fun updateInventoryAdjustment(adjustmentId: Long, newQuantity: Int, reason: String, dateMillis: Long, reqId: String) {
+  fun updateInventoryAdjustment(adjustmentId: Long, newQuantity: Int, reason: String, reqId: String) {
     scope.launch(Dispatchers.IO) {
       try {
-        engine.updateInventoryAdjustment(adjustmentId, newQuantity, reason, dateMillis)
+        engine.updateInventoryAdjustment(adjustmentId, newQuantity, reason)
         refreshCoreViews()
         notifyResult(reqId, true, "تم تعديل تسوية المخزون وعكس الفرق على الكمية ✓")
       } catch (e: Exception) {
