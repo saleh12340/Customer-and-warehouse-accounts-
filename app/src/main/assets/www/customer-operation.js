@@ -110,7 +110,7 @@ function saveCustomerOperation(isDebit) {
   }
   if (existing) {
     selectCustomerForOperation(existing.id, existing.name);
-    addCustomerOperationRecord(existing.id, amount, isDebit);
+    addCustomerOperationRecord(existing.id, amount, isDebit, false);
     return;
   }
 
@@ -123,12 +123,12 @@ function saveCustomerOperation(isDebit) {
     const input = document.getElementById('op-customer-name');
     if (input) input.value = name;
     activeCustomerId = id;
-    addCustomerOperationRecord(id, amount, isDebit);
+    addCustomerOperationRecord(id, amount, isDebit, true);
   }, () => { opSaving = false; });
   window.Android.saveCustomer(JSON.stringify(payload), reqId);
 }
 
-function addCustomerOperationRecord(customerId, amount, isDebit) {
+function addCustomerOperationRecord(customerId, amount, isDebit, createdInThisSave) {
   const done = () => {
     opSaving = false;
     const amountInput = document.getElementById('op-customer-amount');
@@ -138,7 +138,13 @@ function addCustomerOperationRecord(customerId, amount, isDebit) {
     if (window.Android.getCustomers) window.Android.getCustomers();
     showToast('تم تسجيل العملية وتحديث حساب العميل', 'success');
   };
-  const failed = () => { opSaving = false; };
+  const failed = () => {
+    opSaving = false;
+    // If the newly-created customer could not receive its first transaction, remove the empty record.
+    if (createdInThisSave && window.Android.deleteCustomer) {
+      window.Android.deleteCustomer(Number(customerId), nextReqId());
+    }
+  };
   const reqId = nextReqId(done, failed);
   const dateMillis = Date.now();
   if (window.Android.addCustomerTransactionWithDate) {
