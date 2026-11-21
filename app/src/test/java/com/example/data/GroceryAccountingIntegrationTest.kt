@@ -852,4 +852,16 @@ class GroceryAccountingIntegrationTest {
     assertEquals(8, history.item.quantity)
   }
 
+
+  @Test
+  fun transactionReceiptUsesHistoricalBalanceAtSelectedTransactionNotLatestBalance() = runBlocking {
+    val customerId = engine.saveCustomer(0L, "عميل سجل تاريخي", "771234567", "", 1000.0)
+    val firstTxId = engine.addCustomerTransaction(customerId, 1000.0, isDebit = true, description = "الحركة الأولى", dateMillis = 1000L)
+    engine.addCustomerTransaction(customerId, 300.0, isDebit = false, description = "الحركة الثانية", dateMillis = 2000L)
+
+    val receipt = engine.getTransactionReceiptSnapshot(firstTxId)!!
+    assertEquals(1000.0, receipt.previousBalance, 0.01)
+    assertEquals(2000.0, receipt.currentBalance, 0.01)
+  }
+
 }

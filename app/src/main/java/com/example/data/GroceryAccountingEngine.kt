@@ -546,9 +546,25 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       balance = s.balance
       phone = s.phone
     }
-    val delta = txDelta(tx, debitIncreasesBalance = isCustomer)
-    val prevBalance = GroceryViewModel.roundMoney(balance - delta)
-    return TransactionReceiptSnapshot(tx, phone, balance, prevBalance)
+    val partyTransactions = transactionDao.getTransactionsForPartySnapshot(tx.partyType, tx.partyId)
+      .sortedWith(compareBy<TransactionEntity> { it.date }.thenBy { it.id })
+    val totalDelta = partyTransactions.sumOf { txDelta(it, debitIncreasesBalance = isCustomer) }
+    var runningBalance = GroceryViewModel.roundMoney(balance - totalDelta)
+    var previousBalance = runningBalance
+    var transactionBalance = runningBalance
+    var found = false
+    for (entry in partyTransactions) {
+      val before = runningBalance
+      runningBalance = GroceryViewModel.roundMoney(runningBalance + txDelta(entry, debitIncreasesBalance = isCustomer))
+      if (entry.id == txId) {
+        previousBalance = before
+        transactionBalance = runningBalance
+        found = true
+        break
+      }
+    }
+    check(found) { "تعذر تحديد رصيد الحركة في تسلسل الحساب" }
+    return TransactionReceiptSnapshot(tx, phone, transactionBalance, previousBalance)
   }
 
   // ---------------- Invoices ----------------
