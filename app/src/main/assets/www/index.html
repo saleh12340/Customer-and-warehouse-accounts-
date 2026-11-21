@@ -20,15 +20,17 @@
       <h1 id="app-title">بقالة العزي للمواد الغذائية</h1>
     </div>
     <div class="header-actions">
-      <button type="button" class="icon-btn" onclick="openCreateInvoice()" aria-label="فاتورة جديدة">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <button type="button" class="icon-btn header-activity-btn" onclick="switchView('activity-log')" aria-label="سجل العمليات" title="سجل العمليات">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
       </button>
-      <button type="button" class="icon-btn" onclick="switchView('invoices')" aria-label="الفواتير">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16l3-2 3 2 3-2 3 2 3-2V8z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="14" y2="14"/></svg>
+      <button type="button" class="icon-btn" onclick="toggleHeaderMenu()" aria-label="المزيد" title="المزيد">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
       </button>
-      <button type="button" class="icon-btn" onclick="switchView('settings')" aria-label="الإعدادات">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1.02 1.4 1.1.07.01.14.01.21.01H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      </button>
+    </div>
+    <div id="header-overflow-menu" class="header-overflow-menu hidden">
+      <button type="button" onclick="switchView('settings'); toggleHeaderMenu(false)">الإعدادات</button>
+      <button type="button" onclick="switchView('invoices'); toggleHeaderMenu(false)">سجل الفواتير</button>
+      <button type="button" onclick="switchView('activity-log'); toggleHeaderMenu(false)">سجل العمليات</button>
     </div>
   </header>
 
@@ -67,16 +69,24 @@
     <!-- 1. Dashboard -->
     <section id="view-dashboard" class="view active">
       <div class="sticky-top-panel">
-        <div class="section-head">
+        <div class="section-head dashboard-heading">
           <h2>لوحة التحكم المالية</h2>
-          <span class="chip chip-blue" id="dash-date-label">اليوم</span>
+          <div class="dashboard-head-actions">
+            <button type="button" class="activity-shortcut" onclick="switchView('activity-log')" aria-label="سجل العمليات">
+              <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>سجل العمليات</span>
+            </button>
+            <span class="chip chip-blue" id="dash-date-label">اليوم</span>
+          </div>
         </div>
-        <div class="quick-grid">
-          <button type="button" class="btn btn-success btn-compact" onclick="openCreateInvoice()">+ فاتورة</button>
-          <button type="button" class="btn btn-primary btn-compact" onclick="openCustomerForm(0)">+ عميل</button>
-          <button type="button" class="btn btn-outline-primary btn-compact" onclick="openInventoryForm(0)">+ صنف</button>
-          <button type="button" class="btn btn-outline btn-compact" onclick="switchView('suppliers')">الموردين</button>
-          <button type="button" class="btn btn-outline btn-compact" onclick="switchView('notes')">الملاحظات</button>
+        <div class="dashboard-launcher-grid">
+          <button type="button" class="launcher-item" onclick="switchView('customers')"><span class="launcher-icon launcher-blue"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M18 8h4M20 6v4"/></svg></span><span>العملاء</span></button>
+          <button type="button" class="launcher-item" onclick="switchView('suppliers')"><span class="launcher-icon launcher-purple"><svg viewBox="0 0 24 24"><path d="M3 21V8l9-5 9 5v13M3 10h18M8 21v-7h8v7"/></svg></span><span>الموردون</span></button>
+          <button type="button" class="launcher-item" onclick="switchView('inventory')"><span class="launcher-icon launcher-green"><svg viewBox="0 0 24 24"><path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/></svg></span><span>المخزن</span></button>
+          <button type="button" class="launcher-item" onclick="switchView('invoices')"><span class="launcher-icon launcher-orange"><svg viewBox="0 0 24 24"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h4"/></svg></span><span>الفواتير</span></button>
+          <button type="button" class="launcher-item" onclick="switchView('reports')"><span class="launcher-icon launcher-cyan"><svg viewBox="0 0 24 24"><path d="M4 20V9m8 11V4m8 16v-7M2 20h20"/></svg></span><span>التقارير</span></button>
+          <button type="button" class="launcher-item" onclick="switchView('notes')"><span class="launcher-icon launcher-pink"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"/></svg></span><span>الملاحظات</span></button>
+          <button type="button" class="launcher-item" onclick="switchView('settings')"><span class="launcher-icon launcher-slate"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19 13 2 1-2 4-2-1-2 1v2H9v-2l-2-1-2 1-2-4 2-1V9L3 8l2-4 2 1 2-1V2h6v2l2 1 2-1 2 4-2 1z"/></svg></span><span>الإعدادات</span></button>
+          <button type="button" class="launcher-item" onclick="switchView('about')"><span class="launcher-icon launcher-dark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7h.01"/></svg></span><span>حول التطبيق</span></button>
         </div>
       </div>
 
@@ -108,6 +118,21 @@
         </div>
         <div id="dash-recent-invoices"></div>
       </div>
+    </section>
+
+    <section id="view-activity-log" class="view">
+      <div class="sticky-top-panel">
+        <div class="section-head"><h2>سجل العمليات الشامل</h2><button type="button" class="btn btn-outline btn-sm" onclick="loadActivityLog()">تحديث</button></div>
+        <div class="activity-filter-row">
+          <input id="activity-search" class="ruled-cell" type="search" placeholder="بحث في السجل..." oninput="renderActivityLog()">
+          <select id="activity-filter" class="ruled-cell" onchange="renderActivityLog()">
+            <option value="ALL">كل العمليات</option><option value="INVOICE">الفواتير</option>
+            <option value="CUSTOMER_TX">حسابات العملاء</option><option value="SUPPLIER_TX">حسابات الموردين</option><option value="STOCK">حركات المخزون</option>
+          </select>
+        </div>
+        <div id="activity-summary" class="muted-text"></div>
+      </div>
+      <div id="activity-log-list"><div class="empty-state">جارٍ تحميل السجل...</div></div>
     </section>
 
     <!-- 2. Customers List -->
@@ -1109,6 +1134,14 @@
     </section>
 
   </main>
+
+  <div id="quick-action-backdrop" class="quick-action-backdrop hidden" onclick="closeQuickActions()"></div>
+  <div id="quick-action-sheet" class="quick-action-sheet hidden" role="dialog" aria-modal="true" aria-label="الإجراءات السريعة">
+    <div class="quick-sheet-handle"></div><div class="quick-sheet-title">إجراء سريع</div>
+    <button type="button" class="quick-sheet-option" onclick="quickCustomerOperation()"><span class="quick-sheet-icon quick-blue">↔</span><span><strong>عملية حساب عميل</strong><small>تسجيل دين أو دفعة على حساب عميل</small></span></button>
+    <button type="button" class="quick-sheet-option" onclick="quickCreateInvoice()"><span class="quick-sheet-icon quick-green">＋</span><span><strong>فاتورة سريعة</strong><small>فتح شاشة إنشاء فاتورة مباشرة</small></span></button>
+  </div>
+  <button type="button" id="quick-action-fab" class="quick-action-fab" onclick="toggleQuickActions()" aria-label="إجراء سريع">＋</button>
 
   <!-- Fixed Bottom Navigation -->
   <nav class="bottom-nav" aria-label="التنقل السفلي">
