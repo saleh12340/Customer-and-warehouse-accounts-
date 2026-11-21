@@ -358,13 +358,20 @@ object PdfGenerator {
 
         if (idx == pages.lastIndex) {
           y += 10f
+          val totalOnParty = entries.filter { entry ->
+            if (isCustomer) entry.transaction.type.startsWith("DEBIT")
+            else !entry.transaction.type.startsWith("CREDIT")
+          }.sumOf { it.transaction.amount }
+          val totalForParty = entries.sumOf { it.transaction.amount } - totalOnParty
+          val totalsText = "إجمالي عليه: ${formatMoney(totalOnParty)} $currency   |   إجمالي له: ${formatMoney(totalForParty)} $currency"
           val balText = when {
             currentBalance > 0.01 -> (if (isCustomer) "الرصيد الحالي عليه: " else "المستحق الحالي له: ") + "${formatMoney(currentBalance)} $currency"
             currentBalance < -0.01 -> (if (isCustomer) "الرصيد الحالي له: " else "رصيد لنا عند المورد: ") + "${formatMoney(-currentBalance)} $currency"
             else -> "الحساب مسدد بالكامل (0 $currency)"
           }
-          canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 46f, 6f, 6f, boxFill)
-          drawRtl(canvas, balText, MARGIN + 12f, y + 14f, CONTENT_WIDTH - 24f, titlePaint, Layout.Alignment.ALIGN_CENTER)
+          canvas.drawRoundRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 62f, 6f, 6f, boxFill)
+          drawRtl(canvas, totalsText, MARGIN + 12f, y + 9f, CONTENT_WIDTH - 24f, boldPaint, Layout.Alignment.ALIGN_CENTER)
+          drawRtl(canvas, balText, MARGIN + 12f, y + 34f, CONTENT_WIDTH - 24f, titlePaint, Layout.Alignment.ALIGN_CENTER)
         }
 
         drawRtl(canvas, "صفحة ${idx + 1} / $totalPages", MARGIN, PAGE_HEIGHT - 28f, CONTENT_WIDTH, smallPaint, Layout.Alignment.ALIGN_CENTER)
