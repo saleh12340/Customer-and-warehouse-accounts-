@@ -52,6 +52,8 @@ function enforceEnglishNumericFields(root) {
 function normalizeNumericEvent(event) {
   const el = event.target;
   if (!el || !el.matches || !el.matches(NUMERIC_FIELD_SELECTOR)) return;
+  // The dedicated customer-operation amount rejects non-ASCII digits instead of converting them.
+  if (el.hasAttribute('data-english-only')) return;
   normalizeNumericField(el);
   const normalized = toEnglishDigits(el.value);
   if (normalized !== el.value) {
