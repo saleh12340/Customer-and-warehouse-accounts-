@@ -73,6 +73,53 @@ class AndroidBridge(
     )
   }
 
+
+  // Activity timeline is derived from existing persisted records; no database migration or duplicate events.
+  @JavascriptInterface
+  fun getActivityLog() {
+    scope.launch(Dispatchers.IO) {
+      try {
+        data class ActivityRow(val date: Long, val priority: Int, val json: JSONObject)
+        val combined = mutableListOf<ActivityRow>()
+        database.invoiceDao().getInvoicesSnapshot().forEach { inv ->
+          val purchase = inv.type == "PURCHASE"
+          combined += ActivityRow(inv.date, 0, JSONObject().apply {
+            put("kind", "INVOICE"); put("id", inv.id); put("partyId", inv.partyId)
+            put("partyType", if (purchase) "SUPPLIER" else "CUSTOMER")
+            put("invoiceType", inv.type); put("invoiceNumber", inv.invoiceNumber)
+            put("title", (if (purchase) "فاتورة شراء #" else "فاتورة بيع #") + inv.invoiceNumber)
+            put("subtitle", inv.partyName + " • " + inv.status); put("partyName", inv.partyName)
+            put("amount", inv.totalAmount); put("date", inv.date)
+          })
+        }
+        database.transactionDao().getTransactionsSnapshot().filter { it.invoiceId == null }.forEach { tx ->
+          val customer = tx.partyType == "CUSTOMER"
+          val debit = tx.type.startsWith("DEBIT")
+          val label = if (customer) { if (debit) "دين على العميل" else "دفعة من العميل" }
+                      else { if (debit) "دفعة للمورد" else "مستحق للمورد" }
+          combined += ActivityRow(tx.date, 1, JSONObject().apply {
+            put("kind", if (customer) "CUSTOMER_TX" else "SUPPLIER_TX"); put("id", tx.id)
+            put("partyId", tx.partyId); put("partyType", tx.partyType); put("title", label)
+            put("subtitle", tx.partyName + " • " + tx.description); put("description", tx.description)
+            put("partyName", tx.partyName); put("amount", tx.amount); put("date", tx.date)
+          })
+        }
+        database.inventoryAdjustmentDao().getAllAdjustmentsSnapshot().forEach { adj ->
+          combined += ActivityRow(adj.date, 2, JSONObject().apply {
+            put("kind", "STOCK"); put("id", adj.itemId); put("partyId", adj.itemId)
+            put("adjustmentId", adj.id); put("title", "تسوية مخزون: " + adj.itemName)
+            put("subtitle", adj.reason + " • الكمية: " + adj.previousQuantity + " ← " + adj.newQuantity)
+            put("description", adj.reason); put("amount", 0); put("date", adj.date)
+          })
+        }
+        val payload = JSONArray()
+        combined.sortedWith(compareByDescending<ActivityRow> { it.date }.thenByDescending { it.priority })
+          .take(500).forEach { payload.put(it.json) }
+        callJs("onActivityLogData", payload.toString())
+      } catch (e: Exception) { callJs("onActivityLogData", "[]") }
+    }
+  }
+
   // ---------------- Dashboard ----------------
 
   @JavascriptInterface
