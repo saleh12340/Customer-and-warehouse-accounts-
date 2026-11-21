@@ -1714,6 +1714,32 @@ function openInventoryHistory(itemId) {
   window.Android.getInventoryHistory(itemId, nextReqId());
 }
 
+function saveInventoryAdjustment(adjustmentId) {
+  const quantity = Number(document.getElementById('inventory-adjustment-qty-' + adjustmentId)?.value);
+  const reason = String(document.getElementById('inventory-adjustment-reason-' + adjustmentId)?.value || '').trim();
+  if (!Number.isInteger(quantity) || quantity < 0 || quantity > 10000000 || !reason) {
+    showToast('أدخل كمية صحيحة وسبباً للتسوية', 'error');
+    return;
+  }
+  if (!window.Android?.updateInventoryAdjustment) return;
+  const reqId = nextReqId(() => {
+    if (activeInventoryHistoryItemId) window.Android.getInventoryHistory(activeInventoryHistoryItemId, nextReqId());
+  });
+  window.Android.updateInventoryAdjustment(adjustmentId, quantity, reason, Date.now(), reqId);
+}
+
+function toggleInventoryAdjustmentDeleteConfirm(adjustmentId, show) {
+  document.getElementById('inventory-adjustment-delete-confirm-' + adjustmentId)?.classList.toggle('hidden', !show);
+}
+
+function deleteInventoryAdjustment(adjustmentId) {
+  if (!window.Android?.deleteInventoryAdjustment) return;
+  const reqId = nextReqId(() => {
+    if (activeInventoryHistoryItemId) window.Android.getInventoryHistory(activeInventoryHistoryItemId, nextReqId());
+  });
+  window.Android.deleteInventoryAdjustment(adjustmentId, reqId);
+}
+
 function closeInventoryHistory() {
   const box = document.getElementById('inventory-history-card');
   if (box) box.classList.add('hidden');
@@ -1740,7 +1766,7 @@ window.onInventoryHistoryData = function (jsonStr) {
           const cls = isAdd ? 'text-success' : 'text-danger';
           const qtyStr = isAdd ? `+${m.deltaQty}` : String(m.deltaQty);
           const invoiceCell = isAdjustment ? '<strong>تسوية مخزون</strong>' : `<strong>#${escapeHtml(m.invoiceNumber)}</strong>`;
-          const actions = isAdjustment ? '<span class="muted-text">حركة تسوية</span>' : `<button type="button" class="tbl-action-btn" onclick="openEditInvoice(${m.invoiceId})">تعديل</button><button type="button" class="tbl-action-btn del" onclick="deleteInvoiceWithConfirmation(${m.invoiceId})">حذف</button>`;
+          const actions = isAdjustment ? `<div style="display:grid;gap:3px;min-width:112px;"><input type="number" min="0" step="1" id="inventory-adjustment-qty-${m.adjustmentId}" value="${Number(m.newQuantity ?? 0)}" aria-label="الكمية الجديدة للتسوية" style="width:100%;min-width:0;padding:4px;"><input type="text" id="inventory-adjustment-reason-${m.adjustmentId}" value="${escapeHtml(m.partyName)}" aria-label="سبب التسوية" style="width:100%;min-width:0;padding:4px;"><button type="button" class="tbl-action-btn" onclick="saveInventoryAdjustment(${m.adjustmentId})">حفظ التعديل</button><button type="button" class="tbl-action-btn del" onclick="toggleInventoryAdjustmentDeleteConfirm(${m.adjustmentId},true)">حذف التسوية</button><div id="inventory-adjustment-delete-confirm-${m.adjustmentId}" class="hidden"><small>تأكيد حذف هذه التسوية فقط؟</small><button type="button" class="tbl-action-btn del" onclick="deleteInventoryAdjustment(${m.adjustmentId})">تأكيد الحذف</button><button type="button" class="tbl-action-btn" onclick="toggleInventoryAdjustmentDeleteConfirm(${m.adjustmentId},false)">إلغاء</button></div></div>` : `<button type="button" class="tbl-action-btn" onclick="openEditInvoice(${m.invoiceId})">تعديل</button><button type="button" class="tbl-action-btn del" onclick="deleteInvoiceWithConfirmation(${m.invoiceId})">حذف</button>`;
           return `<tr ${isAdjustment ? `id="inventory-adjustment-${Number(m.adjustmentId||0)}"` : ''}>
             <td ${isAdjustment ? '' : `onclick="openEditInvoice(${m.invoiceId})"`}>${invoiceCell}</td>
             <td>${escapeHtml(m.partyName)}</td>

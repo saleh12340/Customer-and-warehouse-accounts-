@@ -964,6 +964,8 @@ class AndroidBridge(
               put(JSONObject().apply {
                 put("invoiceId", m.invoiceId)
                 put("adjustmentId", m.adjustmentId)
+                m.adjustmentPreviousQuantity?.let { put("previousQuantity", it) }
+                m.adjustmentNewQuantity?.let { put("newQuantity", it) }
                 put("invoiceNumber", m.invoiceNumber)
                 put("invoiceType", m.invoiceType)
                 put("partyName", m.partyName)
@@ -979,6 +981,32 @@ class AndroidBridge(
         notifyResult(reqId, true, "تم تحميل سجل حركات الصنف")
       } catch (e: Exception) {
         notifyResult(reqId, false, e.message ?: "تعذر تحميل حركات الصنف")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun updateInventoryAdjustment(adjustmentId: Long, newQuantity: Int, reason: String, dateMillis: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        engine.updateInventoryAdjustment(adjustmentId, newQuantity, reason, dateMillis)
+        refreshCoreViews()
+        notifyResult(reqId, true, "تم تعديل تسوية المخزون وعكس الفرق على الكمية ✓")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر تعديل تسوية المخزون")
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun deleteInventoryAdjustment(adjustmentId: Long, reqId: String) {
+    scope.launch(Dispatchers.IO) {
+      try {
+        engine.deleteInventoryAdjustment(adjustmentId)
+        refreshCoreViews()
+        notifyResult(reqId, true, "تم حذف التسوية وعكس أثرها على المخزون ✓")
+      } catch (e: Exception) {
+        notifyResult(reqId, false, e.message ?: "تعذر حذف تسوية المخزون")
       }
     }
   }

@@ -59,7 +59,9 @@ data class StockMovementEntry(
   val unitPrice: Double,
   val totalPrice: Double,
   val date: Long,
-  val adjustmentId: Long = 0L
+  val adjustmentId: Long = 0L,
+  val adjustmentPreviousQuantity: Int? = null,
+  val adjustmentNewQuantity: Int? = null
 )
 
 data class InventoryMovementSnapshot(
@@ -509,6 +511,44 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     }
   }
 
+  suspend fun updateInventoryAdjustment(
+    adjustmentId: Long,
+    newQuantity: Int,
+    reason: String,
+    dateMillis: Long
+  ) {
+    require(newQuantity in 0..10_000_000) { "الكمية الجديدة خارج النطاق المسموح" }
+    val cleanReason = reason.trim()
+    require(cleanReason.isNotEmpty()) { "سبب التسوية مطلوب" }
+    require(dateMillis > 0L) { "تاريخ التسوية غير صالح" }
+    database.withTransaction {
+      val adjustment = inventoryAdjustmentDao.getAdjustmentById(adjustmentId) ?: error("سجل التسوية غير موجود")
+      val item = inventoryDao.getItemById(adjustment.itemId) ?: error("الصنف المرتبط بالتسوية غير موجود")
+      val newDelta = newQuantity - adjustment.previousQuantity
+      val recalculatedStock = item.quantity - adjustment.deltaQuantity + newDelta
+      require(recalculatedStock in 0..10_000_000) { "تعديل التسوية ينتج عنه كمية مخزون غير صالحة" }
+      inventoryDao.updateItem(item.copy(quantity = recalculatedStock))
+      check(inventoryAdjustmentDao.updateAdjustment(adjustment.copy(
+        itemName = item.name,
+        newQuantity = newQuantity,
+        deltaQuantity = newDelta,
+        reason = cleanReason,
+        date = dateMillis
+      )) == 1) { "تعذر تحديث سجل التسوية" }
+    }
+  }
+
+  suspend fun deleteInventoryAdjustment(adjustmentId: Long) {
+    database.withTransaction {
+      val adjustment = inventoryAdjustmentDao.getAdjustmentById(adjustmentId) ?: error("سجل التسوية غير موجود")
+      val item = inventoryDao.getItemById(adjustment.itemId) ?: error("الصنف المرتبط بالتسوية غير موجود")
+      val recalculatedStock = item.quantity - adjustment.deltaQuantity
+      require(recalculatedStock in 0..10_000_000) { "حذف التسوية ينتج عنه كمية مخزون غير صالحة" }
+      inventoryDao.updateItem(item.copy(quantity = recalculatedStock))
+      check(inventoryAdjustmentDao.deleteAdjustmentById(adjustmentId) == 1) { "تعذر حذف سجل التسوية المحدد" }
+    }
+  }
+
   suspend fun getInventoryMovementHistory(itemId: Long): InventoryMovementSnapshot? {
     val item = inventoryDao.getItemById(itemId) ?: return null
     val invoiceMap = invoiceDao.getInvoicesSnapshot().associateBy { it.id }
@@ -525,7 +565,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     }
     val adjustments = inventoryAdjustmentDao.getAdjustmentsForItem(itemId).map { a ->
       StockMovementEntry(0L, "تسوية مخزون", "ADJUSTMENT", a.reason, a.deltaQuantity,
-        item.purchasePrice, kotlin.math.abs(a.deltaQuantity).toDouble() * item.purchasePrice, a.date, a.id)
+        item.purchasePrice, kotlin.math.abs(a.deltaQuantity).toDouble() * item.purchasePrice,
+        a.date, a.id, a.previousQuantity, a.newQuantity)
     }
     val totalAdjusted = adjustments.sumOf { it.deltaQty }
     val movements = (invoiceMovements + adjustments).sortedByDescending { it.date }
