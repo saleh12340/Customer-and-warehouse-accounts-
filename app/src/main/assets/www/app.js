@@ -300,9 +300,14 @@ function initializeContextSuggestions() {
     } else hideContextSuggestions();
   });
   document.addEventListener('focusout', event => {
-    if (event.target === activeSuggestionInput) {
+    const leavingInput = event.target;
+    if (leavingInput === activeSuggestionInput) {
       suggestionHideFrame = requestAnimationFrame(() => {
-        if (!document.getElementById('context-suggestion-panel')?.contains(document.activeElement)) hideContextSuggestions();
+        // A different suggestion-enabled input may have received focus in the same frame.
+        if (activeSuggestionInput === leavingInput &&
+            !document.getElementById('context-suggestion-panel')?.contains(document.activeElement)) {
+          hideContextSuggestions();
+        }
       });
     }
   });
@@ -2377,7 +2382,7 @@ function renderBatchEntryRows() {
           value="${escapeHtml(row.total)}" oninput="onBatchRowTotalInput(${idx}, this.value)">
         <input type="number" id="batch-qty-${idx}" class="ruled-cell cell-num" placeholder="الكمية" min="1" step="1"
           value="${escapeHtml(row.qty)}" oninput="onBatchRowQtyInput(${idx}, this.value)">
-        <input type="text" id="batch-name-${idx}" class="ruled-cell" list="inv-items-datalist"
+        <input type="text" id="batch-name-${idx}" class="ruled-cell" autocomplete="off"
           placeholder="اسم الصنف..." value="${escapeHtml(row.itemName)}"
           oninput="onBatchRowNameInput(${idx}, this.value)" onchange="onBatchRowNameInput(${idx}, this.value)">
         <select id="batch-unit-${idx}" class="ruled-cell batch-unit-select" aria-label="الوحدة أو نوع الوحدة"
