@@ -3399,6 +3399,38 @@ function returnFromThermalPreview() {
 
 // ---------------- Two-panel Notes ----------------
 function noteRowsFor(side) { return side === 'right' ? noteRightRows : noteLeftRows; }
+const NOTE_CURSOR_STORAGE_KEY = 'alaziy-note-editor-cursor-v1';
+function saveNoteEditorCursor(side, index, field, input) {
+  const target = input || document.activeElement;
+  if (!target || !target.classList?.contains('note-cell')) return;
+  let start = target.value?.length || 0, end = start;
+  try { start = target.selectionStart ?? start; end = target.selectionEnd ?? start; } catch (_) {}
+  const scroll = document.getElementById('main-scroll');
+  const snapshot = {
+    noteId: Number(noteEditorId) || 0, side, index: Number(index) || 0, field,
+    start, end, scrollTop: scroll ? scroll.scrollTop : 0
+  };
+  try { localStorage.setItem(NOTE_CURSOR_STORAGE_KEY, JSON.stringify(snapshot)); } catch (_) {}
+}
+function restoreNoteEditorCursor(noteId) {
+  let snapshot = null;
+  try { snapshot = JSON.parse(localStorage.getItem(NOTE_CURSOR_STORAGE_KEY) || 'null'); } catch (_) {}
+  if (!snapshot || Number(snapshot.noteId) !== Number(noteId) ||
+      !['right', 'left'].includes(snapshot.side) || !['qty', 'detail'].includes(snapshot.field)) return;
+  const scroll = document.getElementById('main-scroll');
+  if (scroll && Number.isFinite(Number(snapshot.scrollTop))) scroll.scrollTop = Math.max(0, Number(snapshot.scrollTop));
+  requestAnimationFrame(() => {
+    const body = document.getElementById(snapshot.side === 'right' ? 'note-right-rows' : 'note-left-rows');
+    const input = body?.children?.[Number(snapshot.index)]?.querySelector('.note-' + snapshot.field);
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    const length = input.value.length;
+    const start = Math.max(0, Math.min(length, Number(snapshot.start) || 0));
+    const end = Math.max(start, Math.min(length, Number(snapshot.end) || start));
+    try { input.setSelectionRange(start, end); } catch (_) {}
+    if (scroll && Number.isFinite(Number(snapshot.scrollTop))) scroll.scrollTop = Math.max(0, Number(snapshot.scrollTop));
+  });
+}
 function noteRowMarkup(side, index) {
   const row = noteRowsFor(side)[index] || { qty: '', detail: '' };
   return `<tr>
@@ -3418,6 +3450,7 @@ function focusNoteCell(side, index, field) {
   if (!input) return false;
   input.focus({ preventScroll: true });
   try { input.setSelectionRange(input.value.length, input.value.length); } catch (_) {}
+  saveNoteEditorCursor(side, index, field, input);
   input.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   return document.activeElement === input;
 }
@@ -3519,6 +3552,7 @@ function updateNoteCell(side, index, field, value) {
   const rows = noteRowsFor(side);
   if (!rows[index]) return;
   rows[index][field] = value;
+  saveNoteEditorCursor(side, index, field, document.activeElement);
   noteEditorDirty = true;
   noteEditRevision++;
   queueNoteAutosave();
@@ -3596,8 +3630,16 @@ window.onNoteSaved = function (jsonStr) {
     const result = JSON.parse(jsonStr) || {};
     noteAutosaveInFlight = false;
     if (Number(result.session) === noteEditorSession) {
+      const previousNoteId = noteEditorId;
       noteEditorId = Number(result.id) || noteEditorId;
-      try { localStorage.setItem('alaziy-last-note-id', String(noteEditorId)); } catch (_) {}
+      try {
+        localStorage.setItem('alaziy-last-note-id', String(noteEditorId));
+        const cursor = JSON.parse(localStorage.getItem(NOTE_CURSOR_STORAGE_KEY) || 'null');
+        if (cursor && Number(cursor.noteId) === Number(previousNoteId)) {
+          cursor.noteId = Number(noteEditorId) || 0;
+          localStorage.setItem(NOTE_CURSOR_STORAGE_KEY, JSON.stringify(cursor));
+        }
+      } catch (_) {}
       if (Number(result.revision) === noteEditRevision) {
         noteEditorDirty = false;
         noteAutosaveRetryCount = 0;
@@ -3704,6 +3746,7 @@ function openSavedNote(id) {
   if (lastLeft.qty || lastLeft.detail) noteLeftRows.push({ qty: '', detail: '' });
   renderNoteEditor();
   const scroll = document.getElementById('main-scroll'); if (scroll) scroll.scrollTop = 0;
+  restoreNoteEditorCursor(noteEditorId);
 }
 function removeSavedNote(id) {
   if (!window.Android || !confirm('هل تريد حذف هذه الملاحظة نهائياً؟')) return;
