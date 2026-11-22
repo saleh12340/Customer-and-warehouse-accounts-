@@ -3624,12 +3624,16 @@ window.onNoteSaveFailed = function (jsonStr) {
     }
   } catch (_) {}
 };
+window.flushPendingNoteAutosave = function () {
+  if (noteEditorDirty) {
+    clearTimeout(noteAutosaveTimer);
+    performNoteSave(false);
+  }
+};
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && noteEditorDirty) { clearTimeout(noteAutosaveTimer); performNoteSave(); }
+  if (document.visibilityState === 'hidden') window.flushPendingNoteAutosave();
 });
-window.addEventListener('pagehide', () => {
-  if (noteEditorDirty) { clearTimeout(noteAutosaveTimer); performNoteSave(); }
-});
+window.addEventListener('pagehide', () => window.flushPendingNoteAutosave());
 window.onNotesData = function (jsonStr) {
   try {
     savedNotes = JSON.parse(jsonStr) || [];
