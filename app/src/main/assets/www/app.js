@@ -92,6 +92,7 @@ let noteEditorDirty = false;
 let noteAutosaveTimer = null;
 let noteAutosaveInFlight = false;
 let noteAutosavePending = false;
+let noteManualSavePending = false;
 let noteEditRevision = 0;
 let noteEditorSession = 0;
 let restoreLastNoteOnLoad = false;
@@ -3564,23 +3565,27 @@ function queueNoteAutosave(delayMs = 750) {
   clearTimeout(noteAutosaveTimer);
   const status = document.getElementById('note-editor-status');
   if (status) status.textContent = 'جارٍ الحفظ التلقائي…';
-  noteAutosaveTimer = setTimeout(() => performNoteSave(), delayMs);
+  noteAutosaveTimer = setTimeout(() => performNoteSave(false), delayMs);
 }
-function performNoteSave() {
+function performNoteSave(manual = false) {
   if (!window.Android || !window.Android.saveNote) return;
   clearTimeout(noteAutosaveTimer);
   const rightRows = notePayloadRows(noteRightRows), leftRows = notePayloadRows(noteLeftRows);
   if (!noteHasContent(rightRows, leftRows) && !noteEditorId) return;
-  if (noteAutosaveInFlight) { noteAutosavePending = true; return; }
+  if (noteAutosaveInFlight) {
+    noteAutosavePending = true;
+    noteManualSavePending = noteManualSavePending || manual;
+    return;
+  }
   noteAutosaveInFlight = true;
   noteAutosavePending = false;
-  const payload = { id: noteEditorId, rightRows, leftRows, revision: noteEditRevision, session: noteEditorSession };
+  const payload = { id: noteEditorId, rightRows, leftRows, revision: noteEditRevision, session: noteEditorSession, manual };
   window.Android.saveNote(JSON.stringify(payload), nextReqId());
 }
 function saveCurrentNote() {
   if (!window.Android) return;
   if (!noteHasContent() && !noteEditorId) { showToast('أدخل كمية أو تفاصيل قبل الحفظ'); return; }
-  performNoteSave();
+  performNoteSave(true);
 }
 window.onNoteSaved = function (jsonStr) {
   try {
@@ -3592,7 +3597,7 @@ window.onNoteSaved = function (jsonStr) {
       if (Number(result.revision) === noteEditRevision) {
         noteEditorDirty = false;
         const status = document.getElementById('note-editor-status');
-        if (status) status.textContent = 'تم الحفظ تلقائياً ✓';
+        if (status) status.textContent = result.manual ? 'تم حفظ الملاحظة ✓' : 'تم الحفظ تلقائياً ✓';
       } else {
         noteEditorDirty = true;
       }
@@ -3600,7 +3605,12 @@ window.onNoteSaved = function (jsonStr) {
     refreshContextSuggestions();
     if (noteAutosavePending || noteEditorDirty) {
       noteAutosavePending = false;
-      queueNoteAutosave(180);
+      if (noteManualSavePending) {
+        noteManualSavePending = false;
+        performNoteSave(true);
+      } else {
+        queueNoteAutosave(180);
+      }
     }
   } catch (e) { noteAutosaveInFlight = false; console.error(e); }
 };
