@@ -3508,7 +3508,7 @@ function renderNoteEditor() {
   renderNoteRows('right'); renderNoteRows('left');
   refreshContextSuggestions();
   const status = document.getElementById('note-editor-status');
-  if (status) status.textContent = noteEditorId ? 'تعديل ملاحظة محفوظة' : 'ملاحظة جديدة غير محفوظة';
+  if (status) status.textContent = noteEditorId ? 'ملاحظة محفوظة • الحفظ التلقائي نشط' : 'الحفظ التلقائي نشط — ابدأ الكتابة';
   const toggleBtn = document.getElementById('btn-note-preview-toggle');
   if (toggleBtn) toggleBtn.textContent = notePreviewVisible ? 'إخفاء المعاينة' : 'معاينة حرارية';
   scheduleNoteThermalPreviewRefresh(60);
