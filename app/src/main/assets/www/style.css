@@ -2075,11 +2075,9 @@ body.compact-lists table.data-table td { padding: 4px 3px; }
 @media(max-width:370px){.dashboard-launcher-grid{gap:9px 3px;padding:10px 3px}.launcher-icon{width:46px;height:46px}.activity-shortcut{padding:4px 6px}}
 
 
-/* Dedicated customer operation entry and compact one-line ledger. */
-.customer-op-fields{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(105px,1fr);gap:7px;direction:rtl}
-.customer-op-fields input{width:100%;min-width:0}
-.customer-op-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
-.customer-op-actions .btn{margin-top:0;min-height:42px;font-size:14px}
+/* Customer operation screen: use the same ruled fields, cards and button row as the original screens. */
+.customer-op-actions{margin-top:6px}
+.customer-op-actions > .btn{margin-top:4px}
 .customer-op-suggestions{position:relative;z-index:20;display:flex;flex-direction:column;gap:3px;margin-top:5px;max-height:150px;overflow:auto;background:var(--surface);border:1px solid var(--border-color);border-radius:9px;padding:4px}
 .customer-op-suggestions.hidden{display:none}
 .customer-op-suggestion{width:100%;text-align:right;border:0;border-bottom:1px solid var(--border-color);background:var(--surface);padding:9px 8px;color:var(--text-primary);font-weight:700}
@@ -2098,7 +2096,7 @@ body.compact-lists table.data-table td { padding: 4px 3px; }
 .customer-op-expanded{padding:7px 9px;margin:0 0 4px;border-right:3px solid var(--primary-blue);background:var(--surface-alt);font-size:11px;line-height:1.7}
 .customer-op-menu{display:flex;flex-wrap:wrap;gap:5px;padding:5px 2px}
 .customer-op-menu button{border:1px solid var(--border-color);background:var(--surface);border-radius:7px;padding:5px 8px;font-size:11px;font-weight:700}
-@media(max-width:360px){.customer-op-row{grid-template-columns:48px 67px minmax(0,1fr) 58px 27px;font-size:10px;gap:2px}.customer-op-fields{grid-template-columns:minmax(0,1.55fr) minmax(92px,1fr)}}
+@media(max-width:360px){.customer-op-row{grid-template-columns:48px 67px minmax(0,1fr) 58px 27px;font-size:10px;gap:2px}}
 
 .dashboard-entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 9px}
 .dashboard-entry-actions .btn{margin-top:0;min-height:43px;font-size:13px}
