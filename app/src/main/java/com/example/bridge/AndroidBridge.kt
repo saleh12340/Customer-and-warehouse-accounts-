@@ -467,6 +467,7 @@ class AndroidBridge(
       }
       val revision = obj.optLong("revision", -1L)
       val session = obj.optLong("session", -1L)
+      val manual = obj.optBoolean("manual", false)
       try {
         val id = obj.optLong("id", 0L)
         val rightRows = obj.optJSONArray("rightRows") ?: JSONArray()
@@ -497,14 +498,14 @@ class AndroidBridge(
           JSONObject().put("id", savedId).put("revision", revision).put("session", session).toString()
         )
         getNotes()
-        notifyResult(reqId, true, "تم حفظ الملاحظة بنجاح ✓")
+        if (manual) notifyResult(reqId, true, "تم حفظ الملاحظة بنجاح ✓")
       } catch (e: Exception) {
         callJs(
           "onNoteSaveFailed",
           JSONObject().put("revision", revision).put("session", session)
             .put("message", e.message ?: "تعذر حفظ الملاحظة").toString()
         )
-        notifyResult(reqId, false, e.message ?: "تعذر حفظ الملاحظة")
+        if (manual) notifyResult(reqId, false, e.message ?: "تعذر حفظ الملاحظة")
       }
     }
   }
