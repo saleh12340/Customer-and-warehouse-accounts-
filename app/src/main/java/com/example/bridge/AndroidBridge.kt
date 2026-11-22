@@ -495,7 +495,7 @@ class AndroidBridge(
         }
         callJs(
           "onNoteSaved",
-          JSONObject().put("id", savedId).put("revision", revision).put("session", session).toString()
+          JSONObject().put("id", savedId).put("revision", revision).put("session", session).put("manual", manual).toString()
         )
         getNotes()
         if (manual) notifyResult(reqId, true, "تم حفظ الملاحظة بنجاح ✓")
