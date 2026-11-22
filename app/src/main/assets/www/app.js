@@ -848,8 +848,8 @@ function renderCustomersList() {
   const summary = document.getElementById('customers-summary-strip');
   const query = (document.getElementById('customer-search').value || '').trim().toLowerCase();
   const showZero = settingsData.showZeroBalanceParties !== false;
-  const sortMode = settingsData.defaultCustomerSort || 'NAME';
-
+  // Newest customer first. Auto-increment Room IDs preserve insertion order,
+  // including after app restarts and backup restoration.
   const filtered = customersData.filter(c => {
     const matchSearch = !query || c.name.toLowerCase().includes(query) || (c.phone || '').includes(query);
     if (!matchSearch) return false;
@@ -858,11 +858,7 @@ function renderCustomersList() {
     if (customerFilter === 'SETTLED') return Math.abs(c.balance) <= 0.01;
     if (!showZero && Math.abs(c.balance) <= 0.01) return false;
     return true;
-  }).sort((a, b) => {
-    if (sortMode === 'BALANCE_DESC') return (Number(b.balance) || 0) - (Number(a.balance) || 0);
-    if (sortMode === 'BALANCE_ASC') return (Number(a.balance) || 0) - (Number(b.balance) || 0);
-    return (a.name || '').localeCompare(b.name || '', 'ar');
-  });
+  }).sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
 
   const totalDebt = filtered.reduce((sum, c) => sum + Math.max(c.balance, 0), 0);
   summary.innerHTML = `<span>العملاء: ${filtered.length}</span><span>إجمالي الديون: ${fmtMoney(totalDebt)} ${escapeHtml(appCurrency)}</span>`;
@@ -873,25 +869,39 @@ function renderCustomersList() {
   }
 
   container.innerHTML = filtered.map(c => {
-    const isDebit = c.balance > 0.01;
-    const isCredit = c.balance < -0.01;
-    const cls = isDebit ? 'text-danger' : (isCredit ? 'text-success' : 'text-dark');
-    const label = isDebit ? `عليه ${fmtMoney(c.balance)}` : (isCredit ? `له ${fmtMoney(-c.balance)}` : 'مسدد 0');
+    const isDebit = Number(c.balance) > 0.01;
+    const isCredit = Number(c.balance) < -0.01;
+    const balanceClass = isDebit ? 'customer-balance-debit' : (isCredit ? 'customer-balance-credit' : 'customer-balance-settled');
+    const balanceLabel = isDebit ? 'عليه' : (isCredit ? 'له' : 'رصيد مسدد');
+    const balanceValue = isDebit ? c.balance : (isCredit ? -c.balance : 0);
     return `
-      <div class="list-item" onclick="openCustomerDetail(${c.id})">
-        <div>
-          <strong>${escapeHtml(c.name)}</strong>
-          <div class="muted-text">${escapeHtml(c.phone || 'بدون جوال')}${c.address ? ' • ' + escapeHtml(c.address) : ''}</div>
-        </div>
-        <div class="list-item-actions">
-          <span class="${cls}" style="font-weight:800; font-size:13.5px;">${label} ${escapeHtml(appCurrency)}</span>
-          <div class="btn-row-compact">
-            <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openCustomerForm(${c.id})">تعديل</button>
-            <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteCustomerFromList(${c.id})">حذف</button>
-            <span class="badge badge-blue">كشف الحساب</span>
+      <article class="customer-ledger-card" onclick="openCustomerDetail(${c.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCustomerDetail(${c.id})}">
+        <div class="customer-ledger-main">
+          <div class="customer-ledger-identity">
+            <span class="customer-ledger-avatar" aria-hidden="true">${escapeHtml((c.name || '؟').trim().charAt(0) || '؟')}</span>
+            <div class="customer-ledger-name-wrap">
+              <strong class="customer-ledger-name">${escapeHtml(c.name)}</strong>
+              <span class="customer-ledger-caption">عميل</span>
+            </div>
+          </div>
+          <div class="customer-ledger-balance ${balanceClass}">
+            <span class="customer-ledger-balance-label">${balanceLabel}</span>
+            <strong>${fmtMoney(balanceValue)}</strong>
+            <small>${escapeHtml(appCurrency)}</small>
           </div>
         </div>
-      </div>
+        <div class="customer-ledger-details">
+          <span class="customer-ledger-detail"><span aria-hidden="true">☎</span>${escapeHtml(c.phone || 'بدون جوال')}</span>
+          ${c.address ? `<span class="customer-ledger-detail customer-ledger-address"><span aria-hidden="true">⌖</span>${escapeHtml(c.address)}</span>` : ''}
+        </div>
+        <div class="customer-ledger-footer">
+          <span class="customer-ledger-open">فتح كشف الحساب <span aria-hidden="true">←</span></span>
+          <div class="customer-ledger-actions">
+            <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openCustomerForm(${c.id})">تعديل</button>
+            <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteCustomerFromList(${c.id})">حذف</button>
+          </div>
+        </div>
+      </article>
     `;
   }).join('');
 }
