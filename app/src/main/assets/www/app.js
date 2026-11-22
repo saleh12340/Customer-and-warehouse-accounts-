@@ -3628,7 +3628,11 @@ window.onNotesData = function (jsonStr) {
     if (count) count.textContent = String(savedNotes.length);
     const list = document.getElementById('notes-history-list');
     if (!list) return;
-    if (!savedNotes.length) { list.innerHTML = '<div class="empty-state">لا توجد ملاحظات محفوظة بعد</div>'; return; }
+    if (!savedNotes.length) {
+      list.innerHTML = '<div class="empty-state">لا توجد ملاحظات محفوظة بعد</div>';
+      restoreLastNoteOnLoad = false;
+      return;
+    }
     list.innerHTML = savedNotes.map(note => {
       const right = note.rightRows || [], left = note.leftRows || [], total = right.length + left.length;
       const first = [...right, ...left].find(r => r.detail || r.qty);
@@ -3678,6 +3682,11 @@ function removeSavedNote(id) {
     renderNoteEditor();
   }
   window.Android.deleteNote(id, nextReqId());
+}
+function openNoteHistory() {
+  if (window.Android && window.Android.getNotes) window.Android.getNotes();
+  const history = document.getElementById('notes-history-card');
+  if (history) history.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function requireSavedNote() {
   if (!noteEditorId) { showToast('احفظ الملاحظة أولاً'); return false; }
