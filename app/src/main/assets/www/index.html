@@ -801,7 +801,7 @@
         <div class="section-head">
           <h2>الملاحظات</h2>
           <div class="btn-row-compact">
-            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openNoteHistory()">السجل السابق</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openNoteHistory()">سجل الملاحظات</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="startNewNote()">ملاحظة جديدة</button>
           </div>
         </div>
@@ -866,13 +866,26 @@
         </div>
       </div>
 
+    </section>
+
+    </section>
+
+    <!-- Dedicated notes history screen; the note editor layout remains unchanged. -->
+    <section id="view-notes-history" class="view">
+      <div class="sticky-top-panel">
+        <div class="section-head">
+          <h2>سجل الملاحظات</h2>
+          <span class="muted-text">الأحدث أولاً</span>
+        </div>
+      </div>
       <div class="card compact-card" id="notes-history-card">
         <div class="card-title-row"><h3>الملاحظات السابقة</h3><span class="muted-text" id="notes-count">0</span></div>
         <div id="notes-history-list"><div class="empty-state">لا توجد ملاحظات محفوظة بعد</div></div>
       </div>
+
     </section>
 
-    <!-- 8. Financial Reports -->
+        <!-- 8. Financial Reports -->
     <section id="view-reports" class="view">
       <div class="sticky-top-panel">
         <div class="section-head">
