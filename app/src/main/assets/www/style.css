@@ -2100,3 +2100,62 @@ body.compact-lists table.data-table td { padding: 4px 3px; }
 
 .dashboard-entry-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 9px}
 .dashboard-entry-actions .btn{margin-top:0;min-height:43px;font-size:13px}
+
+
+/* Customer directory: compact ruled ledger cards with clear balance semantics. */
+#customers-list { display:flex; flex-direction:column; gap:7px; }
+.customer-ledger-card {
+  display:flex; flex-direction:column; gap:0; min-width:0; padding:9px 10px 7px;
+  margin:0; border:1px solid #d5dfeb; border-right:3px solid var(--primary-blue,#2563a6);
+  border-radius:11px; background:var(--surface,#fff);
+  box-shadow:0 1px 4px rgba(22,45,75,.055);
+  cursor:pointer; -webkit-tap-highlight-color:transparent; direction:rtl;
+  transition:border-color .15s ease,background .15s ease;
+}
+.customer-ledger-card:active { background:var(--surface-soft,#f4f8fc); border-color:#91afd0; }
+.customer-ledger-main { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+.customer-ledger-identity { display:flex; align-items:center; gap:8px; min-width:0; flex:1; }
+.customer-ledger-avatar {
+  display:grid; place-items:center; flex:0 0 34px; width:34px; height:34px;
+  border-radius:9px; background:#eaf2fc; color:#245b96; font-size:15px; font-weight:900;
+  border:1px solid #d7e5f5;
+}
+.customer-ledger-name-wrap { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.customer-ledger-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--dark-header,#1c2c40); font-size:13px; line-height:1.35; font-weight:800; }
+.customer-ledger-caption { color:var(--text-secondary,#748196); font-size:9px; line-height:1.1; }
+.customer-ledger-balance {
+  display:flex; align-items:baseline; justify-content:center; gap:3px; flex:0 0 auto;
+  min-width:91px; max-width:48%; padding:5px 8px; border:1px solid transparent; border-radius:8px;
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.customer-ledger-balance-label { font-size:9px; font-weight:800; }
+.customer-ledger-balance strong { font-size:13px; font-weight:900; }
+.customer-ledger-balance small { font-size:9px; font-weight:700; }
+.customer-balance-debit { color:#c62828; background:#fff0f0; border-color:#f4cccc; }
+.customer-balance-credit { color:#16834b; background:#eaf8ef; border-color:#c9ead4; }
+.customer-balance-settled { color:#64748b; background:#f1f4f7; border-color:#e0e6ed; }
+.customer-ledger-details {
+  display:flex; flex-wrap:wrap; align-items:center; gap:5px 13px; min-width:0;
+  padding:6px 1px 5px; margin-top:6px; border-top:1px solid #e8edf3;
+}
+.customer-ledger-detail {
+  display:inline-flex; align-items:center; gap:5px; min-width:0; max-width:100%;
+  color:var(--text-secondary,#64748b); font-size:10px; line-height:1.35; overflow-wrap:anywhere;
+}
+.customer-ledger-detail > span { color:#8093a8; font-size:11px; font-weight:800; }
+.customer-ledger-address { flex:1 1 100%; }
+.customer-ledger-footer {
+  display:flex; align-items:center; justify-content:space-between; gap:7px;
+  padding-top:5px; border-top:1px dashed #e3e9f0;
+}
+.customer-ledger-open { color:var(--primary-blue,#245b96); font-size:9.5px; font-weight:800; }
+.customer-ledger-actions { display:flex; align-items:center; gap:5px; }
+.customer-ledger-actions .tbl-action-btn { min-height:25px; padding:3px 9px; border-radius:6px; font-size:9.5px; }
+@media(max-width:360px) {
+  .customer-ledger-card { padding:8px 8px 6px; }
+  .customer-ledger-avatar { flex-basis:31px; width:31px; height:31px; }
+  .customer-ledger-name { font-size:12px; }
+  .customer-ledger-balance { min-width:82px; padding:4px 6px; }
+  .customer-ledger-balance strong { font-size:12px; }
+  .customer-ledger-detail { font-size:9px; }
+}
