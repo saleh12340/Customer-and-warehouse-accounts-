@@ -98,6 +98,7 @@ let noteManualSavePending = false;
 let noteEditRevision = 0;
 let noteEditorSession = 0;
 let restoreLastNoteOnLoad = false;
+let refreshNotesHistoryAfterSave = false;
 let noteRightRows = [{ qty: '', detail: '' }];
 let noteLeftRows = [{ qty: '', detail: '' }];
 let savedNotes = [];
@@ -582,6 +583,7 @@ const SUB_VIEW_PARENTS = {
   'create-invoice': 'invoices',
   'thermal-preview': 'create-invoice',
   'activity-log': 'dashboard',
+  'notes-history': 'notes',
   'suppliers': 'dashboard',
   'settings': 'dashboard',
   'about': 'dashboard'
@@ -717,6 +719,10 @@ function loadViewData(view) {
     restoreLastNoteOnLoad = true;
     renderNoteEditor();
     window.Android.getNotes();
+  } else if (view === 'notes-history') {
+    const list = document.getElementById('notes-history-list');
+    if (list) list.innerHTML = '<div class="empty-state">جارٍ تحميل سجل الملاحظات...</div>';
+    if (!refreshNotesHistoryAfterSave) window.Android.getNotes();
   } else if (view === 'reports') {
     loadReports();
   } else if (view === 'settings') {
@@ -3674,6 +3680,11 @@ window.onNoteSaved = function (jsonStr) {
         queueNoteAutosave(180);
       }
     }
+    if (refreshNotesHistoryAfterSave && currentView === 'notes-history' &&
+        !noteAutosaveInFlight && !noteEditorDirty && !noteAutosavePending) {
+      refreshNotesHistoryAfterSave = false;
+      if (window.Android && window.Android.getNotes) window.Android.getNotes();
+    }
   } catch (e) { noteAutosaveInFlight = false; console.error(e); }
 };
 window.onNoteSaveFailed = function (jsonStr) {
@@ -3695,6 +3706,10 @@ window.onNoteSaveFailed = function (jsonStr) {
       noteAutosaveRetryTimer = setTimeout(() => {
         if (noteEditorDirty && !noteAutosaveInFlight) performNoteSave(false);
       }, delay);
+    } else if (refreshNotesHistoryAfterSave && currentView === 'notes-history') {
+      refreshNotesHistoryAfterSave = false;
+      if (window.Android && window.Android.getNotes) window.Android.getNotes();
+      showToast('تعذر حفظ آخر التعديلات؛ يعرض السجل آخر نسخة محفوظة', 'error');
     }
   } catch (_) {}
 };
@@ -3744,6 +3759,7 @@ window.onNotesData = function (jsonStr) {
 };
 function openSavedNote(id) {
   const note = savedNotes.find(n => Number(n.id) === Number(id)); if (!note) return;
+  if (currentView !== 'notes') switchView('notes');
   if (noteEditorDirty) { clearTimeout(noteAutosaveTimer); performNoteSave(); }
   noteEditorSession++;
   noteEditorId = Number(note.id);
@@ -3774,9 +3790,8 @@ function removeSavedNote(id) {
   window.Android.deleteNote(id, nextReqId());
 }
 function openNoteHistory() {
-  if (window.Android && window.Android.getNotes) window.Android.getNotes();
-  const history = document.getElementById('notes-history-card');
-  if (history) history.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  refreshNotesHistoryAfterSave = noteEditorDirty || noteAutosaveInFlight;
+  switchView('notes-history');
 }
 function requireSavedNote() {
   if (!noteEditorId) {
