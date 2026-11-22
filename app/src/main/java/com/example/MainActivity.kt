@@ -208,6 +208,16 @@ class MainActivity : ComponentActivity() {
     onBackPressedDispatcher.addCallback(this, backCallback)
   }
 
+  override fun onPause() {
+    if (::webView.isInitialized) {
+      webView.evaluateJavascript(
+        "window.flushPendingNoteAutosave && window.flushPendingNoteAutosave();",
+        null
+      )
+    }
+    super.onPause()
+  }
+
   override fun onDestroy() {
     if (::webView.isInitialized) {
       webView.removeJavascriptInterface("Android")
