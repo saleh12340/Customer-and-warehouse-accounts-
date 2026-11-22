@@ -3624,13 +3624,16 @@ window.onNoteSaveFailed = function (jsonStr) {
   noteAutosaveInFlight = false;
   try {
     const result = JSON.parse(jsonStr) || {};
-    if (Number(result.session) === noteEditorSession) {
-      const status = document.getElementById('note-editor-status');
-      if (status) status.textContent = 'تعذر الحفظ — ستتم إعادة المحاولة تلقائياً';
-    }
     // A transient database/bridge failure must not leave a dirty note stranded.
     // Retry only a few times; further edits start a fresh retry cycle.
-    if (!result.manual && noteEditorDirty && noteAutosaveRetryCount < 3) {
+    const canRetry = !result.manual && noteEditorDirty && noteAutosaveRetryCount < 3;
+    if (Number(result.session) === noteEditorSession) {
+      const status = document.getElementById('note-editor-status');
+      if (status) status.textContent = canRetry
+        ? 'تعذر الحفظ — ستتم إعادة المحاولة تلقائياً'
+        : 'لم يتم حفظ التغييرات — اضغط حفظ الملاحظة لإعادة المحاولة';
+    }
+    if (canRetry) {
       const delay = 1000 * Math.pow(2, noteAutosaveRetryCount++);
       clearTimeout(noteAutosaveRetryTimer);
       noteAutosaveRetryTimer = setTimeout(() => {
