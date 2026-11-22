@@ -90,6 +90,8 @@ let pendingQuickCustomerOperation = false;
 let noteEditorId = 0;
 let noteEditorDirty = false;
 let noteAutosaveTimer = null;
+let noteAutosaveRetryTimer = null;
+let noteAutosaveRetryCount = 0;
 let noteAutosaveInFlight = false;
 let noteAutosavePending = false;
 let noteManualSavePending = false;
@@ -3563,6 +3565,8 @@ function noteHasContent(rightRows = notePayloadRows(noteRightRows), leftRows = n
 }
 function queueNoteAutosave(delayMs = 750) {
   clearTimeout(noteAutosaveTimer);
+  clearTimeout(noteAutosaveRetryTimer);
+  noteAutosaveRetryCount = 0;
   const status = document.getElementById('note-editor-status');
   if (status) status.textContent = 'جارٍ الحفظ التلقائي…';
   noteAutosaveTimer = setTimeout(() => performNoteSave(false), delayMs);
@@ -3596,6 +3600,8 @@ window.onNoteSaved = function (jsonStr) {
       try { localStorage.setItem('alaziy-last-note-id', String(noteEditorId)); } catch (_) {}
       if (Number(result.revision) === noteEditRevision) {
         noteEditorDirty = false;
+        noteAutosaveRetryCount = 0;
+        clearTimeout(noteAutosaveRetryTimer);
         const status = document.getElementById('note-editor-status');
         if (status) status.textContent = result.manual ? 'تم حفظ الملاحظة ✓' : 'تم الحفظ تلقائياً ✓';
       } else {
@@ -3620,7 +3626,16 @@ window.onNoteSaveFailed = function (jsonStr) {
     const result = JSON.parse(jsonStr) || {};
     if (Number(result.session) === noteEditorSession) {
       const status = document.getElementById('note-editor-status');
-      if (status) status.textContent = 'تعذر الحفظ — تغييراتك ما زالت ظاهرة، أعد المحاولة';
+      if (status) status.textContent = 'تعذر الحفظ — ستتم إعادة المحاولة تلقائياً';
+    }
+    // A transient database/bridge failure must not leave a dirty note stranded.
+    // Retry only a few times; further edits start a fresh retry cycle.
+    if (!result.manual && noteEditorDirty && noteAutosaveRetryCount < 3) {
+      const delay = 1000 * Math.pow(2, noteAutosaveRetryCount++);
+      clearTimeout(noteAutosaveRetryTimer);
+      noteAutosaveRetryTimer = setTimeout(() => {
+        if (noteEditorDirty && !noteAutosaveInFlight) performNoteSave(false);
+      }, delay);
     }
   } catch (_) {}
 };
