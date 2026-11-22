@@ -89,6 +89,12 @@ let pendingActivityPartyType = '';
 let pendingQuickCustomerOperation = false;
 let noteEditorId = 0;
 let noteEditorDirty = false;
+let noteAutosaveTimer = null;
+let noteAutosaveInFlight = false;
+let noteAutosavePending = false;
+let noteEditRevision = 0;
+let noteEditorSession = 0;
+let restoreLastNoteOnLoad = false;
 let noteRightRows = [{ qty: '', detail: '' }];
 let noteLeftRows = [{ qty: '', detail: '' }];
 let savedNotes = [];
@@ -579,6 +585,10 @@ const SUB_VIEW_PARENTS = {
 };
 
 function switchView(viewName, trackHistory = true) {
+  if (currentView === 'notes' && viewName !== 'notes' && noteEditorDirty) {
+    clearTimeout(noteAutosaveTimer);
+    performNoteSave();
+  }
   if (pendingQuickCustomerOperation && viewName !== 'customers' && viewName !== 'customer-detail') pendingQuickCustomerOperation = false;
   if (viewName === currentView) {
     loadViewData(viewName);
@@ -701,6 +711,7 @@ function loadViewData(view) {
   } else if (view === 'activity-log') {
     loadActivityLog();
   } else if (view === 'notes') {
+    restoreLastNoteOnLoad = true;
     renderNoteEditor();
     window.Android.getNotes();
   } else if (view === 'reports') {
@@ -3506,6 +3517,8 @@ function updateNoteCell(side, index, field, value) {
   if (!rows[index]) return;
   rows[index][field] = value;
   noteEditorDirty = true;
+  noteEditRevision++;
+  queueNoteAutosave();
   if (index === rows.length - 1 && rows[index].qty.trim() && rows[index].detail.trim()) {
     rows.push({ qty: '', detail: '' });
     const body = document.getElementById(side === 'right' ? 'note-right-rows' : 'note-left-rows');
@@ -3522,13 +3535,18 @@ function removeNoteRow(side, index) {
   rows.splice(index, 1);
   if (!rows.length) rows.push({ qty: '', detail: '' });
   noteEditorDirty = true;
+  noteEditRevision++;
+  queueNoteAutosave();
   renderNoteRows(side);
   const status = document.getElementById('note-editor-status');
   if (status) status.textContent = noteEditorId ? 'تعديل ملاحظة محفوظة — توجد تغييرات غير محفوظة' : 'ملاحظة جديدة غير محفوظة';
   scheduleNoteThermalPreviewRefresh(80);
 }
 function startNewNote() {
+  if (noteEditorDirty) { clearTimeout(noteAutosaveTimer); performNoteSave(); }
+  noteEditorSession++;
   noteEditorId = 0;
+  try { localStorage.setItem('alaziy-last-note-id', '0'); } catch (_) {}
   noteEditorDirty = false;
   noteRightRows = [{ qty: '', detail: '' }];
   noteLeftRows = [{ qty: '', detail: '' }];
@@ -3539,20 +3557,69 @@ function notePayloadRows(rows) {
   return rows.filter(r => (r.qty || '').trim() || (r.detail || '').trim())
     .map(r => ({ qty: (r.qty || '').trim(), detail: (r.detail || '').trim() }));
 }
+function noteHasContent(rightRows = notePayloadRows(noteRightRows), leftRows = notePayloadRows(noteLeftRows)) {
+  return rightRows.length > 0 || leftRows.length > 0;
+}
+function queueNoteAutosave(delayMs = 750) {
+  clearTimeout(noteAutosaveTimer);
+  const status = document.getElementById('note-editor-status');
+  if (status) status.textContent = 'جارٍ الحفظ التلقائي…';
+  noteAutosaveTimer = setTimeout(() => performNoteSave(), delayMs);
+}
+function performNoteSave() {
+  if (!window.Android || !window.Android.saveNote) return;
+  clearTimeout(noteAutosaveTimer);
+  const rightRows = notePayloadRows(noteRightRows), leftRows = notePayloadRows(noteLeftRows);
+  if (!noteHasContent(rightRows, leftRows) && !noteEditorId) return;
+  if (noteAutosaveInFlight) { noteAutosavePending = true; return; }
+  noteAutosaveInFlight = true;
+  noteAutosavePending = false;
+  const payload = { id: noteEditorId, rightRows, leftRows, revision: noteEditRevision, session: noteEditorSession };
+  window.Android.saveNote(JSON.stringify(payload), nextReqId());
+}
 function saveCurrentNote() {
   if (!window.Android) return;
-  const rightRows = notePayloadRows(noteRightRows), leftRows = notePayloadRows(noteLeftRows);
-  if (!rightRows.length && !leftRows.length) { showToast('أدخل كمية أو تفاصيل قبل الحفظ'); return; }
-  window.Android.saveNote(JSON.stringify({ id: noteEditorId, rightRows, leftRows }), nextReqId());
+  if (!noteHasContent() && !noteEditorId) { showToast('أدخل كمية أو تفاصيل قبل الحفظ'); return; }
+  performNoteSave();
 }
 window.onNoteSaved = function (jsonStr) {
   try {
-    noteEditorId = Number(JSON.parse(jsonStr).id) || 0;
-    noteEditorDirty = false;
-    renderNoteEditor();
+    const result = JSON.parse(jsonStr) || {};
+    noteAutosaveInFlight = false;
+    if (Number(result.session) === noteEditorSession) {
+      noteEditorId = Number(result.id) || noteEditorId;
+      try { localStorage.setItem('alaziy-last-note-id', String(noteEditorId)); } catch (_) {}
+      if (Number(result.revision) === noteEditRevision) {
+        noteEditorDirty = false;
+        const status = document.getElementById('note-editor-status');
+        if (status) status.textContent = 'تم الحفظ تلقائياً ✓';
+      } else {
+        noteEditorDirty = true;
+      }
+    }
     refreshContextSuggestions();
-  } catch (e) { console.error(e); }
+    if (noteAutosavePending || noteEditorDirty) {
+      noteAutosavePending = false;
+      queueNoteAutosave(180);
+    }
+  } catch (e) { noteAutosaveInFlight = false; console.error(e); }
 };
+window.onNoteSaveFailed = function (jsonStr) {
+  noteAutosaveInFlight = false;
+  try {
+    const result = JSON.parse(jsonStr) || {};
+    if (Number(result.session) === noteEditorSession) {
+      const status = document.getElementById('note-editor-status');
+      if (status) status.textContent = 'تعذر الحفظ — تغييراتك ما زالت ظاهرة، أعد المحاولة';
+    }
+  } catch (_) {}
+};
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && noteEditorDirty) { clearTimeout(noteAutosaveTimer); performNoteSave(); }
+});
+window.addEventListener('pagehide', () => {
+  if (noteEditorDirty) { clearTimeout(noteAutosaveTimer); performNoteSave(); }
+});
 window.onNotesData = function (jsonStr) {
   try {
     savedNotes = JSON.parse(jsonStr) || [];
@@ -3575,12 +3642,21 @@ window.onNotesData = function (jsonStr) {
         <button type="button" class="tbl-action-btn del" onclick="removeSavedNote(${Number(note.id)})">حذف</button>
       </div>`;
     }).join('');
+    if (restoreLastNoteOnLoad) {
+      restoreLastNoteOnLoad = false;
+      let lastId = 0;
+      try { lastId = Number(localStorage.getItem('alaziy-last-note-id')) || 0; } catch (_) {}
+      if (lastId) openSavedNote(lastId);
+    }
   } catch (e) { console.error(e); }
 };
 function openSavedNote(id) {
   const note = savedNotes.find(n => Number(n.id) === Number(id)); if (!note) return;
+  noteEditorSession++;
   noteEditorId = Number(note.id);
   noteEditorDirty = false;
+  noteEditRevision = 0;
+  try { localStorage.setItem('alaziy-last-note-id', String(noteEditorId)); } catch (_) {}
   noteRightRows = (note.rightRows || []).map(r => ({ qty: r.qty || '', detail: r.detail || '' }));
   noteLeftRows = (note.leftRows || []).map(r => ({ qty: r.qty || '', detail: r.detail || '' }));
   if (!noteRightRows.length) noteRightRows = [{ qty: '', detail: '' }];
@@ -3594,8 +3670,14 @@ function openSavedNote(id) {
 }
 function removeSavedNote(id) {
   if (!window.Android || !confirm('هل تريد حذف هذه الملاحظة نهائياً؟')) return;
+  if (Number(noteEditorId) === Number(id)) {
+    clearTimeout(noteAutosaveTimer);
+    noteEditorSession++;
+    noteEditorId = 0; noteEditorDirty = false; noteRightRows = [{ qty: '', detail: '' }]; noteLeftRows = [{ qty: '', detail: '' }];
+    try { localStorage.setItem('alaziy-last-note-id', '0'); } catch (_) {}
+    renderNoteEditor();
+  }
   window.Android.deleteNote(id, nextReqId());
-  if (Number(noteEditorId) === Number(id)) startNewNote();
 }
 function requireSavedNote() {
   if (!noteEditorId) { showToast('احفظ الملاحظة أولاً'); return false; }
