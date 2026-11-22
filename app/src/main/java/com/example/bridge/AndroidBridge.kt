@@ -461,8 +461,13 @@ class AndroidBridge(
   @JavascriptInterface
   fun saveNote(jsonPayload: String, reqId: String) {
     scope.launch(Dispatchers.IO) {
+      val obj = try { JSONObject(jsonPayload) } catch (e: Exception) {
+        notifyResult(reqId, false, "بيانات الملاحظة غير صالحة")
+        return@launch
+      }
+      val revision = obj.optLong("revision", -1L)
+      val session = obj.optLong("session", -1L)
       try {
-        val obj = JSONObject(jsonPayload)
         val id = obj.optLong("id", 0L)
         val rightRows = obj.optJSONArray("rightRows") ?: JSONArray()
         val leftRows = obj.optJSONArray("leftRows") ?: JSONArray()
@@ -470,10 +475,12 @@ class AndroidBridge(
           val row = rows.optJSONObject(index) ?: JSONObject()
           row.optString("qty").isNotBlank() || row.optString("detail").isNotBlank()
         }
-        require(hasContent(rightRows) || hasContent(leftRows)) { "أدخل بيانات في أحد شقي الملاحظة على الأقل" }
         require(rightRows.length() <= 500 && leftRows.length() <= 500) { "عدد صفوف الملاحظة تجاوز الحد المسموح" }
-        val now = System.currentTimeMillis()
         val old = if (id > 0L) database.noteDao().getNoteById(id) else null
+        require(hasContent(rightRows) || hasContent(leftRows) || old != null) {
+          "أدخل بيانات في أحد شقي الملاحظة على الأقل"
+        }
+        val now = System.currentTimeMillis()
         val note = NoteEntity(
           id = old?.id ?: 0L,
           createdAt = old?.createdAt ?: now,
@@ -485,10 +492,18 @@ class AndroidBridge(
           database.noteDao().updateNote(note)
           old.id
         }
-        callJs("onNoteSaved", JSONObject().put("id", savedId).toString())
+        callJs(
+          "onNoteSaved",
+          JSONObject().put("id", savedId).put("revision", revision).put("session", session).toString()
+        )
         getNotes()
         notifyResult(reqId, true, "تم حفظ الملاحظة بنجاح ✓")
       } catch (e: Exception) {
+        callJs(
+          "onNoteSaveFailed",
+          JSONObject().put("revision", revision).put("session", session)
+            .put("message", e.message ?: "تعذر حفظ الملاحظة").toString()
+        )
         notifyResult(reqId, false, e.message ?: "تعذر حفظ الملاحظة")
       }
     }
