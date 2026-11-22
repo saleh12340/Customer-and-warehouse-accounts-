@@ -622,7 +622,7 @@ class AndroidBridge(
           val ok = WhatsAppHelper.shareFile(
             context = activity,
             fileUri = uri,
-            mimeType = "application/octet-stream",
+            mimeType = "image/png",
             message = "صورة ملاحظة من ${settings.storeName} - HD",
             preferWhatsApp = settings.preferWhatsAppDirect
           )
@@ -659,7 +659,7 @@ class AndroidBridge(
           val ok = WhatsAppHelper.shareFile(
             context = activity,
             fileUri = uri,
-            mimeType = "application/octet-stream",
+            mimeType = "image/png",
             message = "صورة حرارية للملاحظة من ${settings.storeName} - HD",
             preferWhatsApp = settings.preferWhatsAppDirect
           )
