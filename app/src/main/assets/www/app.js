@@ -3805,6 +3805,7 @@ function exportCurrentNotePdf() { if (window.Android && requireSavedNote()) wind
 function shareCurrentNoteWhatsApp() { if (window.Android && requireSavedNote()) window.Android.shareNoteWhatsApp(noteEditorId, nextReqId()); }
 function exportCurrentNoteImageHd() { if (window.Android && requireSavedNote()) window.Android.exportNoteImageHd(noteEditorId, nextReqId()); }
 function shareCurrentNoteImageWhatsApp() { if (window.Android && requireSavedNote()) window.Android.shareNoteImageWhatsApp(noteEditorId, nextReqId()); }
+function shareCurrentNoteThermalImageWhatsApp() { if (window.Android && requireSavedNote()) window.Android.shareNoteThermalImageWhatsApp(noteEditorId, nextReqId()); }
 
 // ---------------- Reports ----------------
 
