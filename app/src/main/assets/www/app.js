@@ -3704,8 +3704,22 @@ function openNoteHistory() {
   if (history) history.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function requireSavedNote() {
-  if (!noteEditorId) { showToast('احفظ الملاحظة أولاً'); return false; }
-  if (noteEditorDirty) { showToast('احفظ التعديلات أولاً قبل الطباعة أو المشاركة'); return false; }
+  if (!noteEditorId) {
+    if (noteHasContent()) {
+      clearTimeout(noteAutosaveTimer);
+      performNoteSave(false);
+      showToast('جارٍ حفظ الملاحظة تلقائياً؛ أعد المحاولة بعد لحظة', 'info');
+    } else {
+      showToast('اكتب محتوى الملاحظة أولاً');
+    }
+    return false;
+  }
+  if (noteEditorDirty || noteAutosaveInFlight) {
+    clearTimeout(noteAutosaveTimer);
+    performNoteSave(false);
+    showToast('جارٍ حفظ التعديلات تلقائياً؛ أعد المحاولة بعد لحظة', 'info');
+    return false;
+  }
   return true;
 }
 function toggleNoteThermalPreview(forceState) {
