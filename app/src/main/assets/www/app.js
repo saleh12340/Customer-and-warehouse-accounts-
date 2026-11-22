@@ -3431,6 +3431,20 @@ function restoreNoteEditorCursor(noteId) {
     if (scroll && Number.isFinite(Number(snapshot.scrollTop))) scroll.scrollTop = Math.max(0, Number(snapshot.scrollTop));
   });
 }
+function persistActiveNoteCursor(event) {
+  const input = event?.target;
+  if (!input?.classList?.contains('note-cell')) return;
+  const body = input.closest('tbody[id^="note-"][id$="-rows"]');
+  if (!body) return;
+  const side = body.id === 'note-right-rows' ? 'right' : body.id === 'note-left-rows' ? 'left' : '';
+  const row = input.closest('tr');
+  const index = row ? Array.prototype.indexOf.call(body.children, row) : -1;
+  if (side && index >= 0) saveNoteEditorCursor(side, index, input.classList.contains('note-qty') ? 'qty' : 'detail', input);
+}
+document.addEventListener('keyup', persistActiveNoteCursor, true);
+document.addEventListener('pointerup', persistActiveNoteCursor, true);
+document.addEventListener('focusin', persistActiveNoteCursor, true);
+
 function noteRowMarkup(side, index) {
   const row = noteRowsFor(side)[index] || { qty: '', detail: '' };
   return `<tr>
