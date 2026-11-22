@@ -800,7 +800,10 @@
       <div class="sticky-top-panel">
         <div class="section-head">
           <h2>الملاحظات</h2>
-          <button type="button" class="btn btn-outline btn-sm" onclick="startNewNote()">ملاحظة جديدة</button>
+          <div class="btn-row-compact">
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="openNoteHistory()">السجل السابق</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="startNewNote()">ملاحظة جديدة</button>
+          </div>
         </div>
         <div class="notes-toolbar">
           <span id="note-editor-status" class="muted-text">ملاحظة جديدة غير محفوظة</span>
@@ -862,7 +865,7 @@
         </div>
       </div>
 
-      <div class="card compact-card">
+      <div class="card compact-card" id="notes-history-card">
         <div class="card-title-row"><h3>الملاحظات السابقة</h3><span class="muted-text" id="notes-count">0</span></div>
         <div id="notes-history-list"><div class="empty-state">لا توجد ملاحظات محفوظة بعد</div></div>
       </div>
