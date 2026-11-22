@@ -54,7 +54,7 @@ body {
 /* Placeholders disappear immediately on focus or input */
 input::placeholder,
 textarea::placeholder {
-  color: #94A3B8;
+  color: #475569;
   font-weight: 500;
   font-size: 12px;
   transition: color 0.1s ease;
