@@ -203,14 +203,18 @@
       <div class="sticky-top-panel">
         <div class="section-head"><h2>إضافة عملية عميل</h2></div>
         <div class="card compact-card customer-op-entry">
-          <div class="customer-op-fields">
+          <div class="ruled-grid-labels grid-cust-name-first">
+            <span>اسم العميل</span>
+            <span>المبلغ</span>
+          </div>
+          <div class="ruled-input-row grid-cust-name-first">
             <input id="op-customer-name" type="text" class="ruled-cell" placeholder="ابحث عن اسم العميل..." autocomplete="off" aria-label="اسم العميل">
-            <input id="op-customer-amount" type="text" class="ruled-cell cell-num" placeholder="المبلغ" inputmode="numeric" pattern="[0-9]*" data-english-only="true" lang="en-US" dir="ltr" autocomplete="off" aria-label="المبلغ">
+            <input id="op-customer-amount" type="text" class="ruled-cell cell-num" placeholder="أدخل المبلغ" inputmode="numeric" pattern="[0-9]*" data-english-only="true" lang="en-US" dir="ltr" autocomplete="off" aria-label="المبلغ">
           </div>
           <div id="op-customer-suggestions" class="customer-op-suggestions hidden" role="listbox"></div>
-          <div class="customer-op-actions">
-            <button type="button" class="btn btn-success" onclick="saveCustomerOperation(false)">له</button>
-            <button type="button" class="btn btn-danger" onclick="saveCustomerOperation(true)">عليه</button>
+          <div class="btn-row customer-op-actions">
+            <button type="button" class="btn btn-success btn-compact" onclick="saveCustomerOperation(false)">له</button>
+            <button type="button" class="btn btn-danger btn-compact" onclick="saveCustomerOperation(true)">عليه</button>
           </div>
           <div id="op-customer-selected" class="muted-text" aria-live="polite">اختر عميلاً لعرض حسابه وعملياته</div>
         </div>
