@@ -66,10 +66,14 @@ android {
     unitTests {
       isIncludeAndroidResources = true
       all {
-        // Robolectric fetches its instrumented Android runtime separately from Gradle.
-        // Use Maven Central's canonical hostname to avoid intermittent repo1 checksum/404 failures in CI.
-        it.systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
-        it.systemProperty("robolectric.dependency.repo.id", "mavenCentral")
+        // Robolectric downloads instrumented Android SDK jars at test runtime.
+        // Maven Central rate-limited these requests with HTTP 429 in CI;
+        // use Google's mirror of Maven Central to avoid recurring throttling.
+        it.systemProperty(
+          "robolectric.dependency.repo.url",
+          "https://maven-central.storage-download.googleapis.com/maven2"
+        )
+        it.systemProperty("robolectric.dependency.repo.id", "googleMavenCentralMirror")
       }
     }
   }
