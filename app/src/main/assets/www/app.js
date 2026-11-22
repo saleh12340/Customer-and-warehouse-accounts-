@@ -3656,6 +3656,7 @@ window.onNotesData = function (jsonStr) {
 };
 function openSavedNote(id) {
   const note = savedNotes.find(n => Number(n.id) === Number(id)); if (!note) return;
+  if (noteEditorDirty) { clearTimeout(noteAutosaveTimer); performNoteSave(); }
   noteEditorSession++;
   noteEditorId = Number(note.id);
   noteEditorDirty = false;
