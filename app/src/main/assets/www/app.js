@@ -2328,7 +2328,7 @@ function reverseInventoryUnitDirection(prefix) {
   const level = levels[0];
   const oldLarger = level.nameInput.value.trim();
   const factor = String(level.factorInput?.value || '').trim();
-  if (!oldBase || !oldLarger || !/^\\d+$/.test(factor) || Number(factor) < 1) {
+  if (!oldBase || !oldLarger || !/^\d+$/.test(factor) || Number(factor) < 1) {
     showToast('أكمل اسم الوحدتين ومعامل التحويل أولاً', 'error');
     return;
   }
