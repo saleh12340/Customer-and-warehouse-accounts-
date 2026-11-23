@@ -153,6 +153,64 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     return null
   }
 
+  private fun validateInventoryUnitConfig(rawConfig: String) {
+    val source = rawConfig.trim()
+    require(source.isNotEmpty()) { "الوحدة الأساسية للمخزون مطلوبة" }
+    val config = runCatching { JSONObject(source) }.getOrNull() ?: return
+    val base = config.optString("base", "").trim()
+    require(base.isNotEmpty()) { "اسم الوحدة الأساسية للمخزون مطلوب" }
+
+    val names = mutableSetOf(base)
+    var cumulativeFactor = 1L
+    val configuredUnits = config.optJSONArray("units")
+    if (configuredUnits != null && configuredUnits.length() > 0) {
+      for (index in 0 until configuredUnits.length()) {
+        val unit = configuredUnits.optJSONObject(index)
+          ?: error("تعريف الوحدة رقم ${index + 1} غير صحيح")
+        val name = unit.optString("name", "").trim()
+        val rawFactor = unit.opt("factorToSmaller")
+        val factor = (rawFactor as? Number)?.toDouble()
+          ?: rawFactor?.toString()?.toDoubleOrNull()
+          ?: Double.NaN
+        require(name.isNotEmpty()) { "اسم الوحدة رقم ${index + 1} مطلوب" }
+        require(names.add(name)) { "اسم الوحدة «$name» مكرر داخل الصنف" }
+        require(factor.isFinite() && factor >= 1.0 && factor <= 1_000_000.0 && factor % 1.0 == 0.0) {
+          "معامل تحويل الوحدة «$name» يجب أن يكون عدداً صحيحاً موجباً"
+        }
+        cumulativeFactor *= factor.toLong()
+        require(cumulativeFactor in 1..1_000_000) { "معامل التحويل المتسلسل أكبر من الحد المسموح" }
+      }
+      return
+    }
+
+    // Validate the original two-level format as well; old saved items remain valid.
+    val packName = config.optString("packName", "").trim()
+    val packSize = config.opt("packSize")
+    val cartonName = config.optString("cartonName", "").trim()
+    val cartonPacks = config.opt("cartonPacks")
+    fun positiveWhole(value: Any?): Long? {
+      val number = (value as? Number)?.toDouble()
+        ?: value?.toString()?.toDoubleOrNull()
+        ?: return null
+      return number.toLong().takeIf { number.isFinite() && number >= 1.0 && number <= 1_000_000.0 && number % 1.0 == 0.0 }
+    }
+    if (packName.isNotEmpty()) {
+      require(names.add(packName)) { "اسم الوحدة «$packName» مكرر داخل الصنف" }
+      val factor = positiveWhole(packSize) ?: error("معامل تحويل الوحدة «$packName» غير صحيح")
+      cumulativeFactor *= factor
+    } else {
+      require(positiveWhole(packSize) in listOf(null, 1L)) { "حدد اسم الوحدة الوسطى قبل معامل تحويلها" }
+    }
+    if (cartonName.isNotEmpty()) {
+      require(names.add(cartonName)) { "اسم الوحدة «$cartonName» مكرر داخل الصنف" }
+      val factor = positiveWhole(cartonPacks) ?: error("معامل تحويل الوحدة «$cartonName» غير صحيح")
+      cumulativeFactor *= factor
+    } else {
+      require(positiveWhole(cartonPacks) in listOf(null, 1L)) { "حدد اسم الوحدة الكبيرة قبل معامل تحويلها" }
+    }
+    require(cumulativeFactor in 1..1_000_000) { "معامل التحويل المتسلسل أكبر من الحد المسموح" }
+  }
+
   private fun inventoryBaseUnit(rawConfig: String): String {
     val parsed = runCatching { JSONObject(rawConfig).optString("base", "").trim() }.getOrNull().orEmpty()
     return parsed.ifBlank { rawConfig.trim() }
@@ -469,6 +527,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val cleanName = name.trim()
     val cleanUnit = unit.trim().ifBlank { "حبة" }
     require(cleanName.isNotEmpty()) { "اسم الصنف مطلوب" }
+    validateInventoryUnitConfig(cleanUnit)
     require(quantity in 0..10_000_000) { "الكمية خارج النطاق المسموح" }
     require(purchasePrice.isFinite() && purchasePrice >= 0) { "سعر الشراء غير صحيح" }
     require(sellingPrice.isFinite() && sellingPrice >= 0) { "سعر البيع غير صحيح" }
