@@ -431,6 +431,25 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
+  fun inventoryUnitDefinitionsRejectEmptyDuplicateAndUnsafeConversions() = runBlocking {
+    val invalidConfigs = listOf(
+      """{"base":"","units":[]}""",
+      """{"base":"حبة","units":[{"name":"حبة","factorToSmaller":24}]}""",
+      """{"base":"حبة","units":[{"name":"قرطاس","factorToSmaller":0}]}""",
+      """{"base":"حبة","units":[{"name":"قرطاس","factorToSmaller":1000},{"name":"كرتون","factorToSmaller":1001}]}"""
+    )
+    invalidConfigs.forEachIndexed { index, config ->
+      try {
+        engine.saveInventoryItem(0L, "صنف غير صالح $index", "مواد غذائية", 0, 0.0, 0.0, config)
+        fail("Expected invalid unit configuration to be rejected: $config")
+      } catch (expected: IllegalArgumentException) {
+        assertTrue(expected.message.orEmpty().isNotBlank())
+      }
+    }
+    assertEquals(0, db.inventoryDao().getItemsSnapshot().size)
+  }
+
+  @Test
   fun customerAndSupplierTransactionsComputeRunningBalanceAndReverseOnEditDelete() = runBlocking {
     val custId = engine.saveCustomer(0L, "سليمان", "0777000111", "", 500.0)
     val tx1 = engine.addCustomerTransaction(custId, 1500.0, isDebit = true, description = "بضاعة آجل", dateMillis = 1000L)
