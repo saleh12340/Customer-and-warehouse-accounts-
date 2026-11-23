@@ -105,6 +105,25 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       .toString()
   }
 
+  private fun expectedInventoryUnitFactor(rawConfig: String, unitLabel: String): Int? {
+    val label = unitLabel.trim()
+    if (label.isBlank()) return null
+    val config = runCatching { JSONObject(rawConfig) }.getOrNull()
+      ?: return if (rawConfig.trim() == label) 1 else null
+    val base = config.optString("base", "").trim()
+    if (label == base && base.isNotBlank()) return 1
+    val packName = config.optString("packName", "").trim()
+    val packSize = config.optInt("packSize", 1)
+    if (label == packName && packName.isNotBlank() && packSize > 0) return packSize
+    val cartonName = config.optString("cartonName", "").trim()
+    val cartonCount = config.optInt("cartonPacks", 1)
+    if (label == cartonName && cartonName.isNotBlank() && cartonCount > 0) {
+      val factor = if (packName.isNotBlank()) packSize.toLong() * cartonCount else cartonCount.toLong()
+      return factor.takeIf { it in 1..1_000_000 }?.toInt()
+    }
+    return null
+  }
+
   private fun sanitizeMoney(value: Double, label: String): Double {
     require(value.isFinite() && abs(value) <= GroceryViewModel.MAX_MONETARY_AMOUNT) { "$label خارج النطاق المسموح" }
     return GroceryViewModel.roundMoney(value)
@@ -471,7 +490,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         require(line.unitPrice.isFinite() && line.unitPrice >= 0.0) { "سعر شراء غير صحيح للصنف: $cleanName" }
 
         val baseQuantity = line.stockQuantity.takeIf { it > 0 } ?: Math.multiplyExact(line.quantity, line.unitFactor.coerceAtLeast(1))
-        val baseUnitPrice = GroceryViewModel.roundMoney(line.unitPrice / line.unitFactor.coerceAtLeast(1))
+        val baseUnitPrice = GroceryViewModel.roundUnitPrice(line.unitPrice / line.unitFactor.coerceAtLeast(1))
         val existing = inventoryDao.getItemByName(cleanName)
         val targetId = if (existing != null) {
           val newQuantity = Math.addExact(existing.quantity, baseQuantity)
@@ -649,6 +668,17 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     }
 
     return database.withTransaction {
+      if (invoiceId <= 0L) {
+        normalizedItems.filter { it.itemId > 0L }.forEach { line ->
+          val stockItem = inventoryDao.getItemById(line.itemId)
+            ?: error("الصنف غير موجود في المخزن: ${line.itemName}")
+          if (line.unitLabel.isBlank() && line.unitFactor == 1) return@forEach
+          val expectedFactor = expectedInventoryUnitFactor(stockItem.unit, line.unitLabel)
+          require(expectedFactor != null && expectedFactor == line.unitFactor) {
+            "وحدة الصنف «${line.unitLabel}» غير مطابقة لتعريف «${line.itemName}». راجع بيانات الصنف؛ يجب أن يكون معامل التحويل صحيحاً قبل حفظ الفاتورة."
+          }
+        }
+      }
       val duplicate = invoiceDao.getInvoiceByNumber(cleanNumber)
       check(duplicate == null || duplicate.id == invoiceId) { "رقم الفاتورة مستخدم من قبل" }
 
@@ -706,7 +736,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
           item.copy(costPriceAtSale = capturedCost)
         } else {
           val factor = item.unitFactor.coerceAtLeast(1)
-          val baseUnitPrice = GroceryViewModel.roundMoney(item.unitPrice / factor)
+          val baseUnitPrice = GroceryViewModel.roundUnitPrice(item.unitPrice / factor)
           val resolvedItemId = if (item.itemId > 0L) {
             check(inventoryDao.getItemById(item.itemId) != null) {
               "الصنف غير موجود في المخزن: ${item.itemName}"
@@ -746,7 +776,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
             val stockItem = inventoryDao.getItemById(item.itemId)
               ?: error("الصنف غير موجود: ${item.itemName}")
             val factor = item.unitFactor.coerceAtLeast(1)
-            val baseUnitPrice = GroceryViewModel.roundMoney(item.unitPrice / factor)
+            val baseUnitPrice = GroceryViewModel.roundUnitPrice(item.unitPrice / factor)
             inventoryDao.updateItem(stockItem.copy(purchasePrice = baseUnitPrice))
           }
         }
