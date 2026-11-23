@@ -2222,7 +2222,7 @@ function parseInventoryUnitConfig(raw) {
       const cartonName = String(v.cartonName || '').trim();
       const packSize = Math.max(1, Number(v.packSize) || 1);
       const cartonPacks = Math.max(1, Number(v.cartonPacks) || 1);
-      const units = Array.isArray(v.units)
+      const units = Array.isArray(v.units) && v.units.length > 0
         ? v.units.map(u => ({ name: String(u?.name || '').trim(), factorToSmaller: Number(u?.factorToSmaller) }))
             .filter(u => u.name && Number.isInteger(u.factorToSmaller) && u.factorToSmaller > 0)
         : [
