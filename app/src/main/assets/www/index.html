@@ -463,17 +463,16 @@
           <input type="text" id="inventory-quick-unit" class="ruled-cell" placeholder="حبة / كرتون">
         </div>
         <div class="unit-config-panel">
-          <small>تفريد العبوات (اختياري): عدد الوحدات الأساسية داخل العبوة</small>
-          <small>مثال: كرتون 48 حبة = اكتب كرتون ثم 48 واترك الكبرى فارغة. أو 6 باكت × 24 حبة = باكت 24 ثم كرتون 6.</small>
+          <small>تفريد وحدات الصنف من وحدة الشراء بالجملة إلى أصغر وحدة للمخزون.</small>
           <div class="ruled-input-row grid-unit-config">
-            <input type="text" id="inventory-quick-pack-name" class="ruled-cell" placeholder="اسم الوحدة الوسطى مثل باكت">
-            <input type="number" id="inventory-quick-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="حبة/باكت">
+            <input type="text" id="inventory-quick-carton-name" class="ruled-cell" placeholder="وحدة الشراء الكبرى: كرتون">
+            <input type="number" id="inventory-quick-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الوسطى في الكرتون">
           </div>
           <div class="ruled-input-row grid-unit-config">
-            <input type="text" id="inventory-quick-carton-name" class="ruled-cell" placeholder="اسم العبوة الكبرى مثل كرتون">
-            <input type="number" id="inventory-quick-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="باكت/كرتون">
+            <input type="text" id="inventory-quick-pack-name" class="ruled-cell" placeholder="الوحدة الوسطى: باكت">
+            <input type="number" id="inventory-quick-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الصغيرة في الباكت">
           </div>
-          <small id="inventory-quick-unit-preview" class="muted-text">مثال: 6 باكت × 24 حبة = 144 حبة في الكرتون</small>
+          <small id="inventory-quick-unit-preview" class="muted-text">مثال: 1 كرتون = 6 باكت = 144 حبة</small>
         </div>
         <div class="btn-row" style="margin-top:7px;">
           <button type="button" class="btn btn-primary btn-sm" onclick="submitInventoryQuickAdd()">حفظ الصنف</button>
@@ -507,27 +506,26 @@
 
           <div class="ruled-grid-labels grid-inv-3" style="margin-top:6px;">
             <span>سعر البيع *</span>
-            <span>الوحدة</span>
+            <span>أصغر وحدة (للمخزون)</span>
             <span>الفئة</span>
           </div>
           <div class="ruled-input-row grid-inv-3">
             <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-sell" class="ruled-cell cell-num" placeholder="سعر البيع" min="0" step="0.01" oninput="updateMarginPreview()">
-            <input type="text" id="inv-item-form-unit" class="ruled-cell" placeholder="حبة / كرتون">
+            <input type="text" id="inv-item-form-unit" class="ruled-cell" placeholder="حبة / وحدة مفردة">
             <input type="text" id="inv-item-form-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
           </div>
           <div class="unit-config-panel">
-            <strong>تفريد وحدات الصنف</strong>
-            <small>الوحدة الأساسية هي التي يحسب بها رصيد المخزن. اكتب عدد الوحدات الأساسية في الوحدة الوسطى، ثم عدد الوحدات الوسطى في الكرتون.</small>
-            <small>مثال: كرتون 48 حبة = الوحدة الوسطى كرتون والعدد 48. أو 6 باكت × 24 حبة = باكت 24 ثم كرتون 6.</small>
+            <strong>تفريد وحدات الصنف (من وحدة الشراء الكبرى إلى الأصغر)</strong>
+            <small>اكتب وحدة الشراء بالجملة أولاً مثل الكرتون، ثم عدد الوحدات الوسطى داخله. بعد ذلك اكتب الوحدة الوسطى وعدد الوحدات الصغيرة داخلها. رصيد المخزون يُحسب بأصغر وحدة.</small>
+            <div class="ruled-input-row grid-unit-config">
+              <input type="text" id="inv-item-form-carton-name" class="ruled-cell" placeholder="وحدة الشراء الكبرى: كرتون">
+              <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الوسطى في الكرتون">
+            </div>
             <div class="ruled-input-row grid-unit-config">
               <input type="text" id="inv-item-form-pack-name" class="ruled-cell" placeholder="الوحدة الوسطى: باكت">
-              <input type="number" id="inv-item-form-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الحبات في الباكت">
+              <input type="number" id="inv-item-form-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الصغيرة في الباكت">
             </div>
-            <div class="ruled-input-row grid-unit-config">
-              <input type="text" id="inv-item-form-carton-name" class="ruled-cell" placeholder="الوحدة الكبرى: كرتون">
-              <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الباكتات في الكرتون">
-            </div>
-            <small id="inv-item-form-unit-preview" class="muted-text">مثال: 6 باكت × 24 حبة = 144 حبة في الكرتون</small>
+            <small id="inv-item-form-unit-preview" class="muted-text">مثال: 1 كرتون = 6 باكت = 144 حبة</small>
           </div>
 
           <div id="inventory-margin-preview" class="info-pill">الربح المتوقع للوحدة: 0</div>
