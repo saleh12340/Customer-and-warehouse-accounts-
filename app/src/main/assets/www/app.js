@@ -2287,6 +2287,17 @@ function getInventoryUnitOptions(item) {
   const invoiceType = document.getElementById('inv-type')?.value || 'CASH';
   return invoiceType === 'PURCHASE' ? options.reverse() : options;
 }
+function getInvoiceUnitOptionsForRow(item, row) {
+  const options = getInventoryUnitOptions(item);
+  // Keep a historical unit/factor visible while editing an older invoice even
+  // if the item's current unit definition has since been changed.
+  if (row?.unitName && Number(row.unitFactor) > 0 &&
+      !options.some(option => option.name === row.unitName && option.factor === Number(row.unitFactor))) {
+    options.push({ name: row.unitName, factor: Number(row.unitFactor) });
+  }
+  return options;
+}
+
 function createBlankBatchRow() {
   return { itemId: 0, itemName: '', qty: '1', unitPrice: '', total: '', unitName: '', unitFactor: 1, lastEdited: 'TOTAL' };
 }
@@ -2653,7 +2664,7 @@ function updateBatchUnitOptions(idx) {
   if (!row || !select) return;
   const item = inventoryData.find(x => x.id === row.itemId) ||
     inventoryData.find(x => (x.name || '').trim().toLowerCase() === (row.itemName || '').trim().toLowerCase());
-  const options = getInventoryUnitOptions(item);
+  const options = getInvoiceUnitOptionsForRow(item, row);
   select.innerHTML = options.map(o => '<option value="' + escapeHtml(o.name) + '">' + escapeHtml(o.name) + '</option>').join('');
   const selected = options.find(o => o.name === row.unitName && o.factor === row.unitFactor) || options[0];
   row.unitName = selected.name; row.unitFactor = selected.factor; select.value = selected.name;
@@ -2663,7 +2674,7 @@ function onBatchRowUnitChange(idx, name) {
   const row = batchEntryRows[idx]; if (!row) return;
   const item = inventoryData.find(x => x.id === row.itemId) ||
     inventoryData.find(x => (x.name || '').trim().toLowerCase() === (row.itemName || '').trim().toLowerCase());
-  const option = getInventoryUnitOptions(item).find(o => o.name === name); if (!option) return;
+  const option = getInvoiceUnitOptionsForRow(item, row).find(o => o.name === name); if (!option) return;
   row.unitName = option.name; row.unitFactor = option.factor;
   const basePrice = item ? ((document.getElementById('inv-type').value === 'PURCHASE') ? item.purchasePrice : item.sellingPrice) : 0;
   if (basePrice > 0) {
@@ -2707,7 +2718,7 @@ function onBatchRowNameInput(idx, val) {
   const totalEl = document.getElementById(`batch-total-${idx}`);
   if (matched) {
     row.itemId = matched.id;
-    const options = getInventoryUnitOptions(matched);
+    const options = getInvoiceUnitOptionsForRow(matched, row);
     const selected = options.find(o => o.name === row.unitName && o.factor === row.unitFactor) || options[0];
     row.unitName = selected.name;
     row.unitFactor = selected.factor;
