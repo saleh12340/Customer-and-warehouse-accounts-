@@ -158,7 +158,7 @@ const SUGGESTION_LIST_IDS = {
   units: 'suggest-units', categories: 'suggest-categories',
   customerDescriptions: 'suggest-customer-descriptions', supplierDescriptions: 'suggest-supplier-descriptions'
 };
-const DEFAULT_UNIT_SUGGESTIONS = ['كيس', 'نص كيس', 'دزن', 'حبة'];
+const DEFAULT_UNIT_SUGGESTIONS = ['حبة', 'قرطاس', 'كرتون', 'باكت', 'شدة', 'كيس', 'نص كيس', 'دزن'];
 const CUSTOM_UNIT_STORAGE_KEY = 'alaziy_custom_inventory_units_v1';
 const UNIT_SELECT_IDS = [
   'inventory-quick-unit', 'inventory-quick-carton-name', 'inventory-quick-pack-name',
@@ -237,8 +237,8 @@ function saveManagedUnit(){
  const wasEditing=Boolean(editingManagedUnitName); cancelManagedUnitEdit(); refreshUnitSelectOptions(document); renderManagedUnits();
  showToast(wasEditing?'تم تعديل الوحدة':'تمت إضافة الوحدة','success');
 }
-function editManagedUnitAt(index){const custom=readCustomInventoryUnits();const name=custom[index-DEFAULT_UNIT_SUGGESTIONS.length];if(name===undefined)return;editingManagedUnitName=name;const input=document.getElementById('unit-manager-name');input.value=name;document.getElementById('unit-editor-title').textContent='تعديل الوحدة';document.getElementById('unit-manager-save').textContent='حفظ التعديل';document.getElementById('unit-manager-cancel')?.classList.remove('hidden');input.focus();}
-function cancelManagedUnitEdit(){editingManagedUnitName='';const input=document.getElementById('unit-manager-name');if(input)input.value='';const title=document.getElementById('unit-editor-title');if(title)title.textContent='إضافة وحدة جديدة';const save=document.getElementById('unit-manager-save');if(save)save.textContent='إضافة الوحدة';document.getElementById('unit-manager-cancel')?.classList.add('hidden');}
+function editManagedUnitAt(index){const custom=readCustomInventoryUnits();const name=custom[index-DEFAULT_UNIT_SUGGESTIONS.length];if(name===undefined)return;editingManagedUnitName=name;const input=document.getElementById('unit-manager-name');input.value=name;document.getElementById('unit-editor-title').textContent='تعديل اسم الوحدة';document.getElementById('unit-manager-save').textContent='حفظ التعديل';document.getElementById('unit-manager-cancel')?.classList.remove('hidden');input.focus();}
+function cancelManagedUnitEdit(){editingManagedUnitName='';const input=document.getElementById('unit-manager-name');if(input)input.value='';const title=document.getElementById('unit-editor-title');if(title)title.textContent='إضافة وحدة جديدة';const save=document.getElementById('unit-manager-save');if(save)save.textContent='إضافة الاسم';document.getElementById('unit-manager-cancel')?.classList.add('hidden');}
 function deleteManagedUnitAt(index){const custom=readCustomInventoryUnits();const name=custom[index-DEFAULT_UNIT_SUGGESTIONS.length];if(name===undefined)return;const next=custom.filter((_,i)=>i!==index-DEFAULT_UNIT_SUGGESTIONS.length);try{localStorage.setItem(CUSTOM_UNIT_STORAGE_KEY,JSON.stringify(next));}catch(_){showToast('تعذر حذف الوحدة','error');return;}if(normalizeSuggestionText(editingManagedUnitName)===normalizeSuggestionText(name))cancelManagedUnitEdit();refreshUnitSelectOptions(document);renderManagedUnits();showToast('تم حذف الوحدة من قائمة الوحدات','success');}
 
 const MAX_CONTEXT_SUGGESTIONS = 3;
