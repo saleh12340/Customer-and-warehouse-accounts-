@@ -2440,6 +2440,7 @@ function openCreateInvoice(presetType, presetPartyId) {
   setInvoiceSubmitBusy(false);
   document.getElementById('invoice-screen-title').textContent = 'إصدار فاتورة جديدة';
   document.getElementById('btn-save-invoice').textContent = 'حفظ الفاتورة';
+  document.getElementById('btn-delete-editing-invoice')?.classList.add('hidden');
   document.getElementById('invoice-saved-badge').classList.add('hidden');
   document.getElementById('inv-type').value = presetType || settingsData.defaultInvoiceType || 'CASH';
   lastInvoiceType = document.getElementById('inv-type').value;
@@ -2507,6 +2508,7 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
 
     document.getElementById('invoice-screen-title').textContent = 'تعديل الفاتورة';
     document.getElementById('btn-save-invoice').textContent = 'حفظ التعديل';
+    document.getElementById('btn-delete-editing-invoice')?.classList.remove('hidden');
     document.getElementById('invoice-saved-badge').classList.remove('hidden');
     document.getElementById('inv-number').value = inv.invoiceNumber;
     toggleMultiStockPicker(false);
@@ -2542,6 +2544,35 @@ window.onInvoiceLoadedForEdit = function (jsonStr) {
     console.error(e);
   }
 };
+
+function deleteEditingInvoice() {
+  const invoiceId = Number(editingInvoiceId) || 0;
+  if (!window.Android || invoiceId <= 0) return;
+  const confirmed = window.confirm(
+    'هل تريد حذف الفاتورة المحفوظة نهائياً؟\\nسيتم عكس أثرها على المخزون ورصيد العميل أو المورد. ولن تتأثر الفواتير الأخرى.'
+  );
+  if (!confirmed) return;
+
+  const deleteButton = document.getElementById('btn-delete-editing-invoice');
+  if (deleteButton) deleteButton.disabled = true;
+  const reqId = nextReqId(
+    () => {
+      editingInvoiceId = 0;
+      invoiceDirty = false;
+      cartItems = [];
+      if (deleteButton) {
+        deleteButton.disabled = false;
+        deleteButton.classList.add('hidden');
+      }
+      switchView('invoices', false);
+      if (window.Android.getInvoices) window.Android.getInvoices();
+    },
+    () => {
+      if (deleteButton) deleteButton.disabled = false;
+    }
+  );
+  window.Android.deleteInvoice(invoiceId, reqId);
+}
 
 function setInvoiceType(type) {
   const select = document.getElementById('inv-type');
