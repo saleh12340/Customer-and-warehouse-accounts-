@@ -477,6 +477,8 @@
               <input type="number" id="inventory-quick-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الأصغر داخلها">
             </div>
           </details>
+          <div id="inventory-quick-extra-units" class="unit-level-list"></div>
+          <button type="button" class="btn btn-outline btn-sm unit-level-add" onclick="addInventoryUnitLevel('inventory-quick')">+ إضافة مستوى وحدة آخر</button>
           <small id="inventory-quick-unit-preview" class="muted-text">مثال: كل قرطاس يحتوي على 24 حبة</small>
         </div>
         <div class="btn-row" style="margin-top:7px;">
@@ -533,7 +535,9 @@
                 <input type="number" id="inv-item-form-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الأصغر داخلها">
               </div>
             </details>
-            <small id="inv-item-form-unit-preview" class="muted-text">مثال: 1 كرتون = 24 حبة</small>
+            <div id="inv-item-form-extra-units" class="unit-level-list"></div>
+            <button type="button" class="btn btn-outline btn-sm unit-level-add" onclick="addInventoryUnitLevel('inv-item-form')">+ إضافة مستوى وحدة آخر</button>
+            <small id="inv-item-form-unit-preview" class="muted-text">مثال: كل كرتون يحتوي على 24 حبة</small>
           </div>
 
           <div id="inventory-margin-preview" class="info-pill">الربح المتوقع للوحدة: 0</div>
