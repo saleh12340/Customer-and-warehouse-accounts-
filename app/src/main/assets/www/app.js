@@ -159,6 +159,97 @@ const SUGGESTION_LIST_IDS = {
   customerDescriptions: 'suggest-customer-descriptions', supplierDescriptions: 'suggest-supplier-descriptions'
 };
 const DEFAULT_UNIT_SUGGESTIONS = ['حبة', 'نص كيس', 'كيس', 'نص قطمة', 'قطمة', 'كرتون', 'شدة', 'دزة', 'باكت', 'كيلو', 'جرام', 'لتر', 'صندوق'];
+const CUSTOM_UNIT_STORAGE_KEY = 'alaziy_custom_inventory_units_v1';
+const UNIT_SELECT_IDS = [
+  'inventory-quick-unit', 'inventory-quick-carton-name', 'inventory-quick-pack-name',
+  'inv-item-form-unit', 'inv-item-form-carton-name', 'inv-item-form-pack-name',
+  'set-default-inventory-unit'
+];
+function readCustomInventoryUnits() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CUSTOM_UNIT_STORAGE_KEY) || '[]');
+    return Array.isArray(stored) ? stored.filter(x => typeof x === 'string' && x.trim()) : [];
+  } catch (_) { return []; }
+}
+function getAvailableInventoryUnits() {
+  const values = [...DEFAULT_UNIT_SUGGESTIONS, settingsData?.defaultInventoryUnit];
+  (inventoryData || []).forEach(item => values.push(item.unit, item.baseUnit, item.packName, item.cartonName));
+  values.push(...readCustomInventoryUnits());
+  return uniqueSuggestionValues(values);
+}
+function refreshUnitSelectOptions(target) {
+  const selects = target instanceof HTMLSelectElement
+    ? [target]
+    : (target?.querySelectorAll ? [...target.querySelectorAll('select[data-unit-select]')] : []);
+  selects.forEach(select => {
+    const current = String(select.value || '').trim();
+    const units = getAvailableInventoryUnits();
+    select.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'اختر الوحدة';
+    select.appendChild(placeholder);
+    units.forEach(unit => {
+      const option = document.createElement('option');
+      option.value = unit;
+      option.textContent = unit;
+      select.appendChild(option);
+    });
+    if (current && !units.some(unit => normalizeSuggestionText(unit) === normalizeSuggestionText(current))) {
+      const legacy = document.createElement('option');
+      legacy.value = current;
+      legacy.textContent = current;
+      select.appendChild(legacy);
+    }
+    const addOption = document.createElement('option');
+    addOption.value = '__ADD_NEW_UNIT__';
+    addOption.textContent = '＋ إضافة وحدة جديدة';
+    select.appendChild(addOption);
+    select.value = current;
+    select.dataset.previousValue = current;
+  });
+}
+function initializeUnitSelectors() {
+  refreshUnitSelectOptions(document);
+  document.addEventListener('focusin', event => {
+    if (event.target?.matches?.('select[data-unit-select]')) refreshUnitSelectOptions(event.target);
+  });
+}
+function handleUnitSelect(select) {
+  if (!select || !select.matches('select[data-unit-select]')) return;
+  if (select.value === '__ADD_NEW_UNIT__') {
+    const previous = select.dataset.previousValue || '';
+    const entered = window.prompt('اكتب اسم الوحدة الجديدة:');
+    const name = String(entered || '').trim();
+    if (!name) {
+      select.value = previous;
+      return;
+    }
+    const units = getAvailableInventoryUnits();
+    const existing = units.find(unit => normalizeSuggestionText(unit) === normalizeSuggestionText(name));
+    const chosen = existing || name;
+    if (!existing) {
+      const custom = readCustomInventoryUnits();
+      custom.push(name);
+      try { localStorage.setItem(CUSTOM_UNIT_STORAGE_KEY, JSON.stringify(uniqueSuggestionValues(custom))); }
+      catch (_) {
+        showToast('تعذر حفظ الوحدة الجديدة على هذا الجهاز', 'error');
+        select.value = previous;
+        return;
+      }
+    }
+    refreshUnitSelectOptions(document);
+    select.value = chosen;
+    select.dataset.previousValue = chosen;
+    select.dispatchEvent(new Event('input', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    showToast(existing ? 'الوحدة موجودة وتم اختيارها' : 'تمت إضافة الوحدة وأصبحت متاحة في القوائم', 'success');
+    return;
+  }
+  select.dataset.previousValue = select.value || '';
+  select.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 const MAX_CONTEXT_SUGGESTIONS = 3;
 const MIN_CONTEXT_QUERY_LENGTH = 2;
 let activeSuggestionInput = null;
@@ -369,6 +460,7 @@ function initializeContextSuggestions() {
   document.getElementById('main-scroll')?.addEventListener('scroll', positionContextSuggestions, { passive: true });
 }
 document.addEventListener('DOMContentLoaded', initializeContextSuggestions);
+document.addEventListener('DOMContentLoaded', initializeUnitSelectors);
 
 let customerFilter = 'ALL';
 let inventoryFilter = 'ALL';
