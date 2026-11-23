@@ -1662,6 +1662,7 @@ function shareSupplierWhatsApp() {
 window.onInventoryData = function (jsonStr) {
   try {
     inventoryData = JSON.parse(jsonStr);
+    refreshUnitSelectOptions(document);
     refreshContextSuggestions();
     populateInventoryCategoryFilter();
     populateInventoryCategorySuggestions();
@@ -1802,6 +1803,7 @@ function toggleInventoryQuickAdd(forceState) {
   const show = typeof forceState === 'boolean' ? forceState : panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !show);
   if (show) {
+    refreshUnitSelectOptions(document);
     const cat = document.getElementById('inventory-quick-category');
     const unit = document.getElementById('inventory-quick-unit');
     if (cat && !cat.value) cat.value = settingsData.defaultInventoryCategory || 'مواد غذائية';
@@ -1955,6 +1957,7 @@ window.onInventoryHistoryData = function (jsonStr) {
 };
 
 function openInventoryForm(itemId) {
+  refreshUnitSelectOptions(document);
   editingInventoryId = itemId || 0;
   const isEdit = editingInventoryId > 0;
   document.getElementById('inventory-form-title').textContent = isEdit ? 'تعديل بيانات الصنف' : 'إضافة صنف جديد للمخزن';
@@ -4141,6 +4144,7 @@ window.onSettingsData = function (jsonStr) {
   try {
     const incoming = JSON.parse(jsonStr);
     settingsData = { ...settingsData, ...incoming };
+    refreshUnitSelectOptions(document);
     appCurrency = settingsData.currency || appCurrency;
     storeName = settingsData.storeName || storeName;
     document.getElementById('app-title').textContent = storeName;
