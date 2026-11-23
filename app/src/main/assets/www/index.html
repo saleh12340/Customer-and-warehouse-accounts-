@@ -447,6 +447,15 @@
       </div>
       <div id="inventory-quick-add" class="card compact-card hidden">
         <div class="card-title-row"><strong>إضافة صنف جديد بسرعة</strong><span class="muted-text">يُحفظ مباشرة في المخزن</span></div>
+        <div class="ruled-grid-labels grid-quick-stock">
+          <span>اسم الصنف *</span><span>الرصيد</span><span>سعر الشراء</span><span>سعر البيع</span>
+        </div>
+        <div class="ruled-input-row grid-quick-stock">
+          <input type="text" id="inventory-quick-name" class="ruled-cell" placeholder="اسم الصنف">
+          <input type="number" lang="en" dir="ltr" inputmode="numeric" id="inventory-quick-qty" class="ruled-cell cell-num" placeholder="0" min="0" value="1">
+          <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inventory-quick-buy" class="ruled-cell cell-num" placeholder="شراء" min="0" step="0.01">
+          <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inventory-quick-sell" class="ruled-cell cell-num" placeholder="بيع" min="0" step="0.01">
+        </div>
         <div class="ruled-grid-labels grid-quick-stock" style="margin-top:5px;">
           <span>الفئة</span><span>الوحدة الأصغر</span>
         </div>
