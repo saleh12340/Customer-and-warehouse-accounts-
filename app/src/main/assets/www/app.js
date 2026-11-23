@@ -2229,6 +2229,13 @@ function serializeInventoryUnitConfig(prefix) {
   if ((packName && packSize < 1) || (cartonName && cartonPacks < 1)) {
     showToast('أدخل عدد الوحدات داخل العبوة بشكل صحيح', 'error'); return null;
   }
+  const configuredNames = [base, packName, cartonName].filter(Boolean).map(normalizeSuggestionText);
+  if (new Set(configuredNames).size !== configuredNames.length) {
+    showToast('يجب أن يكون لكل مستوى وحدة اسم مختلف', 'error'); return null;
+  }
+  if (!base.trim()) {
+    showToast('حدد أصغر وحدة للمخزون أولاً', 'error'); return null;
+  }
   return JSON.stringify({ base, packName, packSize: packName ? packSize : 1, cartonName, cartonPacks: cartonName ? cartonPacks : 1 });
 }
 function fillInventoryUnitConfig(prefix, raw) {
