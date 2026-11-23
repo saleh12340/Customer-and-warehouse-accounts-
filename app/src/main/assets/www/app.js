@@ -231,7 +231,7 @@ function saveManagedUnit(){
  if(!name){showToast('اكتب اسم الوحدة أولاً','warning');input?.focus();return;}
  if(DEFAULT_UNIT_SUGGESTIONS.some(x=>normalizeSuggestionText(x)===normalizeSuggestionText(name))){showToast('هذه الوحدة من الوحدات الأساسية','warning');return;}
  const custom=readCustomInventoryUnits();
- if(custom.some(x=>normalizeSuggestionText(x)===normalizeSuggestionText(name))&&!editingManagedUnitName){showToast('هذه الوحدة موجودة بالفعل','warning');return;}
+ if(custom.some(x=>normalizeSuggestionText(x)===normalizeSuggestionText(name)&&normalizeSuggestionText(x)!==normalizeSuggestionText(editingManagedUnitName))){showToast('هذه الوحدة موجودة بالفعل','warning');return;}
  const next=uniqueSuggestionValues(editingManagedUnitName?custom.map(x=>normalizeSuggestionText(x)===normalizeSuggestionText(editingManagedUnitName)?name:x):[...custom,name]);
  try{localStorage.setItem(CUSTOM_UNIT_STORAGE_KEY,JSON.stringify(next));}catch(_){showToast('تعذر حفظ الوحدات على هذا الجهاز','error');return;}
  const wasEditing=Boolean(editingManagedUnitName); cancelManagedUnitEdit(); refreshUnitSelectOptions(document); renderManagedUnits();
