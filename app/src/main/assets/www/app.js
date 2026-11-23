@@ -1756,6 +1756,7 @@ function renderInventoryList() {
 
   container.innerHTML = filtered.map(i => {
     const qty = Number(i.quantity) || 0;
+    const baseUnit = parseInventoryUnitConfig(i.unit).base || 'حبة';
     const badge = qty <= 0
       ? '<span class="badge badge-red">نافذ</span>'
       : (qty <= lowThreshold ? '<span class="badge badge-amber">منخفض</span>' : '<span class="badge badge-green">متوفر</span>');
@@ -1771,15 +1772,15 @@ function renderInventoryList() {
       <article class="inventory-row">
         <div class="inventory-row-main">
           <div class="inventory-item-title"><strong>${escapeHtml(i.name)}</strong>${badge}</div>
-          <span class="inventory-item-sub">${escapeHtml(i.category || 'عام')} · ${escapeHtml(parseInventoryUnitConfig(i.unit).base || 'حبة')}</span>
+          <span class="inventory-item-sub">${escapeHtml(i.category || 'عام')} · ${escapeHtml(baseUnit)}</span>
         </div>
         <div class="inventory-row-qty">
           <span class="inventory-meta-label">الرصيد</span>
           <strong class="${qty <= 0 ? 'text-danger' : (qty <= lowThreshold ? 'text-primary' : 'text-success')}">${fmtMoney(qty)}</strong>
         </div>
         <div class="inventory-row-prices">
-          <span>شراء <b>${fmtMoney(i.purchasePrice)}</b></span>
-          <span>بيع <b>${fmtMoney(i.sellingPrice)}</b></span>
+          <span>شراء / ${escapeHtml(baseUnit)} <b>${fmtMoney(i.purchasePrice)}</b></span>
+          <span>بيع / ${escapeHtml(baseUnit)} <b>${fmtMoney(i.sellingPrice)}</b></span>
         </div>
         <div class="inventory-row-actions">${actionsHtml}</div>
       </article>
@@ -1998,8 +1999,9 @@ function updateMarginPreview() {
   const buy = parseFloat(document.getElementById('inv-item-form-buy').value) || 0;
   const sell = parseFloat(document.getElementById('inv-item-form-sell').value) || 0;
   const diff = sell - buy;
+  const baseUnit = (document.getElementById('inv-item-form-unit')?.value || 'الوحدة الأصغر').trim();
   document.getElementById('inventory-margin-preview').textContent =
-    `الربح المتوقع للوحدة: ${fmtMoney(diff)} ${appCurrency}`;
+    `الربح المتوقع لكل ${baseUnit}: ${fmtMoney(diff)} ${appCurrency}`;
 }
 
 function submitInventoryForm() {
