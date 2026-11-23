@@ -2244,12 +2244,17 @@ function updateInventoryUnitPreview(prefix) {
   const carton = get('-carton-name'), cartonPacks = parseInt(get('-carton-packs'), 10) || 0;
   const el = document.getElementById(prefix + '-unit-preview'); if (!el) return;
   const parts = [];
+  // Use natural Arabic sentences instead of mixed RTL/LTR equations, which
+  // some Android WebViews visually reorder and make the unit relation appear reversed.
   if (carton && cartonPacks > 0) {
-    const factor = (pack && packSize > 0) ? packSize * cartonPacks : cartonPacks;
-    parts.push('1 ' + carton + ' = ' + cartonPacks + ' ' + (pack || base) + ' = ' + factor + ' ' + base);
+    const innerUnit = pack && packSize > 0 ? pack : base;
+    const innerCount = pack && packSize > 0 ? packSize : cartonPacks;
+    const totalBase = cartonPacks * innerCount;
+    parts.push('كل ' + carton + ' يحتوي على ' + cartonPacks + ' ' + innerUnit +
+      (pack && packSize > 0 ? '، أي ' + totalBase + ' ' + base : ''));
   }
-  if (pack && packSize > 0) parts.push('1 ' + pack + ' = ' + packSize + ' ' + base);
-  el.textContent = parts.join(' | ') || ('الوحدة الأساسية: ' + base);
+  if (pack && packSize > 0) parts.push('كل ' + pack + ' يحتوي على ' + packSize + ' ' + base);
+  el.textContent = parts.join(' — ') || ('الوحدة الأساسية للمخزون: ' + base);
 }
 document.addEventListener('input', event => {
   const id = event.target && event.target.id ? event.target.id : '';
