@@ -1837,6 +1837,8 @@ function submitInventoryQuickAdd() {
       const el = document.getElementById('inventory-quick-' + key);
       if (el) el.value = '';
     });
+    renderInventoryUnitExtraRows('inventory-quick', []);
+    updateInventoryUnitPreview('inventory-quick');
     toggleInventoryQuickAdd(false);
     showToast('تمت إضافة الصنف إلى المخزن ✓', 'success');
     renderInventoryList();
