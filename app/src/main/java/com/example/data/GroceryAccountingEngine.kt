@@ -108,8 +108,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       .put("units", units)
       .put("packName", "")
       .put("packSize", 1)
-      .put("cartonName", "")
-      .put("cartonPacks", 1)
+      .put("cartonName", if (factor > 1) label else "")
+      .put("cartonPacks", if (factor > 1) factor else 1)
       .toString()
   }
 
