@@ -450,6 +450,46 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
+  fun purchaseInvoiceEditAndDeleteRestorePreviousInventoryCostAndStock() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد تكلفة الشراء", "770000029", "", 0.0)
+    val itemId = engine.saveInventoryItem(0L, "صنف تكلفة متغيرة", "مواد غذائية", 10, 80.0, 120.0, "حبة")
+
+    val firstPurchaseId = engine.saveInvoice(
+      0L, "COST-RESTORE-PUR-001", "PURCHASE", supplierId, "مورد تكلفة الشراء",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف تكلفة متغيرة", 2, 100.0, 200.0, 2, "حبة", 1)),
+      200.0
+    )
+    assertEquals(12, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(100.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.000001)
+    assertEquals(80.0, db.invoiceDao().getInvoiceWithItems(firstPurchaseId)!!.items.single().costPriceAtSale!!, 0.000001)
+
+    val secondPurchaseId = engine.saveInvoice(
+      0L, "COST-RESTORE-PUR-002", "PURCHASE", supplierId, "مورد تكلفة الشراء",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف تكلفة متغيرة", 1, 120.0, 120.0, 1, "حبة", 1)),
+      120.0
+    )
+    assertEquals(13, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(120.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.000001)
+
+    engine.saveInvoice(
+      secondPurchaseId, "COST-RESTORE-PUR-002", "PURCHASE", supplierId, "مورد تكلفة الشراء",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف تكلفة متغيرة", 2, 130.0, 260.0, 2, "حبة", 1)),
+      260.0
+    )
+    assertEquals(14, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(130.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.000001)
+    assertEquals(100.0, db.invoiceDao().getInvoiceWithItems(secondPurchaseId)!!.items.single().costPriceAtSale!!, 0.000001)
+
+    engine.deleteInvoice(secondPurchaseId)
+    assertEquals(12, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(100.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.000001)
+
+    engine.deleteInvoice(firstPurchaseId)
+    assertEquals(10, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(80.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.000001)
+  }
+
+  @Test
   fun customerAndSupplierTransactionsComputeRunningBalanceAndReverseOnEditDelete() = runBlocking {
     val custId = engine.saveCustomer(0L, "سليمان", "0777000111", "", 500.0)
     val tx1 = engine.addCustomerTransaction(custId, 1500.0, isDebit = true, description = "بضاعة آجل", dateMillis = 1000L)
