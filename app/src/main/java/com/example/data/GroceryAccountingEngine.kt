@@ -895,29 +895,26 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         } else {
           val factor = item.unitFactor.coerceAtLeast(1)
           val baseUnitPrice = item.unitPrice / factor
-          val resolvedItemId = if (item.itemId > 0L) {
-            check(inventoryDao.getItemById(item.itemId) != null) {
-              "الصنف غير موجود في المخزن: ${item.itemName}"
-            }
-            item.itemId
+          val existingItem = if (item.itemId > 0L) {
+            inventoryDao.getItemById(item.itemId)
+              ?: error("الصنف غير موجود في المخزن: ${item.itemName}")
           } else {
-            val existing = inventoryDao.getItemByName(item.itemName)
-            if (existing != null) {
-              existing.id
-            } else {
-              inventoryDao.insertItem(
-                InventoryItemEntity(
-                  name = item.itemName,
-                  category = "عام",
-                  quantity = 0,
-                  purchasePrice = baseUnitPrice,
-                  sellingPrice = 0.0,
-                  unit = purchaseInventoryUnitConfig(item)
-                )
-              )
-            }
+            inventoryDao.getItemByName(item.itemName)
           }
-          item.copy(itemId = resolvedItemId)
+          // Keep the cost that existed immediately before this purchase so
+          // deleting or editing the purchase can restore the previous cost.
+          val previousPurchaseCost = existingItem?.purchasePrice ?: 0.0
+          val resolvedItemId = existingItem?.id ?: inventoryDao.insertItem(
+            InventoryItemEntity(
+              name = item.itemName,
+              category = "عام",
+              quantity = 0,
+              purchasePrice = baseUnitPrice,
+              sellingPrice = 0.0,
+              unit = purchaseInventoryUnitConfig(item)
+            )
+          )
+          item.copy(itemId = resolvedItemId, costPriceAtSale = previousPurchaseCost)
         }
       }
 
@@ -993,6 +990,32 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         val stockQuantity = oldItem.stockQuantity.takeIf { it > 0 } ?: oldItem.quantity
         check(inventoryDao.adjustQuantity(oldItem.itemId, oldStockSign * stockQuantity) == 1) {
           "تعذر عكس حركة المخزون للصنف ${oldItem.itemName}"
+        }
+      }
+    }
+    if (oldInvoice.type == "PURCHASE") {
+      val affectedItemIds = previous.items.map { it.itemId }.filter { it > 0L }.toSet()
+      if (affectedItemIds.isNotEmpty()) {
+        val remainingPurchaseInvoices = invoiceDao.getInvoicesSnapshot()
+          .filter { it.type == "PURCHASE" && it.id != oldInvoice.id }
+          .associateBy { it.id }
+        val remainingPurchaseLines = invoiceDao.getInvoiceItemsSnapshot()
+          .filter { it.itemId in affectedItemIds && it.invoiceId in remainingPurchaseInvoices.keys }
+        for (itemId in affectedItemIds) {
+          val latestRemainingPurchase = remainingPurchaseLines
+            .filter { it.itemId == itemId }
+            .maxWithOrNull(
+              compareBy<InvoiceItemEntity> { remainingPurchaseInvoices[it.invoiceId]?.date ?: 0L }
+                .thenBy { it.id }
+            )
+          val restoredCost = latestRemainingPurchase?.let { line ->
+            line.unitPrice / line.unitFactor.coerceAtLeast(1)
+          } ?: previous.items.firstOrNull { it.itemId == itemId }?.costPriceAtSale
+          if (restoredCost != null && restoredCost.isFinite() && restoredCost >= 0.0) {
+            val stockItem = inventoryDao.getItemById(itemId)
+              ?: error("الصنف غير موجود أثناء استعادة تكلفة الشراء")
+            inventoryDao.updateItem(stockItem.copy(purchasePrice = restoredCost))
+          }
         }
       }
     }
