@@ -126,7 +126,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     // New format: any number of nested units, ordered from the smallest
     // package to the largest. Each factor is the count of the previous level.
     val configuredUnits = config.optJSONArray("units")
-    if (configuredUnits != null) {
+    if (configuredUnits != null && configuredUnits.length() > 0) {
       var cumulativeFactor = 1L
       for (index in 0 until configuredUnits.length()) {
         val unit = configuredUnits.optJSONObject(index) ?: return null
