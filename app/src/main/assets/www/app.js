@@ -1250,8 +1250,7 @@ function renderSuppliersList() {
   const summary = document.getElementById('suppliers-summary-strip');
   const query = (document.getElementById('supplier-search').value || '').trim().toLowerCase();
   const showZero = settingsData.showZeroBalanceParties !== false;
-  const sortMode = settingsData.defaultCustomerSort || 'NAME';
-
+  // Match the customer directory: newest supplier first by auto-increment ID.
   const filtered = suppliersData.filter(s => {
     const matches = !query ||
       s.name.toLowerCase().includes(query) ||
@@ -1260,11 +1259,7 @@ function renderSuppliersList() {
     if (!matches) return false;
     if (!showZero && !query && Math.abs(s.balance) <= 0.01) return false;
     return true;
-  }).sort((a, b) => {
-    if (sortMode === 'BALANCE_DESC') return (Number(b.balance) || 0) - (Number(a.balance) || 0);
-    if (sortMode === 'BALANCE_ASC') return (Number(a.balance) || 0) - (Number(b.balance) || 0);
-    return (a.name || '').localeCompare(b.name || '', 'ar');
-  });
+  }).sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
 
   const totalPayable = filtered.reduce((sum, s) => sum + Math.max(s.balance, 0), 0);
   summary.innerHTML = `<span>الموردون: ${filtered.length}</span><span>المستحقات: ${fmtMoney(totalPayable)} ${escapeHtml(appCurrency)}</span>`;
@@ -1275,23 +1270,39 @@ function renderSuppliersList() {
   }
 
   container.innerHTML = filtered.map(s => {
-    const cls = s.balance > 0.01 ? 'text-danger' : (s.balance < -0.01 ? 'text-success' : 'text-dark');
-    const balLabel = s.balance > 0.01 ? `له ${fmtMoney(s.balance)}` : (s.balance < -0.01 ? `لنا ${fmtMoney(-s.balance)}` : 'مسدد 0');
+    const isPayable = Number(s.balance) > 0.01;
+    const isReceivable = Number(s.balance) < -0.01;
+    const balanceClass = isPayable ? 'customer-balance-debit' : (isReceivable ? 'customer-balance-credit' : 'customer-balance-settled');
+    const balanceLabel = isPayable ? 'له' : (isReceivable ? 'لنا' : 'رصيد مسدد');
+    const balanceValue = isPayable ? s.balance : (isReceivable ? -s.balance : 0);
     return `
-      <div class="list-item" onclick="openSupplierDetail(${s.id})">
-        <div>
-          <strong>${escapeHtml(s.name)}</strong>
-          <div class="muted-text">${escapeHtml(s.company || 'مورد')}${s.phone ? ' • ' + escapeHtml(s.phone) : ''}</div>
-        </div>
-        <div class="list-item-actions">
-          <span class="${cls}" style="font-weight:800; font-size:13.5px;">${balLabel} ${escapeHtml(appCurrency)}</span>
-          <div class="btn-row-compact">
-            <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openSupplierForm(${s.id})">تعديل</button>
-            <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteSupplierFromList(${s.id})">حذف</button>
-            <span class="badge badge-blue">كشف المورد</span>
+      <article class="customer-ledger-card" onclick="openSupplierDetail(${s.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSupplierDetail(${s.id})}">
+        <div class="customer-ledger-main">
+          <div class="customer-ledger-identity">
+            <span class="customer-ledger-avatar" aria-hidden="true">${escapeHtml((s.name || '؟').trim().charAt(0) || '؟')}</span>
+            <div class="customer-ledger-name-wrap">
+              <strong class="customer-ledger-name">${escapeHtml(s.name)}</strong>
+              <span class="customer-ledger-caption">${escapeHtml(s.company || 'مورد')}</span>
+            </div>
+          </div>
+          <div class="customer-ledger-balance ${balanceClass}">
+            <span class="customer-ledger-balance-label">${balanceLabel}</span>
+            <strong>${fmtMoney(balanceValue)}</strong>
+            <small>${escapeHtml(appCurrency)}</small>
           </div>
         </div>
-      </div>
+        <div class="customer-ledger-details">
+          <span class="customer-ledger-detail"><span aria-hidden="true">☎</span>${escapeHtml(s.phone || 'بدون جوال')}</span>
+          ${s.company ? `<span class="customer-ledger-detail customer-ledger-address"><span aria-hidden="true">▤</span>${escapeHtml(s.company)}</span>` : ''}
+        </div>
+        <div class="customer-ledger-footer">
+          <span class="customer-ledger-open">فتح كشف المورد <span aria-hidden="true">←</span></span>
+          <div class="customer-ledger-actions">
+            <button type="button" class="tbl-action-btn" onclick="event.stopPropagation(); openSupplierForm(${s.id})">تعديل</button>
+            <button type="button" class="tbl-action-btn del" onclick="event.stopPropagation(); deleteSupplierFromList(${s.id})">حذف</button>
+          </div>
+        </div>
+      </article>
     `;
   }).join('');
 }
@@ -2148,11 +2159,11 @@ function updateInventoryUnitPreview(prefix) {
   const carton = get('-carton-name'), cartonPacks = parseInt(get('-carton-packs'), 10) || 0;
   const el = document.getElementById(prefix + '-unit-preview'); if (!el) return;
   const parts = [];
-  if (pack && packSize > 0) parts.push('1 ' + pack + ' = ' + packSize + ' ' + base);
   if (carton && cartonPacks > 0) {
     const factor = (pack && packSize > 0) ? packSize * cartonPacks : cartonPacks;
     parts.push('1 ' + carton + ' = ' + cartonPacks + ' ' + (pack || base) + ' = ' + factor + ' ' + base);
   }
+  if (pack && packSize > 0) parts.push('1 ' + pack + ' = ' + packSize + ' ' + base);
   el.textContent = parts.join(' | ') || ('الوحدة الأساسية: ' + base);
 }
 document.addEventListener('input', event => {
@@ -2179,13 +2190,16 @@ function getInventoryUnitOptions(item) {
     { name: 'لتر', factor: 1 },
     { name: 'صندوق', factor: 1 }
   ];
+  // The stored purchase cost is per smallest stock unit. For purchases show
+  // the largest wholesale package first; its factor converts to base stock.
   const v = parseInventoryUnitConfig(item.unit), options = [{ name: v.base, factor: 1 }];
   if (v.packName && v.packSize > 1) options.push({ name: v.packName, factor: v.packSize });
   if (v.cartonName && v.cartonPacks > 0) {
     const factor = v.packName ? v.packSize * v.cartonPacks : v.cartonPacks;
     if (factor > 1) options.push({ name: v.cartonName, factor });
   }
-  return options;
+  const invoiceType = document.getElementById('inv-type')?.value || 'CASH';
+  return invoiceType === 'PURCHASE' ? options.reverse() : options;
 }
 function createBlankBatchRow() {
   return { itemId: 0, itemName: '', qty: '1', unitPrice: '', total: '', unitName: '', unitFactor: 1, lastEdited: 'TOTAL' };
@@ -2886,9 +2900,10 @@ function addInventoryItemQuick(itemId) {
     return;
   }
   const type = document.getElementById('inv-type').value;
-  const unitPrice = Math.max(0, Number(type === 'PURCHASE' ? item.purchasePrice : item.sellingPrice) || 0);
-  const baseUnit = parseInventoryUnitConfig(item.unit).base || settingsData.defaultInventoryUnit || 'حبة';
-  appendItemLineToCart(item.id, item.name, 1, unitPrice, unitPrice, baseUnit, 1);
+  const basePrice = Math.max(0, Number(type === 'PURCHASE' ? item.purchasePrice : item.sellingPrice) || 0);
+  const defaultUnit = getInventoryUnitOptions(item)[0] || { name: parseInventoryUnitConfig(item.unit).base || 'حبة', factor: 1 };
+  const unitPrice = Math.round(basePrice * defaultUnit.factor * 10000) / 10000;
+  appendItemLineToCart(item.id, item.name, 1, unitPrice, unitPrice, defaultUnit.name, defaultUnit.factor);
   invoiceDirty = true;
   syncCashPaidWithCart();
   renderCart();
