@@ -187,7 +187,7 @@ class GroceryAccountingIntegrationTest {
 
     val rebased = db.inventoryDao().getItemById(itemId)!!
     assertEquals(72, rebased.quantity)
-    assertEquals(104.1667, rebased.purchasePrice, 0.0001)
+    assertEquals(2500.0 / 24.0, rebased.purchasePrice, 0.000000001)
     assertEquals(125.0, rebased.sellingPrice, 0.0001)
 
     val convertedAdjustment = db.inventoryAdjustmentDao().getAdjustmentsForItem(itemId).single()
@@ -200,11 +200,11 @@ class GroceryAccountingIntegrationTest {
     val oldSaleLine = db.invoiceDao().getInvoiceWithItems(saleId)!!.items.single()
     assertEquals(24, oldSaleLine.stockQuantity)
     assertEquals(24, oldSaleLine.unitFactor)
-    assertEquals(104.1667, oldSaleLine.costPriceAtSale!!, 0.0001)
+    assertEquals(2500.0 / 24.0, oldSaleLine.costPriceAtSale!!, 0.000000001)
 
     val reportAfterRebase = engine.buildReport()
-    assertEquals(2500.0, reportAfterRebase.cogs, 0.02)
-    assertEquals(500.0, reportAfterRebase.grossProfit, 0.02)
+    assertEquals(2500.0, reportAfterRebase.cogs, 0.000001)
+    assertEquals(500.0, reportAfterRebase.grossProfit, 0.000001)
 
     engine.deleteInvoice(saleId)
     assertEquals(96, db.inventoryDao().getItemById(itemId)!!.quantity)
@@ -238,7 +238,7 @@ class GroceryAccountingIntegrationTest {
     )
     val stocked = db.inventoryDao().getItemById(itemId)!!
     assertEquals(48, stocked.quantity)
-    assertEquals(104.1667, stocked.purchasePrice, 0.0001)
+    assertEquals(2500.0 / 24.0, stocked.purchasePrice, 0.000000001)
     val purchaseLine = db.invoiceDao().getInvoiceWithItems(purchaseId)!!.items.single()
     assertEquals(2, purchaseLine.quantity)
     assertEquals(2500.0, purchaseLine.unitPrice, 0.001)
@@ -252,7 +252,7 @@ class GroceryAccountingIntegrationTest {
     )
     assertEquals(24, db.inventoryDao().getItemById(itemId)!!.quantity)
     val report = engine.buildReport()
-    assertEquals(2500.0, report.cogs, 0.02)
+    assertEquals(2500.0, report.cogs, 0.000001)
     assertEquals(500.0, report.grossProfit, 0.02)
 
     engine.deleteInvoice(saleId)
@@ -296,6 +296,53 @@ class GroceryAccountingIntegrationTest {
 
     engine.deleteInvoice(invoiceId)
     assertEquals(10, db.inventoryDao().getItemById(itemId)!!.quantity)
+  }
+
+
+  @Test
+  fun twoCartonPurchaseAndMixedUnitSalesKeepInvoiceAmountsAndStockReversible() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد الكراتين", "770000026", "", 0.0)
+    val itemId = engine.saveInventoryItem(
+      0L, "منتج 24 حبة", "مواد غذائية", 0, 0.0, 0.0,
+      """{"base":"حبة","packName":"","packSize":1,"cartonName":"كرتون","cartonPacks":24}"""
+    )
+
+    val purchaseId = engine.saveInvoice(
+      0L, "TWO-CARTONS-PUR-001", "PURCHASE", supplierId, "مورد الكراتين",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "منتج 24 حبة", 2, 2500.0, 5000.0, 48, "كرتون", 24)),
+      5000.0
+    )
+    val purchaseLine = db.invoiceDao().getInvoiceWithItems(purchaseId)!!.items.single()
+    assertEquals(2, purchaseLine.quantity)
+    assertEquals(2500.0, purchaseLine.unitPrice, 0.000001)
+    assertEquals(5000.0, purchaseLine.totalPrice, 0.000001)
+    assertEquals(48, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(2500.0 / 24.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.000000001)
+
+    val piecesSaleId = engine.saveInvoice(
+      0L, "MIXED-UNIT-SALE-001", "CASH", 0L, "عميل نقدي",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "منتج 24 حبة", 5, 125.0, 625.0, 5, "حبة", 1)),
+      625.0
+    )
+    assertEquals(43, db.inventoryDao().getItemById(itemId)!!.quantity)
+
+    val cartonSaleId = engine.saveInvoice(
+      0L, "MIXED-UNIT-SALE-002", "CASH", 0L, "عميل نقدي",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "منتج 24 حبة", 1, 3000.0, 3000.0, 24, "كرتون", 24)),
+      3000.0
+    )
+    assertEquals(19, db.inventoryDao().getItemById(itemId)!!.quantity)
+    val report = engine.buildReport()
+    assertEquals(3625.0, report.periodSales, 0.000001)
+    assertEquals(29.0 * (2500.0 / 24.0), report.cogs, 0.000001)
+    assertEquals(3625.0 - 29.0 * (2500.0 / 24.0), report.grossProfit, 0.000001)
+
+    engine.deleteInvoice(cartonSaleId)
+    assertEquals(43, db.inventoryDao().getItemById(itemId)!!.quantity)
+    engine.deleteInvoice(piecesSaleId)
+    assertEquals(48, db.inventoryDao().getItemById(itemId)!!.quantity)
+    engine.deleteInvoice(purchaseId)
+    assertEquals(0, db.inventoryDao().getItemById(itemId)!!.quantity)
   }
 
   @Test
