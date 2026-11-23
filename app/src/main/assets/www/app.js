@@ -2869,7 +2869,9 @@ function renderMultiStockPicker() {
   }
   const lowThreshold = Math.max(1, Number(settingsData.lowStockThreshold) || 10);
   container.innerHTML = list.map(i => {
-    const price = Number(type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice) || 0;
+    const defaultUnit = getInventoryUnitOptions(i)[0] || { name: parseInventoryUnitConfig(i.unit).base || 'حبة', factor: 1 };
+    const basePrice = Number(type === 'PURCHASE' ? i.purchasePrice : i.sellingPrice) || 0;
+    const price = Math.round(basePrice * defaultUnit.factor * 10000) / 10000;
     const qty = Number(i.quantity) || 0;
     const stockClass = qty <= 0 ? 'text-danger' : (qty <= lowThreshold ? 'text-primary' : 'text-success');
     const inCartQty = cartItems
@@ -2885,7 +2887,7 @@ function renderMultiStockPicker() {
           ${inCartQty > 0 ? `<span class="quick-stock-pick-badge">×${fmtMoney(inCartQty)}</span>` : ''}
         </div>
         <div class="quick-stock-pick-meta">
-          <span class="quick-stock-pick-price">${fmtMoney(price)} ${escapeHtml(appCurrency)}</span>
+          <span class="quick-stock-pick-price">${fmtMoney(price)} ${escapeHtml(appCurrency)} / ${escapeHtml(defaultUnit.name)}</span>
           <span class="quick-stock-pick-qty ${stockClass}">${fmtMoney(qty)}</span>
         </div>
       </article>
