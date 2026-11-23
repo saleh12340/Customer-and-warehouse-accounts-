@@ -507,26 +507,29 @@
 
           <div class="ruled-grid-labels grid-inv-3" style="margin-top:6px;">
             <span>سعر البيع *</span>
-            <span>أصغر وحدة (للمخزون)</span>
+            <span>الوحدة الأصغر للمخزون</span>
             <span>الفئة</span>
           </div>
           <div class="ruled-input-row grid-inv-3">
             <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-sell" class="ruled-cell cell-num" placeholder="سعر البيع" min="0" step="0.01" oninput="updateMarginPreview()">
-            <select id="inv-item-form-unit" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="أصغر وحدة للمخزون"><option value="">اختر أصغر وحدة</option></select>
+            <input type="text" id="inv-item-form-unit" class="ruled-cell" placeholder="مثال: حبة" data-suggest="units" aria-label="الوحدة الأصغر للمخزون" autocomplete="off">
             <input type="text" id="inv-item-form-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
           </div>
           <div class="unit-config-panel">
-            <strong>تفريد وحدات الصنف (من وحدة الشراء الكبرى إلى الأصغر)</strong>
-            <small>اكتب وحدة الشراء بالجملة أولاً مثل الكرتون، ثم عدد الوحدات الوسطى داخله. بعد ذلك اكتب الوحدة الوسطى وعدد الوحدات الصغيرة داخلها. رصيد المخزون يُحسب بأصغر وحدة. سعر الشراء المسجل للصنف هو سعر أصغر وحدة، ويُحوّل تلقائياً إلى سعر الكرتون أو العبوة في فاتورة الشراء.</small>
+            <strong>وحدات هذا الصنف</strong>
+            <small>اكتب وحدة الشراء التي تظهر في الفاتورة، ثم عدد الوحدات الأصغر داخلها. مثال: وحدة الشراء كرتون، والوحدة الأصغر حبة، وعدد الحبات في الكرتون 24. يبقى سعر الكرتون كما هو في فاتورة الشراء، ويحوّل التطبيق الكمية إلى 24 حبة للمخزون.</small>
             <div class="ruled-input-row grid-unit-config">
-              <select id="inv-item-form-carton-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="وحدة الشراء الكبرى"><option value="">اختر وحدة الشراء الكبرى</option></select>
-              <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الوسطى في الكرتون">
+              <input type="text" id="inv-item-form-carton-name" class="ruled-cell" placeholder="وحدة الشراء في الفاتورة: كرتون" data-suggest="units" aria-label="وحدة الشراء" autocomplete="off">
+              <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الأصغر داخلها: 24">
             </div>
-            <div class="ruled-input-row grid-unit-config">
-              <select id="inv-item-form-pack-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="الوحدة الوسطى"><option value="">اختر الوحدة الوسطى</option></select>
-              <input type="number" id="inv-item-form-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الصغيرة في الباكت">
-            </div>
-            <small id="inv-item-form-unit-preview" class="muted-text">مثال: 1 كرتون = 6 باكت = 144 حبة</small>
+            <details class="unit-config-extra">
+              <summary>إضافة وحدة وسطى اختيارية</summary>
+              <div class="ruled-input-row grid-unit-config">
+                <input type="text" id="inv-item-form-pack-name" class="ruled-cell" placeholder="اسم الوحدة الوسطى" data-suggest="units" aria-label="الوحدة الوسطى" autocomplete="off">
+                <input type="number" id="inv-item-form-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الأصغر داخلها">
+              </div>
+            </details>
+            <small id="inv-item-form-unit-preview" class="muted-text">مثال: 1 كرتون = 24 حبة</small>
           </div>
 
           <div id="inventory-margin-preview" class="info-pill">الربح المتوقع للوحدة: 0</div>
