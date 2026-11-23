@@ -391,6 +391,46 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
+  fun fourLevelUnitChainUsesCumulativeFactorsForPurchaseSaleAndDelete() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد المستويات", "770000028", "", 0.0)
+    val unitConfig = """{"base":"حبة","units":[{"name":"قرطاس","factorToSmaller":24},{"name":"كرتون","factorToSmaller":4},{"name":"ربطة","factorToSmaller":2}]}"""
+    val itemId = engine.saveInventoryItem(0L, "صنف أربعة مستويات", "مواد غذائية", 0, 0.0, 0.0, unitConfig)
+
+    val purchaseId = engine.saveInvoice(
+      0L, "FOUR-LEVEL-PUR-001", "PURCHASE", supplierId, "مورد المستويات",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف أربعة مستويات", 1, 19200.0, 19200.0, 192, "ربطة", 192)),
+      19200.0
+    )
+    val savedPurchase = db.invoiceDao().getInvoiceWithItems(purchaseId)!!.items.single()
+    assertEquals(1, savedPurchase.quantity)
+    assertEquals(19200.0, savedPurchase.unitPrice, 0.000001)
+    assertEquals(19200.0, savedPurchase.totalPrice, 0.000001)
+    assertEquals(192, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(100.0, db.inventoryDao().getItemById(itemId)!!.purchasePrice, 0.000000001)
+
+    val cartonSaleId = engine.saveInvoice(
+      0L, "FOUR-LEVEL-SALE-001", "CASH", 0L, "عميل نقدي",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف أربعة مستويات", 1, 11000.0, 11000.0, 96, "كرتون", 96)),
+      11000.0
+    )
+    assertEquals(96, db.inventoryDao().getItemById(itemId)!!.quantity)
+
+    val pieceSaleId = engine.saveInvoice(
+      0L, "FOUR-LEVEL-SALE-002", "CASH", 0L, "عميل نقدي",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "صنف أربعة مستويات", 3, 150.0, 450.0, 3, "حبة", 1)),
+      450.0
+    )
+    assertEquals(93, db.inventoryDao().getItemById(itemId)!!.quantity)
+
+    engine.deleteInvoice(pieceSaleId)
+    assertEquals(96, db.inventoryDao().getItemById(itemId)!!.quantity)
+    engine.deleteInvoice(cartonSaleId)
+    assertEquals(192, db.inventoryDao().getItemById(itemId)!!.quantity)
+    engine.deleteInvoice(purchaseId)
+    assertEquals(0, db.inventoryDao().getItemById(itemId)!!.quantity)
+  }
+
+  @Test
   fun customerAndSupplierTransactionsComputeRunningBalanceAndReverseOnEditDelete() = runBlocking {
     val custId = engine.saveCustomer(0L, "سليمان", "0777000111", "", 500.0)
     val tx1 = engine.addCustomerTransaction(custId, 1500.0, isDebit = true, description = "بضاعة آجل", dateMillis = 1000L)
