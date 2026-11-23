@@ -2476,8 +2476,26 @@ function updateInvoiceModeUI() {
 }
 
 function onInvoiceTypeChange() {
-  const type = document.getElementById('inv-type').value;
+  const typeSelect = document.getElementById('inv-type');
+  const type = typeSelect.value;
+  const previousType = lastInvoiceType;
+  const changesPurchaseDirection = previousType && ((previousType === 'PURCHASE') !== (type === 'PURCHASE'));
+  if (changesPurchaseDirection && editingInvoiceId > 0) {
+    typeSelect.value = previousType;
+    showToast('لا يمكن تحويل فاتورة شراء إلى بيع أو العكس أثناء تعديل فاتورة محفوظة؛ أنشئ فاتورة جديدة بالنوع المطلوب', 'warning');
+    return;
+  }
+  if (changesPurchaseDirection && cartItems.length > 0) {
+    if (!window.confirm('تغيير نوع الفاتورة سيحذف الأصناف المدخلة في هذه الفاتورة غير المحفوظة. هل تريد المتابعة؟')) {
+      typeSelect.value = previousType;
+      return;
+    }
+    cartItems = [];
+    batchEntryRows = [createBlankBatchRow()];
+    renderCart();
+  }
   const label = document.getElementById('party-label');
+  if (changesPurchaseDirection) renderBatchEntryRows();
   if (lastInvoiceType && (lastInvoiceType === 'PURCHASE') !== (type === 'PURCHASE')) {
     // Customer and supplier IDs belong to separate tables; do not carry them across modes.
     // Cash/credit sales share the same customer list, so keep that selection.
