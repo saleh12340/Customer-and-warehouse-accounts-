@@ -16,6 +16,37 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Validate WebView screens and scripts
+        shell: bash
+        run: |
+          node --check app/src/main/assets/www/app.js
+          node --check app/src/main/assets/www/customer-operation.js
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('app/src/main/assets/www/index.html', 'utf8');
+          const scripts = [
+            fs.readFileSync('app/src/main/assets/www/app.js', 'utf8'),
+            fs.readFileSync('app/src/main/assets/www/customer-operation.js', 'utf8')
+          ].join('\\n');
+          const ids = [...html.matchAll(/\\bid=["']([^"']+)["']/g)].map(match => match[1]);
+          const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+          if (duplicates.length) throw new Error('Duplicate HTML ids: ' + [...new Set(duplicates)].join(', '));
+          const functions = new Set([...scripts.matchAll(/\\bfunction\\s+([A-Za-z_$][\\w$]*)\\s*\\(/g)].map(match => match[1]));
+          const allowed = new Set(['if', 'event', 'window', 'Math', 'parseInt', 'parseFloat', 'Number', 'String', 'Boolean', 'Date', 'JSON', 'confirm', 'alert', 'setTimeout', 'clearTimeout']);
+          const handlers = [...html.matchAll(/\\bon(?:click|change|input|submit|keydown|keyup|focus|blur)=["']([^"']+)["']/g)].map(match => match[1]);
+          const missing = new Set();
+          for (const handler of handlers) {
+            for (const call of handler.matchAll(/\\b([A-Za-z_$][\\w$]*)\\s*\\(/g)) {
+              if (!functions.has(call[1]) && !allowed.has(call[1])) missing.add(call[1]);
+            }
+          }
+          if (missing.size) throw new Error('Undefined screen handlers: ' + [...missing].join(', '));
+          for (const requiredId of ['inventory-quick-name', 'inventory-quick-qty', 'inventory-quick-buy', 'inventory-quick-sell', 'inventory-quick-unit', 'inventory-quick-carton-name', 'inventory-quick-carton-packs']) {
+            if (!ids.includes(requiredId)) throw new Error('Missing quick inventory field: ' + requiredId);
+          }
+          console.log('WebView JavaScript syntax, HTML ids, and inline handlers validated.');
+          NODE
+
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
