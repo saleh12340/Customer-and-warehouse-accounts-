@@ -238,6 +238,7 @@ function handleUnitSelect(select) {
         return;
       }
     }
+    select.value = previous;
     refreshUnitSelectOptions(document);
     select.value = chosen;
     select.dataset.previousValue = chosen;
