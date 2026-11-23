@@ -2235,7 +2235,7 @@ function fillInventoryUnitConfig(prefix, raw) {
   const v = parseInventoryUnitConfig(raw);
   const values = { '-unit': v.base, '-pack-name': v.packName, '-pack-size': v.packName ? v.packSize : '',
     '-carton-name': v.cartonName, '-carton-packs': v.cartonName ? v.cartonPacks : '' };
-  Object.entries(values).forEach(([s, value]) => { const el = document.getElementById(prefix + s); if (el) el.value = value; });
+  Object.entries(values).forEach(([s, value]) => { const el = document.getElementById(prefix + s); if (el) { if (el.tagName === 'SELECT' && value && ![...el.options].some(option => option.value === String(value))) { const legacy = document.createElement('option'); legacy.value = String(value); legacy.textContent = String(value); el.appendChild(legacy); } el.value = value; } });
   updateInventoryUnitPreview(prefix);
 }
 function updateInventoryUnitPreview(prefix) {
@@ -4127,7 +4127,13 @@ function setCheckboxValue(id, val) {
 
 function setControlValue(id, val) {
   const el = document.getElementById(id);
-  if (el) el.value = val ?? '';
+  if (el) {
+    const value = val ?? '';
+    if (id === 'set-default-inventory-unit' && value && el.tagName === 'SELECT' && ![...el.options].some(option => option.value === String(value))) {
+      const legacy = document.createElement('option'); legacy.value = String(value); legacy.textContent = String(value); el.appendChild(legacy);
+    }
+    el.value = value;
+  }
 }
 
 window.onSettingsData = function (jsonStr) {
