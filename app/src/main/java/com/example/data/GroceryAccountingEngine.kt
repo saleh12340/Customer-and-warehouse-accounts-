@@ -92,14 +92,22 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     val label = item.unitLabel.trim()
     val factor = item.unitFactor.coerceAtLeast(1)
     if (label.isBlank()) return "حبة"
-    // A free-typed line with factor 1 is stocked in its selected base unit
-    // (for example, one carton or one bag). Converted package units retain
-    // their base-unit multiplier (for example, one carton = 48 pieces).
-    val baseUnit = if (factor <= 1) label else "حبة"
+    // A free-typed purchase line without a configured conversion becomes its
+    // own stock base unit. Converted units are stored as one explicit level.
+    val baseUnit = if (factor == 1) label else "حبة"
+    val units = org.json.JSONArray()
+    if (factor > 1) {
+      units.put(
+        JSONObject()
+          .put("name", label)
+          .put("factorToSmaller", factor)
+      )
+    }
     return JSONObject()
       .put("base", baseUnit)
-      .put("packName", if (factor <= 1) "" else label)
-      .put("packSize", if (factor <= 1) 1 else factor)
+      .put("units", units)
+      .put("packName", "")
+      .put("packSize", 1)
       .put("cartonName", "")
       .put("cartonPacks", 1)
       .toString()
@@ -112,6 +120,25 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       ?: return if (rawConfig.trim() == label) 1 else null
     val base = config.optString("base", "").trim()
     if (label == base && base.isNotBlank()) return 1
+
+    // New format: any number of nested units, ordered from the smallest
+    // package to the largest. Each factor is the count of the previous level.
+    val configuredUnits = config.optJSONArray("units")
+    if (configuredUnits != null) {
+      var cumulativeFactor = 1L
+      for (index in 0 until configuredUnits.length()) {
+        val unit = configuredUnits.optJSONObject(index) ?: return null
+        val name = unit.optString("name", "").trim()
+        val factorToSmaller = unit.optInt("factorToSmaller", 0)
+        if (name.isBlank() || factorToSmaller <= 0) return null
+        cumulativeFactor *= factorToSmaller.toLong()
+        if (cumulativeFactor !in 1..1_000_000) return null
+        if (label == name) return cumulativeFactor.toInt()
+      }
+      return null
+    }
+
+    // Backward compatibility with the original two optional levels.
     val packName = config.optString("packName", "").trim()
     val packSize = config.optInt("packSize", 1)
     if (label == packName && packName.isNotBlank() && packSize > 0) return packSize
