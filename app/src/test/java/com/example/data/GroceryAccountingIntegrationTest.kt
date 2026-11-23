@@ -163,6 +163,55 @@ class GroceryAccountingIntegrationTest {
   }
 
   @Test
+  fun directPurchaseCartonOf24PiecesKeepsInvoicePriceAndConvertsStockAndCostExactly() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد البيبسي", "770000024", "", 0.0)
+    val itemId = engine.saveInventoryItem(
+      0L, "بيبسي", "مشروبات", 0, 0.0, 125.0,
+      """{"base":"حبة","packName":"","packSize":1,"cartonName":"قرطاس","cartonPacks":24}"""
+    )
+
+    try {
+      engine.saveInvoice(
+        0L, "PEPSI-BAD-UNIT", "PURCHASE", supplierId, "مورد البيبسي",
+        listOf(InvoiceItemEntity(0L, 0L, itemId, "بيبسي", 1, 2500.0, 2500.0, 24, "حبة", 24)),
+        2500.0
+      )
+      fail("A piece cannot carry the carton multiplier")
+    } catch (expected: IllegalArgumentException) {
+      assertTrue(expected.message!!.contains("غير مطابقة"))
+    }
+
+    val purchaseId = engine.saveInvoice(
+      0L, "PEPSI-PUR-001", "PURCHASE", supplierId, "مورد البيبسي",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "بيبسي", 2, 2500.0, 5000.0, 48, "قرطاس", 24)),
+      5000.0
+    )
+    val stocked = db.inventoryDao().getItemById(itemId)!!
+    assertEquals(48, stocked.quantity)
+    assertEquals(104.1667, stocked.purchasePrice, 0.0001)
+    val purchaseLine = db.invoiceDao().getInvoiceWithItems(purchaseId)!!.items.single()
+    assertEquals(2, purchaseLine.quantity)
+    assertEquals(2500.0, purchaseLine.unitPrice, 0.001)
+    assertEquals(5000.0, purchaseLine.totalPrice, 0.001)
+    assertEquals(48, purchaseLine.stockQuantity)
+
+    val saleId = engine.saveInvoice(
+      0L, "PEPSI-SALE-001", "CASH", 0L, "عميل نقدي",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "بيبسي", 1, 3000.0, 3000.0, 24, "قرطاس", 24)),
+      3000.0
+    )
+    assertEquals(24, db.inventoryDao().getItemById(itemId)!!.quantity)
+    val report = engine.buildReport()
+    assertEquals(2500.0, report.cogs, 0.02)
+    assertEquals(500.0, report.grossProfit, 0.02)
+
+    engine.deleteInvoice(saleId)
+    assertEquals(48, db.inventoryDao().getItemById(itemId)!!.quantity)
+    engine.deleteInvoice(purchaseId)
+    assertEquals(0, db.inventoryDao().getItemById(itemId)!!.quantity)
+  }
+
+  @Test
   fun purchaseCartonsConvertToBaseStockAndReverseExactly() = runBlocking {
     val supplierId = engine.saveSupplier(0L, "مورد العبوات", "770000123", "الجملة", 0.0)
     val itemId = engine.saveInventoryItem(
