@@ -2218,21 +2218,23 @@ function parseInventoryUnitConfig(raw) {
   try {
     const v = JSON.parse(legacy);
     if (v && typeof v === 'object' && v.base) {
-      let units = Array.isArray(v.units)
+      const packName = String(v.packName || '').trim();
+      const cartonName = String(v.cartonName || '').trim();
+      const packSize = Math.max(1, Number(v.packSize) || 1);
+      const cartonPacks = Math.max(1, Number(v.cartonPacks) || 1);
+      const units = Array.isArray(v.units)
         ? v.units.map(u => ({ name: String(u?.name || '').trim(), factorToSmaller: Number(u?.factorToSmaller) }))
             .filter(u => u.name && Number.isInteger(u.factorToSmaller) && u.factorToSmaller > 0)
         : [
-            ...(String(v.packName || '').trim() ? [{ name: String(v.packName).trim(), factorToSmaller: Number(v.packSize) || 1 }] : []),
-            ...(String(v.cartonName || '').trim() ? [{ name: String(v.cartonName).trim(), factorToSmaller: Number(v.cartonPacks) || 1 }] : [])
+            ...(packName ? [{ name: packName, factorToSmaller: packSize }] : []),
+            ...(cartonName ? [{ name: cartonName, factorToSmaller: cartonPacks }] : [])
           ];
+      const staticNames = new Set([packName, cartonName].filter(Boolean));
       return {
         base: String(v.base).trim(),
         units,
-        packName: units[0]?.name || '',
-        packSize: units[0]?.factorToSmaller || 1,
-        cartonName: units[1]?.name || '',
-        cartonPacks: units[1]?.factorToSmaller || 1,
-        extraUnits: units.slice(2)
+        packName, packSize, cartonName, cartonPacks,
+        extraUnits: units.filter(unit => !staticNames.has(unit.name))
       };
     }
   } catch (_) {}
@@ -2292,8 +2294,8 @@ function serializeInventoryUnitConfig(prefix) {
   }
   return JSON.stringify({
     base, units,
-    packName: units[0]?.name || '', packSize: units[0]?.factorToSmaller || 1,
-    cartonName: units[1]?.name || '', cartonPacks: units[1]?.factorToSmaller || 1
+    packName, packSize: packName ? packSize : 1,
+    cartonName, cartonPacks: cartonName ? cartonPacks : 1
   });
 }
 function fillInventoryUnitConfig(prefix, raw) {
