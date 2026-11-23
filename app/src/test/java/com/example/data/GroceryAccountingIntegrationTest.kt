@@ -1162,6 +1162,44 @@ class GroceryAccountingIntegrationTest {
     com.example.utils.StorePreferences.resetAdvancedSettings(context)
   }
 
+  @Test
+  fun sellingPriceIsStoredPerSmallestUnitAndLargerSaleUnitUsesConversionFactor() = runBlocking {
+    val customerId = engine.saveCustomer(0L, "عميل سعر الوحدة", "771234567", "", 0.0)
+    val itemId = engine.saveInventoryItem(
+      0L, "ماء", "مشروبات", 100, 82.5, 95.0,
+      """{"base":"حبة","units":[{"name":"كرتون","factorToSmaller":20}]}"""
+    )
+
+    // UI suggestion for one carton is 95 (smallest-unit price) x 20 = 1,900.
+    val cartonSellingPrice = db.inventoryDao().getItemById(itemId)!!.sellingPrice * 20
+    assertEquals(1900.0, cartonSellingPrice, 0.01)
+
+    val invoiceId = engine.saveInvoice(
+      invoiceId = 0L,
+      invoiceNumber = "SALE-CARTON-UNIT-PRICE",
+      type = "CASH",
+      partyId = customerId,
+      partyName = "عميل سعر الوحدة",
+      rawItems = listOf(
+        InvoiceItemEntity(
+          0L, 0L, itemId, "ماء", 1, cartonSellingPrice, cartonSellingPrice,
+          20, "كرتون", 20
+        )
+      ),
+      paidAmount = 1900.0
+    )
+
+    assertEquals(80, db.inventoryDao().getItemById(itemId)!!.quantity)
+    val saved = db.invoiceDao().getInvoiceWithItems(invoiceId)!!
+    assertEquals(1900.0, saved.invoice.totalAmount, 0.01)
+    assertEquals(1900.0, saved.items.single().unitPrice, 0.01)
+    assertEquals(20, saved.items.single().stockQuantity)
+
+    // Deleting the invoice must restore the 20 smallest units sold.
+    engine.deleteInvoice(invoiceId)
+    assertEquals(100, db.inventoryDao().getItemById(itemId)!!.quantity)
+  }
+
   private fun sha256Hex(value: String): String =
     java.security.MessageDigest.getInstance("SHA-256")
       .digest(value.toByteArray(Charsets.UTF_8))
