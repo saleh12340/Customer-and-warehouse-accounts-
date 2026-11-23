@@ -2226,8 +2226,8 @@ function serializeInventoryUnitConfig(prefix) {
   const get = s => (document.getElementById(prefix + s)?.value || '').trim();
   const base = get('-unit') || 'حبة', packName = get('-pack-name'), packSize = parseInt(get('-pack-size'), 10) || 0;
   const cartonName = get('-carton-name'), cartonPacks = parseInt(get('-carton-packs'), 10) || 0;
-  if ((packName && packSize < 1) || (cartonName && cartonPacks < 1) || (cartonName && !packName)) {
-    showToast('أدخل أعداد العبوات بشكل صحيح', 'error'); return null;
+  if ((packName && packSize < 1) || (cartonName && cartonPacks < 1)) {
+    showToast('أدخل عدد الوحدات داخل العبوة بشكل صحيح', 'error'); return null;
   }
   return JSON.stringify({ base, packName, packSize: packName ? packSize : 1, cartonName, cartonPacks: cartonName ? cartonPacks : 1 });
 }
