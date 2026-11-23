@@ -124,6 +124,11 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     return null
   }
 
+  private fun inventoryBaseUnit(rawConfig: String): String {
+    val parsed = runCatching { JSONObject(rawConfig).optString("base", "").trim() }.getOrNull().orEmpty()
+    return parsed.ifBlank { rawConfig.trim() }
+  }
+
   private fun sanitizeMoney(value: Double, label: String): Double {
     require(value.isFinite() && abs(value) <= GroceryViewModel.MAX_MONETARY_AMOUNT) { "$label خارج النطاق المسموح" }
     return GroceryViewModel.roundMoney(value)
@@ -433,8 +438,9 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     unit: String
   ): Long {
     val cleanName = name.trim()
+    val cleanUnit = unit.trim().ifBlank { "حبة" }
     require(cleanName.isNotEmpty()) { "اسم الصنف مطلوب" }
-    require(quantity >= 0) { "الكمية لا يمكن أن تكون سالبة" }
+    require(quantity in 0..10_000_000) { "الكمية خارج النطاق المسموح" }
     require(purchasePrice.isFinite() && purchasePrice >= 0) { "سعر الشراء غير صحيح" }
     require(sellingPrice.isFinite() && sellingPrice >= 0) { "سعر البيع غير صحيح" }
 
@@ -442,27 +448,91 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
       val existingByName = inventoryDao.getItemByName(cleanName)
       check(existingByName == null || existingByName.id == id) { "يوجد صنف مسجل بهذا الاسم مسبقاً" }
 
-      val entity = InventoryItemEntity(
-        id = if (id > 0) id else 0L,
-        name = cleanName,
-        category = category.trim().ifBlank { "عام" },
-        quantity = quantity,
-        purchasePrice = purchasePrice,
-        sellingPrice = sellingPrice,
-        unit = unit.trim().ifBlank { "حبة" }
-      )
       if (id > 0) {
         val previous = inventoryDao.getItemById(id) ?: error("الصنف غير موجود")
-        if (previous.quantity != quantity) inventoryAdjustmentDao.insertAdjustment(
-          InventoryAdjustmentEntity(id = 0L, itemId = id, itemName = cleanName,
-            previousQuantity = previous.quantity, newQuantity = quantity,
-            deltaQuantity = quantity - previous.quantity,
-            reason = "تسوية يدوية من شاشة بيانات الصنف", date = System.currentTimeMillis())
+        val oldBaseUnit = inventoryBaseUnit(previous.unit)
+        val newBaseUnit = inventoryBaseUnit(cleanUnit)
+        val rebaseFactor = if (oldBaseUnit == newBaseUnit) 1 else {
+          expectedInventoryUnitFactor(cleanUnit, oldBaseUnit)
+            ?: error("لا يمكن تغيير الوحدة الأساسية من «$oldBaseUnit» إلى «$newBaseUnit» دون تحديد عدد وحدات «$newBaseUnit» داخل «$oldBaseUnit».")
+        }
+        require(rebaseFactor in 1..1_000_000) { "معامل تحويل الوحدة غير صحيح" }
+
+        val adjustedQuantity = Math.multiplyExact(quantity, rebaseFactor)
+        val adjustedPurchasePrice = GroceryViewModel.roundUnitPrice(purchasePrice / rebaseFactor)
+        val adjustedSellingPrice = GroceryViewModel.roundUnitPrice(sellingPrice / rebaseFactor)
+
+        if (rebaseFactor > 1) {
+          // Rebase every historical stock movement to the new smallest unit so
+          // invoice editing/deletion, inventory history, and COGS stay balanced.
+          val oldLines = invoiceDao.getInvoiceItemsSnapshot().filter { it.itemId == id }
+          if (oldLines.isNotEmpty()) {
+            val convertedLines = oldLines.map { line ->
+              val oldFactor = line.unitFactor.coerceAtLeast(1)
+              val oldStockQty = line.stockQuantity.takeIf { it > 0 }
+                ?: Math.multiplyExact(line.quantity, oldFactor)
+              line.copy(
+                stockQuantity = Math.multiplyExact(oldStockQty, rebaseFactor),
+                unitLabel = line.unitLabel.ifBlank { oldBaseUnit },
+                unitFactor = Math.multiplyExact(oldFactor, rebaseFactor),
+                costPriceAtSale = line.costPriceAtSale?.let {
+                  GroceryViewModel.roundUnitPrice(it / rebaseFactor)
+                }
+              )
+            }
+            invoiceDao.insertItems(convertedLines)
+          }
+
+          inventoryAdjustmentDao.getAdjustmentsForItem(id).forEach { adjustment ->
+            inventoryAdjustmentDao.updateAdjustment(
+              adjustment.copy(
+                previousQuantity = Math.multiplyExact(adjustment.previousQuantity, rebaseFactor),
+                newQuantity = Math.multiplyExact(adjustment.newQuantity, rebaseFactor),
+                deltaQuantity = Math.multiplyExact(adjustment.deltaQuantity, rebaseFactor)
+              )
+            )
+          }
+        }
+
+        val quantityBeforeManualChange = Math.multiplyExact(previous.quantity, rebaseFactor)
+        if (quantityBeforeManualChange != adjustedQuantity) {
+          inventoryAdjustmentDao.insertAdjustment(
+            InventoryAdjustmentEntity(
+              id = 0L,
+              itemId = id,
+              itemName = cleanName,
+              previousQuantity = quantityBeforeManualChange,
+              newQuantity = adjustedQuantity,
+              deltaQuantity = adjustedQuantity - quantityBeforeManualChange,
+              reason = if (rebaseFactor > 1) "تسوية الرصيد بعد تحويل الوحدة الأساسية" else "تسوية يدوية من شاشة بيانات الصنف",
+              date = System.currentTimeMillis()
+            )
+          )
+        }
+
+        inventoryDao.updateItem(
+          InventoryItemEntity(
+            id = id,
+            name = cleanName,
+            category = category.trim().ifBlank { "عام" },
+            quantity = adjustedQuantity,
+            purchasePrice = adjustedPurchasePrice,
+            sellingPrice = adjustedSellingPrice,
+            unit = cleanUnit
+          )
         )
-        inventoryDao.updateItem(entity)
         id
       } else {
-        inventoryDao.insertItem(entity)
+        inventoryDao.insertItem(
+          InventoryItemEntity(
+            name = cleanName,
+            category = category.trim().ifBlank { "عام" },
+            quantity = quantity,
+            purchasePrice = purchasePrice,
+            sellingPrice = sellingPrice,
+            unit = cleanUnit
+          )
+        )
       }
     }
   }
