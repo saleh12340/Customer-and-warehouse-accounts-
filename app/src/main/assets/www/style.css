@@ -2163,3 +2163,10 @@ body.compact-lists table.data-table td { padding: 4px 3px; }
 
 /* Supplier directory uses the same compact ruled ledger cards as customers. */
 #suppliers-list { display:flex; flex-direction:column; gap:7px; }
+
+.unit-manager-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 4px;border-bottom:1px solid var(--border-color);min-width:0}
+.unit-manager-row:last-child{border-bottom:0}
+.unit-manager-name{display:flex;flex-direction:column;gap:3px;min-width:0}
+.unit-manager-name strong{font-size:14px;color:var(--text-primary);overflow-wrap:anywhere}
+.unit-manager-name small{font-size:11px;color:var(--text-secondary)}
+.unit-manager-row .btn{min-width:54px}
