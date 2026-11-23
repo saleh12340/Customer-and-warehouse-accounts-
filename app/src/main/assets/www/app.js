@@ -2485,7 +2485,10 @@ function onInvoiceTypeChange() {
     showToast('لا يمكن تحويل فاتورة شراء إلى بيع أو العكس أثناء تعديل فاتورة محفوظة؛ أنشئ فاتورة جديدة بالنوع المطلوب', 'warning');
     return;
   }
-  if (changesPurchaseDirection && cartItems.length > 0) {
+  const hasPendingInvoiceLines = cartItems.length > 0 || batchEntryRows.some(row =>
+    String(row.itemName || '').trim() || String(row.total || '').trim() || String(row.unitPrice || '').trim()
+  );
+  if (changesPurchaseDirection && hasPendingInvoiceLines) {
     if (!window.confirm('تغيير نوع الفاتورة سيحذف الأصناف المدخلة في هذه الفاتورة غير المحفوظة. هل تريد المتابعة؟')) {
       typeSelect.value = previousType;
       return;
