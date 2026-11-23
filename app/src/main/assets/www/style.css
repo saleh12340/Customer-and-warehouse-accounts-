@@ -2170,3 +2170,10 @@ body.compact-lists table.data-table td { padding: 4px 3px; }
 .unit-manager-name strong{font-size:14px;color:var(--text-primary);overflow-wrap:anywhere}
 .unit-manager-name small{font-size:11px;color:var(--text-secondary)}
 .unit-manager-row .btn{min-width:54px}
+
+
+/* Repeatable nested stock-unit levels */
+.unit-level-list { display: flex; flex-direction: column; gap: 5px; margin-top: 5px; }
+.unit-level-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) auto; gap: 5px; align-items: center; }
+.unit-level-remove { min-width: 44px; padding-inline: 7px; }
+.unit-level-add { align-self: flex-start; margin-top: 4px; }
