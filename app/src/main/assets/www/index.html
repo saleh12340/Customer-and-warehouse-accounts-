@@ -495,7 +495,7 @@
             <span>إجمالي الشراء</span>
             <span>الرصيد الافتتاحي</span>
             <span>التفاصيل (اسم الصنف) *</span>
-            <span>شراء الواحدة</span>
+            <span>شراء الأصغر</span>
           </div>
           <div class="ruled-input-row grid-inv-4">
             <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-total-buy" class="ruled-cell cell-num" placeholder="الإجمالي" min="0" step="0.01" oninput="syncInventoryBuyFromTotal()">
@@ -516,7 +516,7 @@
           </div>
           <div class="unit-config-panel">
             <strong>تفريد وحدات الصنف (من وحدة الشراء الكبرى إلى الأصغر)</strong>
-            <small>اكتب وحدة الشراء بالجملة أولاً مثل الكرتون، ثم عدد الوحدات الوسطى داخله. بعد ذلك اكتب الوحدة الوسطى وعدد الوحدات الصغيرة داخلها. رصيد المخزون يُحسب بأصغر وحدة.</small>
+            <small>اكتب وحدة الشراء بالجملة أولاً مثل الكرتون، ثم عدد الوحدات الوسطى داخله. بعد ذلك اكتب الوحدة الوسطى وعدد الوحدات الصغيرة داخلها. رصيد المخزون يُحسب بأصغر وحدة. سعر الشراء المسجل للصنف هو سعر أصغر وحدة، ويُحوّل تلقائياً إلى سعر الكرتون أو العبوة في فاتورة الشراء.</small>
             <div class="ruled-input-row grid-unit-config">
               <input type="text" id="inv-item-form-carton-name" class="ruled-cell" placeholder="وحدة الشراء الكبرى: كرتون">
               <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الوسطى في الكرتون">
