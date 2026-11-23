@@ -58,7 +58,7 @@
       <li onclick="menuNavigate('notes')">الملاحظات والدفتر السريع</li>
       <li onclick="menuNavigate('reports')">التقارير والأرباح</li>
       <li onclick="menuNavigate('settings')">الإعدادات والطابعة والنسخ</li>
-      <li onclick="menuNavigate('units')">إدارة الوحدات</li>
+      <li onclick="menuNavigate('units')">أسماء الوحدات المقترحة</li>
       <li onclick="menuNavigate('about')">حول التطبيق وسياسة الخصوصية</li>
     </ul>
   </aside>
@@ -921,7 +921,7 @@
           <h2>الإعدادات المتقدمة والنظام</h2>
           <button type="button" class="btn btn-primary btn-sm" onclick="saveAllAdvancedSettings()">حفظ الكل</button>
         </div>
-        <div class="btn-row" style="margin:6px 0 8px;"><button type="button" class="btn btn-outline-primary btn-compact" onclick="switchView('units')">إدارة الوحدات</button></div>
+        <div class="btn-row" style="margin:6px 0 8px;"><button type="button" class="btn btn-outline-primary btn-compact" onclick="switchView('units')">أسماء الوحدات المقترحة</button></div>
         <div class="pill-tabs settings-section-pills" id="settings-section-pills">
           <button type="button" class="pill active" onclick="scrollToSettingsSection('set-sec-general', this)">العامة</button>
           <button type="button" class="pill" onclick="scrollToSettingsSection('set-sec-invoices', this)">الفواتير</button>
@@ -1176,16 +1176,17 @@
     </section>
 
     <section id="view-units" class="view">
-      <div class="sticky-top-panel"><div class="section-head"><h2>إدارة الوحدات</h2><span class="muted-text">قائمة الوحدات فقط</span></div></div>
+      <div class="sticky-top-panel"><div class="section-head"><h2>أسماء الوحدات المقترحة</h2><span class="muted-text">للاقتراح والكتابة فقط</span></div></div>
+      <p class="muted-text" style="margin:6px 2px;">هذه القائمة تحفظ أسماء مقترحة فقط ولا تحدد التحويل. تعريف العلاقة مثل «قرطاس واحد يحتوي على 24 حبة» يتم داخل بيانات كل صنف.</p>
       <div class="card compact-card">
-        <div class="card-title-row"><h3 id="unit-editor-title">إضافة وحدة جديدة</h3></div>
-        <div class="ruled-input-row" style="grid-template-columns:1fr;"><input type="text" id="unit-manager-name" class="ruled-cell" placeholder="اكتب اسم الوحدة"></div>
+        <div class="card-title-row"><h3 id="unit-editor-title">إضافة اسم وحدة مقترح</h3></div>
+        <div class="ruled-input-row" style="grid-template-columns:1fr;"><input type="text" id="unit-manager-name" class="ruled-cell" placeholder="اكتب اسم الوحدة المقترح"></div>
         <div class="btn-row">
-          <button type="button" class="btn btn-primary btn-compact" id="unit-manager-save" onclick="saveManagedUnit()">إضافة الوحدة</button>
+          <button type="button" class="btn btn-primary btn-compact" id="unit-manager-save" onclick="saveManagedUnit()">إضافة الاسم</button>
           <button type="button" class="btn btn-outline btn-compact hidden" id="unit-manager-cancel" onclick="cancelManagedUnitEdit()">إلغاء التعديل</button>
         </div>
       </div>
-      <div class="card compact-card"><div class="card-title-row"><h3>جميع الوحدات</h3><span class="badge badge-blue" id="unit-manager-count">0</span></div><div id="unit-manager-list"></div></div>
+      <div class="card compact-card"><div class="card-title-row"><h3>أسماء الوحدات المقترحة</h3><span class="badge badge-blue" id="unit-manager-count">0</span></div><div id="unit-manager-list"></div></div>
     </section>
 
     <!-- 10. About & Privacy -->
