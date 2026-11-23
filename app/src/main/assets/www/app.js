@@ -2265,23 +2265,10 @@ document.addEventListener('input', event => {
 });
 
 function getInventoryUnitOptions(item) {
-  if (!item) return [
-    { name: 'حبة', factor: 1 },
-    { name: 'نص كيس', factor: 1 },
-    { name: 'كيس', factor: 1 },
-    { name: 'نص قطمة', factor: 1 },
-    { name: 'قطمة', factor: 1 },
-    { name: 'كرتون', factor: 1 },
-    { name: 'شدة', factor: 1 },
-    { name: 'دزة', factor: 1 },
-    { name: 'باكت', factor: 1 },
-    { name: 'كيلو', factor: 1 },
-    { name: 'جرام', factor: 1 },
-    { name: 'لتر', factor: 1 },
-    { name: 'صندوق', factor: 1 }
-  ];
-  // The stored purchase cost is per smallest stock unit. For purchases show
-  // the largest wholesale package first; its factor converts to base stock.
+  if (!item) return [{ name: settingsData.defaultInventoryUnit || 'حبة', factor: 1 }];
+  // Inventory quantities and stored purchase cost are always expressed in the
+  // smallest stock unit. Invoice rows select a larger unit and carry its
+  // exact multiplier back to that smallest unit.
   const v = parseInventoryUnitConfig(item.unit), options = [{ name: v.base, factor: 1 }];
   if (v.packName && v.packSize > 1) options.push({ name: v.packName, factor: v.packSize });
   if (v.cartonName && v.cartonPacks > 0) {
