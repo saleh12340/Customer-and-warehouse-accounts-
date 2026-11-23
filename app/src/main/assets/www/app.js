@@ -2215,77 +2215,144 @@ function parseInventoryUnitConfig(raw) {
   const legacy = String(raw || '').trim() || 'حبة';
   try {
     const v = JSON.parse(legacy);
-    if (v && typeof v === 'object' && v.base) return {
-      base: String(v.base), packName: String(v.packName || ''),
-      packSize: Math.max(1, parseInt(v.packSize, 10) || 1),
-      cartonName: String(v.cartonName || ''),
-      cartonPacks: Math.max(1, parseInt(v.cartonPacks, 10) || 1)
-    };
+    if (v && typeof v === 'object' && v.base) {
+      let units = Array.isArray(v.units)
+        ? v.units.map(u => ({ name: String(u?.name || '').trim(), factorToSmaller: Number(u?.factorToSmaller) }))
+            .filter(u => u.name && Number.isInteger(u.factorToSmaller) && u.factorToSmaller > 0)
+        : [
+            ...(String(v.packName || '').trim() ? [{ name: String(v.packName).trim(), factorToSmaller: Number(v.packSize) || 1 }] : []),
+            ...(String(v.cartonName || '').trim() ? [{ name: String(v.cartonName).trim(), factorToSmaller: Number(v.cartonPacks) || 1 }] : [])
+          ];
+      return {
+        base: String(v.base).trim(),
+        units,
+        packName: units[0]?.name || '',
+        packSize: units[0]?.factorToSmaller || 1,
+        cartonName: units[1]?.name || '',
+        cartonPacks: units[1]?.factorToSmaller || 1,
+        extraUnits: units.slice(2)
+      };
+    }
   } catch (_) {}
-  return { base: legacy, packName: '', packSize: 1, cartonName: '', cartonPacks: 1 };
+  return { base: legacy, units: [], packName: '', packSize: 1, cartonName: '', cartonPacks: 1, extraUnits: [] };
+}
+function renderInventoryUnitExtraRows(prefix, units = []) {
+  const host = document.getElementById(prefix + '-extra-units');
+  if (!host) return;
+  host.innerHTML = '';
+  units.forEach(unit => addInventoryUnitLevel(prefix, unit));
+}
+function addInventoryUnitLevel(prefix, unit = {}) {
+  const host = document.getElementById(prefix + '-extra-units');
+  if (!host) return;
+  const row = document.createElement('div');
+  row.className = 'ruled-input-row grid-unit-config unit-level-row';
+  row.innerHTML = `
+    <input type="text" class="ruled-cell" data-unit-extra-name data-suggest="units" autocomplete="off"
+      placeholder="اسم الوحدة الأكبر" aria-label="اسم الوحدة الأكبر" value="${escapeHtml(unit.name || '')}">
+    <input type="number" class="ruled-cell cell-num" data-unit-extra-factor min="1" step="1"
+      placeholder="عدد الوحدات السابقة داخلها" aria-label="عدد الوحدات السابقة داخل الوحدة الأكبر"
+      value="${unit.factorToSmaller ? escapeHtml(unit.factorToSmaller) : ''}">
+    <button type="button" class="btn btn-outline btn-sm unit-level-remove"
+      aria-label="حذف مستوى الوحدة" onclick="this.closest('.unit-level-row').remove();updateInventoryUnitPreview('${prefix}')">حذف</button>`;
+  host.appendChild(row);
 }
 function serializeInventoryUnitConfig(prefix) {
   const get = s => (document.getElementById(prefix + s)?.value || '').trim();
-  const base = get('-unit') || 'حبة', packName = get('-pack-name'), packSize = parseInt(get('-pack-size'), 10) || 0;
+  const base = get('-unit') || 'حبة';
+  const packName = get('-pack-name'), packSize = parseInt(get('-pack-size'), 10) || 0;
   const cartonName = get('-carton-name'), cartonPacks = parseInt(get('-carton-packs'), 10) || 0;
   if ((packName && packSize < 1) || (cartonName && cartonPacks < 1)) {
-    showToast('أدخل عدد الوحدات داخل العبوة بشكل صحيح', 'error'); return null;
+    showToast('أدخل عدد الوحدات السابقة داخل كل وحدة بشكل صحيح', 'error'); return null;
   }
-  const configuredNames = [base, packName, cartonName].filter(Boolean).map(normalizeSuggestionText);
+  const units = [];
+  if (packName) units.push({ name: packName, factorToSmaller: packSize });
+  if (cartonName) units.push({ name: cartonName, factorToSmaller: cartonPacks });
+  document.querySelectorAll('#' + prefix + '-extra-units .unit-level-row').forEach(row => {
+    const name = String(row.querySelector('[data-unit-extra-name]')?.value || '').trim();
+    const factorRaw = String(row.querySelector('[data-unit-extra-factor]')?.value || '').trim();
+    if (name || factorRaw) units.push({ name, factorToSmaller: factorRaw === '' ? 0 : Number(factorRaw) });
+  });
+  if (!base) { showToast('حدد أصغر وحدة للمخزون أولاً', 'error'); return null; }
+  if (units.some(u => !u.name || !Number.isInteger(u.factorToSmaller) || u.factorToSmaller < 1)) {
+    showToast('أكمل اسم كل وحدة ومعامل التحويل الخاص بها', 'error'); return null;
+  }
+  const configuredNames = [base, ...units.map(u => u.name)].map(normalizeSuggestionText);
   if (new Set(configuredNames).size !== configuredNames.length) {
     showToast('يجب أن يكون لكل مستوى وحدة اسم مختلف', 'error'); return null;
   }
-  if (!base.trim()) {
-    showToast('حدد أصغر وحدة للمخزون أولاً', 'error'); return null;
+  let cumulative = 1;
+  for (const unit of units) {
+    cumulative *= unit.factorToSmaller;
+    if (!Number.isSafeInteger(cumulative) || cumulative > 1000000) {
+      showToast('معامل التحويل المتسلسل أكبر من الحد المسموح', 'error'); return null;
+    }
   }
-  return JSON.stringify({ base, packName, packSize: packName ? packSize : 1, cartonName, cartonPacks: cartonName ? cartonPacks : 1 });
+  return JSON.stringify({
+    base, units,
+    packName: units[0]?.name || '', packSize: units[0]?.factorToSmaller || 1,
+    cartonName: units[1]?.name || '', cartonPacks: units[1]?.factorToSmaller || 1
+  });
 }
 function fillInventoryUnitConfig(prefix, raw) {
   const v = parseInventoryUnitConfig(raw);
   const values = { '-unit': v.base, '-pack-name': v.packName, '-pack-size': v.packName ? v.packSize : '',
     '-carton-name': v.cartonName, '-carton-packs': v.cartonName ? v.cartonPacks : '' };
   Object.entries(values).forEach(([s, value]) => { const el = document.getElementById(prefix + s); if (el) { if (el.tagName === 'SELECT' && value && ![...el.options].some(option => option.value === String(value))) { const legacy = document.createElement('option'); legacy.value = String(value); legacy.textContent = String(value); el.appendChild(legacy); } el.value = value; } });
+  renderInventoryUnitExtraRows(prefix, v.extraUnits);
   updateInventoryUnitPreview(prefix);
 }
 function updateInventoryUnitPreview(prefix) {
   const get = s => (document.getElementById(prefix + s)?.value || '').trim();
-  const base = get('-unit') || 'حبة', pack = get('-pack-name'), packSize = parseInt(get('-pack-size'), 10) || 0;
+  const base = get('-unit') || 'حبة';
+  const units = [];
+  const pack = get('-pack-name'), packSize = parseInt(get('-pack-size'), 10) || 0;
   const carton = get('-carton-name'), cartonPacks = parseInt(get('-carton-packs'), 10) || 0;
+  if (pack) units.push({ name: pack, factorToSmaller: packSize });
+  if (carton) units.push({ name: carton, factorToSmaller: cartonPacks });
+  document.querySelectorAll('#' + prefix + '-extra-units .unit-level-row').forEach(row => {
+    const name = String(row.querySelector('[data-unit-extra-name]')?.value || '').trim();
+    const factorToSmaller = Number(row.querySelector('[data-unit-extra-factor]')?.value || 0);
+    if (name) units.push({ name, factorToSmaller });
+  });
   const el = document.getElementById(prefix + '-unit-preview'); if (!el) return;
   const parts = [];
-  // Use natural Arabic sentences instead of mixed RTL/LTR equations, which
-  // some Android WebViews visually reorder and make the unit relation appear reversed.
-  if (carton && cartonPacks > 0) {
-    const innerUnit = pack && packSize > 0 ? pack : base;
-    const innerCount = pack && packSize > 0 ? packSize : cartonPacks;
-    const totalBase = cartonPacks * innerCount;
-    parts.push('كل ' + carton + ' يحتوي على ' + cartonPacks + ' ' + innerUnit +
-      (pack && packSize > 0 ? '، أي ' + totalBase + ' ' + base : ''));
+  let previousName = base, cumulative = 1;
+  for (const unit of units) {
+    if (!unit.name || !Number.isInteger(unit.factorToSmaller) || unit.factorToSmaller < 1) continue;
+    cumulative *= unit.factorToSmaller;
+    parts.push('كل ' + unit.name + ' يحتوي على ' + unit.factorToSmaller + ' ' + previousName +
+      (cumulative > unit.factorToSmaller ? '، أي ' + cumulative + ' ' + base : ''));
+    previousName = unit.name;
   }
-  if (pack && packSize > 0) parts.push('كل ' + pack + ' يحتوي على ' + packSize + ' ' + base);
   el.textContent = parts.join(' — ') || ('الوحدة الأساسية للمخزون: ' + base);
 }
 document.addEventListener('input', event => {
   const id = event.target && event.target.id ? event.target.id : '';
-  if (id.startsWith('inv-item-form-')) updateInventoryUnitPreview('inv-item-form');
-  if (id.startsWith('inventory-quick-') && ['inventory-quick-unit','inventory-quick-pack-name','inventory-quick-pack-size','inventory-quick-carton-name','inventory-quick-carton-packs'].includes(id)) {
+  if (id.startsWith('inv-item-form-') || event.target?.matches?.('#inv-item-form-extra-units [data-unit-extra-name],#inv-item-form-extra-units [data-unit-extra-factor]')) {
+    updateInventoryUnitPreview('inv-item-form');
+  }
+  if ((id.startsWith('inventory-quick-') && ['inventory-quick-unit','inventory-quick-pack-name','inventory-quick-pack-size','inventory-quick-carton-name','inventory-quick-carton-packs'].includes(id)) ||
+      event.target?.matches?.('#inventory-quick-extra-units [data-unit-extra-name],#inventory-quick-extra-units [data-unit-extra-factor]')) {
     updateInventoryUnitPreview('inventory-quick');
   }
 });
 
 function getInventoryUnitOptions(item) {
   if (!item) return [{ name: settingsData.defaultInventoryUnit || 'حبة', factor: 1 }];
-  // Inventory quantities and stored purchase cost are always expressed in the
-  // smallest stock unit. Invoice rows select a larger unit and carry its
-  // exact multiplier back to that smallest unit.
+  // Stock quantity and unit cost use the smallest unit. Each configured level
+  // multiplies the immediately smaller level; cumulative factors are derived.
   const v = parseInventoryUnitConfig(item.unit), options = [{ name: v.base, factor: 1 }];
-  if (v.packName && v.packSize > 1) options.push({ name: v.packName, factor: v.packSize });
-  if (v.cartonName && v.cartonPacks > 0) {
-    const factor = v.packName ? v.packSize * v.cartonPacks : v.cartonPacks;
-    if (factor > 1) options.push({ name: v.cartonName, factor });
+  let cumulativeFactor = 1;
+  for (const unit of v.units || []) {
+    cumulativeFactor *= unit.factorToSmaller;
+    if (!Number.isSafeInteger(cumulativeFactor) || cumulativeFactor > 1000000) break;
+    if (!options.some(option => option.name === unit.name)) {
+      options.push({ name: unit.name, factor: cumulativeFactor });
+    }
   }
   const invoiceType = document.getElementById('inv-type')?.value || 'CASH';
-  return invoiceType === 'PURCHASE' ? options.reverse() : options;
+  return invoiceType === 'PURCHASE' ? options.slice().reverse() : options;
 }
 function getInvoiceUnitOptionsForRow(item, row) {
   const options = getInventoryUnitOptions(item);
