@@ -166,6 +166,7 @@ class GroceryAccountingIntegrationTest {
   fun addingSmallestUnitAfterCartonTransactionsRebasesCurrentAndHistoricalStock() = runBlocking {
     val supplierId = engine.saveSupplier(0L, "مورد القرطاس", "770000025", "", 0.0)
     val itemId = engine.saveInventoryItem(0L, "مشروب قديم", "مشروبات", 0, 0.0, 0.0, "قرطاس")
+    engine.saveInventoryItem(itemId, "مشروب قديم", "مشروبات", 2, 2500.0, 3000.0, "قرطاس")
     val purchaseId = engine.saveInvoice(
       0L, "REBASE-PUR-001", "PURCHASE", supplierId, "مورد القرطاس",
       listOf(InvoiceItemEntity(0L, 0L, itemId, "مشروب قديم", 2, 2500.0, 5000.0, 2, "قرطاس", 1)),
@@ -176,19 +177,22 @@ class GroceryAccountingIntegrationTest {
       listOf(InvoiceItemEntity(0L, 0L, itemId, "مشروب قديم", 1, 3000.0, 3000.0, 1, "قرطاس", 1)),
       3000.0
     )
-    assertEquals(1, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(3, db.inventoryDao().getItemById(itemId)!!.quantity)
     assertEquals(2500.0, engine.buildReport().cogs, 0.01)
 
     engine.saveInventoryItem(
-      itemId, "مشروب قديم", "مشروبات", 1, 2500.0, 3000.0,
+      itemId, "مشروب قديم", "مشروبات", 3, 2500.0, 3000.0,
       """{"base":"حبة","packName":"","packSize":1,"cartonName":"قرطاس","cartonPacks":24}"""
     )
 
     val rebased = db.inventoryDao().getItemById(itemId)!!
-    assertEquals(24, rebased.quantity)
+    assertEquals(72, rebased.quantity)
     assertEquals(104.1667, rebased.purchasePrice, 0.0001)
     assertEquals(125.0, rebased.sellingPrice, 0.0001)
 
+    val convertedAdjustment = db.inventoryAdjustmentDao().getAdjustmentsForItem(itemId).single()
+    assertEquals(48, convertedAdjustment.newQuantity)
+    assertEquals(48, convertedAdjustment.deltaQuantity)
     val oldPurchaseLine = db.invoiceDao().getInvoiceWithItems(purchaseId)!!.items.single()
     assertEquals(48, oldPurchaseLine.stockQuantity)
     assertEquals(24, oldPurchaseLine.unitFactor)
@@ -203,9 +207,9 @@ class GroceryAccountingIntegrationTest {
     assertEquals(500.0, reportAfterRebase.grossProfit, 0.02)
 
     engine.deleteInvoice(saleId)
-    assertEquals(48, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(96, db.inventoryDao().getItemById(itemId)!!.quantity)
     engine.deleteInvoice(purchaseId)
-    assertEquals(0, db.inventoryDao().getItemById(itemId)!!.quantity)
+    assertEquals(48, db.inventoryDao().getItemById(itemId)!!.quantity)
   }
 
   @Test
