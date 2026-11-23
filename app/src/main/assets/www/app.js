@@ -2306,6 +2306,38 @@ function fillInventoryUnitConfig(prefix, raw) {
   renderInventoryUnitExtraRows(prefix, v.extraUnits);
   updateInventoryUnitPreview(prefix);
 }
+function reverseInventoryUnitDirection(prefix) {
+  const get = suffix => document.getElementById(prefix + suffix);
+  const baseInput = get('-unit');
+  if (!baseInput) return;
+  const levels = [];
+  const packName = get('-pack-name'), packSize = get('-pack-size');
+  const cartonName = get('-carton-name'), cartonPacks = get('-carton-packs');
+  if ((packName?.value || '').trim()) levels.push({ nameInput: packName, factorInput: packSize });
+  if ((cartonName?.value || '').trim()) levels.push({ nameInput: cartonName, factorInput: cartonPacks });
+  document.querySelectorAll('#' + prefix + '-extra-units .unit-level-row').forEach(row => {
+    const nameInput = row.querySelector('[data-unit-extra-name]');
+    const factorInput = row.querySelector('[data-unit-extra-factor]');
+    if ((nameInput?.value || '').trim()) levels.push({ nameInput, factorInput });
+  });
+  if (levels.length !== 1) {
+    showToast('عكس الاتجاه متاح عند وجود مستوى تحويل واحد فقط. عدّل المستويات المتعددة يدوياً.', 'error');
+    return;
+  }
+  const oldBase = baseInput.value.trim();
+  const level = levels[0];
+  const oldLarger = level.nameInput.value.trim();
+  const factor = String(level.factorInput?.value || '').trim();
+  if (!oldBase || !oldLarger || !/^\\d+$/.test(factor) || Number(factor) < 1) {
+    showToast('أكمل اسم الوحدتين ومعامل التحويل أولاً', 'error');
+    return;
+  }
+  baseInput.value = oldLarger;
+  level.nameInput.value = oldBase;
+  updateInventoryUnitPreview(prefix);
+  showToast('تم عكس الاتجاه. تحقق من العبارة: كل ' + oldBase + ' يحتوي على ' + factor + ' ' + oldLarger, 'success');
+}
+
 function updateInventoryUnitPreview(prefix) {
   const get = s => (document.getElementById(prefix + s)?.value || '').trim();
   const base = get('-unit') || 'حبة';

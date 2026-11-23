@@ -465,7 +465,7 @@
         </div>
         <div class="unit-config-panel">
           <strong>وحدات هذا الصنف</strong>
-          <small>اكتب وحدة الشراء كما تظهر في الفاتورة، ثم عدد الوحدات الأصغر داخلها. مثال: قرطاس واحد يحتوي على 24 حبة. ويمكن إضافة وحدة وسطى عند الحاجة.</small>
+          <small>حدد أصغر وحدة للمخزون (مثل حبة)، ثم وحدة الشراء الأكبر (مثل قرطاس) وعدد الحبات داخلها. سعر الفاتورة لا يتغير.</small>
           <div class="ruled-input-row grid-unit-config">
             <input type="text" id="inventory-quick-carton-name" class="ruled-cell" placeholder="وحدة الشراء في الفاتورة: قرطاس" data-suggest="units" aria-label="وحدة الشراء" autocomplete="off">
             <input type="number" id="inventory-quick-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الحبات داخل القرطاس: 24">
@@ -479,6 +479,7 @@
           </details>
           <div id="inventory-quick-extra-units" class="unit-level-list"></div>
           <button type="button" class="btn btn-outline btn-sm unit-level-add" onclick="addInventoryUnitLevel('inventory-quick')">+ إضافة مستوى وحدة آخر</button>
+          <button type="button" class="btn btn-outline btn-sm unit-level-add" onclick="reverseInventoryUnitDirection('inventory-quick')">عكس اتجاه الوحدة</button>
           <small id="inventory-quick-unit-preview" class="muted-text">مثال: كل قرطاس يحتوي على 24 حبة</small>
         </div>
         <div class="btn-row" style="margin-top:7px;">
@@ -523,7 +524,7 @@
           </div>
           <div class="unit-config-panel">
             <strong>وحدات هذا الصنف</strong>
-            <small>اكتب وحدة الشراء التي تظهر في الفاتورة، ثم عدد الوحدات الأصغر داخلها. مثال: وحدة الشراء كرتون، والوحدة الأصغر حبة، وعدد الحبات في الكرتون 24. يبقى سعر الكرتون كما هو في فاتورة الشراء، ويحوّل التطبيق الكمية إلى 24 حبة للمخزون.</small>
+            <small>حدد الوحدة الأصغر للمخزون أولاً (مثل حبة)، ثم وحدة الشراء الأكبر (مثل كرتون) وعدد الحبات داخلها. يبقى سعر الكرتون وإجمالي الفاتورة كما هما. إذا ظهرت المعادلة بالعكس، استخدم «عكس اتجاه الوحدة» قبل الحفظ.</small>
             <div class="ruled-input-row grid-unit-config">
               <input type="text" id="inv-item-form-carton-name" class="ruled-cell" placeholder="وحدة الشراء في الفاتورة: كرتون" data-suggest="units" aria-label="وحدة الشراء" autocomplete="off">
               <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الأصغر داخلها: 24">
@@ -537,6 +538,7 @@
             </details>
             <div id="inv-item-form-extra-units" class="unit-level-list"></div>
             <button type="button" class="btn btn-outline btn-sm unit-level-add" onclick="addInventoryUnitLevel('inv-item-form')">+ إضافة مستوى وحدة آخر</button>
+            <button type="button" class="btn btn-outline btn-sm unit-level-add" onclick="reverseInventoryUnitDirection('inv-item-form')">عكس اتجاه الوحدة</button>
             <small id="inv-item-form-unit-preview" class="muted-text">مثال: كل كرتون يحتوي على 24 حبة</small>
           </div>
 

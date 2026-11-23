@@ -212,6 +212,44 @@ class GroceryAccountingIntegrationTest {
     assertEquals(48, db.inventoryDao().getItemById(itemId)!!.quantity)
   }
 
+
+  @Test
+  fun purchaseCreatedCartonsCanBeRebasedToPiecesWithoutChangingInvoiceTotal() = runBlocking {
+    val supplierId = engine.saveSupplier(0L, "مورد ماء المدينة", "770000026", "", 0.0)
+    val itemId = engine.saveInventoryItem(0L, "مياه مدينة سام", "مشروبات", 0, 0.0, 1900.0, "كرتون")
+    val purchaseId = engine.saveInvoice(
+      0L, "WATER-CARTON-8250", "PURCHASE", supplierId, "مورد ماء المدينة",
+      listOf(InvoiceItemEntity(0L, 0L, itemId, "مياه مدينة سام", 5, 1650.0, 8250.0, 5, "كرتون", 1)),
+      8250.0
+    )
+
+    val before = db.inventoryDao().getItemById(itemId)!!
+    assertEquals(5, before.quantity)
+    assertEquals(1650.0, before.purchasePrice, 0.01)
+
+    engine.saveInventoryItem(
+      itemId, "مياه مدينة سام", "مشروبات", 5, 1650.0, 1900.0,
+      """{"base":"حبة","units":[{"name":"كرتون","factorToSmaller":20}]}"""
+    )
+
+    val after = db.inventoryDao().getItemById(itemId)!!
+    assertEquals(100, after.quantity)
+    assertEquals(82.5, after.purchasePrice, 0.0001)
+    assertEquals(95.0, after.sellingPrice, 0.0001)
+    assertEquals(8250.0, after.quantity * after.purchasePrice, 0.01)
+
+    val savedPurchase = db.invoiceDao().getInvoiceWithItems(purchaseId)!!
+    assertEquals(8250.0, savedPurchase.invoice.totalAmount, 0.01)
+    assertEquals(5, savedPurchase.items.single().quantity)
+    assertEquals(1650.0, savedPurchase.items.single().unitPrice, 0.01)
+    assertEquals(100, savedPurchase.items.single().stockQuantity)
+    assertEquals(20, savedPurchase.items.single().unitFactor)
+    assertEquals("كرتون", savedPurchase.items.single().unitLabel)
+
+    engine.deleteInvoice(purchaseId)
+    assertEquals(0, db.inventoryDao().getItemById(itemId)!!.quantity)
+  }
+
   @Test
   fun directPurchaseCartonOf24PiecesKeepsInvoicePriceAndConvertsStockAndCostExactly() = runBlocking {
     val supplierId = engine.saveSupplier(0L, "مورد البيبسي", "770000024", "", 0.0)
