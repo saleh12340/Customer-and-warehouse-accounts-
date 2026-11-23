@@ -447,33 +447,28 @@
       </div>
       <div id="inventory-quick-add" class="card compact-card hidden">
         <div class="card-title-row"><strong>إضافة صنف جديد بسرعة</strong><span class="muted-text">يُحفظ مباشرة في المخزن</span></div>
-        <div class="ruled-grid-labels grid-quick-stock">
-          <span>اسم الصنف *</span><span>الرصيد</span><span>سعر الشراء</span><span>سعر البيع</span>
-        </div>
-        <div class="ruled-input-row grid-quick-stock">
-          <input type="text" id="inventory-quick-name" class="ruled-cell" placeholder="اسم الصنف">
-          <input type="number" lang="en" dir="ltr" inputmode="numeric" id="inventory-quick-qty" class="ruled-cell cell-num" placeholder="0" min="0" value="1">
-          <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inventory-quick-buy" class="ruled-cell cell-num" placeholder="شراء" min="0" step="0.01">
-          <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inventory-quick-sell" class="ruled-cell cell-num" placeholder="بيع" min="0" step="0.01">
-        </div>
         <div class="ruled-grid-labels grid-quick-stock" style="margin-top:5px;">
-          <span>الفئة</span><span>الوحدة</span>
+          <span>الفئة</span><span>الوحدة الأصغر</span>
         </div>
         <div class="ruled-input-row grid-quick-stock">
           <input type="text" id="inventory-quick-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
-          <select id="inventory-quick-unit" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="وحدة الصنف"><option value="">اختر الوحدة</option></select>
+          <input type="text" id="inventory-quick-unit" class="ruled-cell" placeholder="مثال: حبة" data-suggest="units" aria-label="الوحدة الأصغر للمخزون" autocomplete="off">
         </div>
         <div class="unit-config-panel">
-          <small>تفريد وحدات الصنف من وحدة الشراء بالجملة إلى أصغر وحدة للمخزون.</small>
+          <strong>وحدات هذا الصنف</strong>
+          <small>اكتب وحدة الشراء كما تظهر في الفاتورة، ثم عدد الوحدات الأصغر داخلها. مثال: قرطاس واحد يحتوي على 24 حبة. ويمكن إضافة وحدة وسطى عند الحاجة.</small>
           <div class="ruled-input-row grid-unit-config">
-            <select id="inventory-quick-carton-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="وحدة الشراء الكبرى"><option value="">اختر وحدة الشراء الكبرى</option></select>
-            <input type="number" id="inventory-quick-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الوسطى في الكرتون">
+            <input type="text" id="inventory-quick-carton-name" class="ruled-cell" placeholder="وحدة الشراء في الفاتورة: قرطاس" data-suggest="units" aria-label="وحدة الشراء" autocomplete="off">
+            <input type="number" id="inventory-quick-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الحبات داخل القرطاس: 24">
           </div>
-          <div class="ruled-input-row grid-unit-config">
-            <select id="inventory-quick-pack-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="الوحدة الوسطى"><option value="">اختر الوحدة الوسطى</option></select>
-            <input type="number" id="inventory-quick-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الصغيرة في الباكت">
-          </div>
-          <small id="inventory-quick-unit-preview" class="muted-text">مثال: 1 كرتون = 6 باكت = 144 حبة</small>
+          <details class="unit-config-extra">
+            <summary>إضافة وحدة وسطى اختيارية</summary>
+            <div class="ruled-input-row grid-unit-config">
+              <input type="text" id="inventory-quick-pack-name" class="ruled-cell" placeholder="اسم الوحدة الوسطى" data-suggest="units" aria-label="الوحدة الوسطى" autocomplete="off">
+              <input type="number" id="inventory-quick-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الأصغر داخلها">
+            </div>
+          </details>
+          <small id="inventory-quick-unit-preview" class="muted-text">مثال: كل قرطاس يحتوي على 24 حبة</small>
         </div>
         <div class="btn-row" style="margin-top:7px;">
           <button type="button" class="btn btn-primary btn-sm" onclick="submitInventoryQuickAdd()">حفظ الصنف</button>
