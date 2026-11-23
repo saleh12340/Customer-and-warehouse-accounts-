@@ -106,10 +106,12 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
     return JSONObject()
       .put("base", baseUnit)
       .put("units", units)
-      .put("packName", "")
-      .put("packSize", 1)
-      .put("cartonName", if (factor > 1) label else "")
-      .put("cartonPacks", if (factor > 1) factor else 1)
+      // Keep the original fields populated for compatibility with older
+      // inventory editors and persisted purchase-created products.
+      .put("packName", if (factor > 1) label else "")
+      .put("packSize", if (factor > 1) factor else 1)
+      .put("cartonName", "")
+      .put("cartonPacks", 1)
       .toString()
   }
 
