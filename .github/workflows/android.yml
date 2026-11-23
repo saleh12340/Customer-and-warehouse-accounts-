@@ -27,16 +27,16 @@ jobs:
           const scripts = [
             fs.readFileSync('app/src/main/assets/www/app.js', 'utf8'),
             fs.readFileSync('app/src/main/assets/www/customer-operation.js', 'utf8')
-          ].join('\n');
-          const ids = [...html.matchAll(/\bid=["']([^"']+)["']/g)].map(match => match[1]);
+          ].join('');
+          const ids = [...html.matchAll(/id=["']([^"']+)["']/g)].map(match => match[1]);
           const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
           if (duplicates.length) throw new Error('Duplicate HTML ids: ' + [...new Set(duplicates)].join(', '));
-          const functions = new Set([...scripts.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map(match => match[1]));
+          const functions = new Set([...scripts.matchAll(/function[ \t\r\n]+([A-Za-z_$][A-Za-z0-9_$]*)[ \t\r\n]*\(/g)].map(match => match[1]));
           const allowed = new Set(['if', 'event', 'window', 'Math', 'parseInt', 'parseFloat', 'Number', 'String', 'Boolean', 'Date', 'JSON', 'confirm', 'alert', 'setTimeout', 'clearTimeout']);
-          const handlers = [...html.matchAll(/\bon(?:click|change|input|submit|keydown|keyup|focus|blur)=["']([^"']+)["']/g)].map(match => match[1]);
+          const handlers = [...html.matchAll(/on(?:click|change|input|submit|keydown|keyup|focus|blur)=["']([^"']+)["']/g)].map(match => match[1]);
           const missing = new Set();
           for (const handler of handlers) {
-            for (const call of handler.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
+            for (const call of handler.matchAll(/([A-Za-z_$][A-Za-z0-9_$]*)[ \t\r\n]*\(/g)) {
               if (!functions.has(call[1]) && !allowed.has(call[1])) missing.add(call[1]);
             }
           }
