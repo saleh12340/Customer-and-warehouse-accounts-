@@ -460,16 +460,16 @@
         </div>
         <div class="ruled-input-row grid-quick-stock">
           <input type="text" id="inventory-quick-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
-          <input type="text" id="inventory-quick-unit" class="ruled-cell" placeholder="حبة / كرتون">
+          <select id="inventory-quick-unit" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="وحدة الصنف"><option value="">اختر الوحدة</option></select>
         </div>
         <div class="unit-config-panel">
           <small>تفريد وحدات الصنف من وحدة الشراء بالجملة إلى أصغر وحدة للمخزون.</small>
           <div class="ruled-input-row grid-unit-config">
-            <input type="text" id="inventory-quick-carton-name" class="ruled-cell" placeholder="وحدة الشراء الكبرى: كرتون">
+            <select id="inventory-quick-carton-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="وحدة الشراء الكبرى"><option value="">اختر وحدة الشراء الكبرى</option></select>
             <input type="number" id="inventory-quick-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الوسطى في الكرتون">
           </div>
           <div class="ruled-input-row grid-unit-config">
-            <input type="text" id="inventory-quick-pack-name" class="ruled-cell" placeholder="الوحدة الوسطى: باكت">
+            <select id="inventory-quick-pack-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="الوحدة الوسطى"><option value="">اختر الوحدة الوسطى</option></select>
             <input type="number" id="inventory-quick-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الصغيرة في الباكت">
           </div>
           <small id="inventory-quick-unit-preview" class="muted-text">مثال: 1 كرتون = 6 باكت = 144 حبة</small>
@@ -511,18 +511,18 @@
           </div>
           <div class="ruled-input-row grid-inv-3">
             <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-sell" class="ruled-cell cell-num" placeholder="سعر البيع" min="0" step="0.01" oninput="updateMarginPreview()">
-            <input type="text" id="inv-item-form-unit" class="ruled-cell" placeholder="حبة / وحدة مفردة">
+            <select id="inv-item-form-unit" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="أصغر وحدة للمخزون"><option value="">اختر أصغر وحدة</option></select>
             <input type="text" id="inv-item-form-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
           </div>
           <div class="unit-config-panel">
             <strong>تفريد وحدات الصنف (من وحدة الشراء الكبرى إلى الأصغر)</strong>
             <small>اكتب وحدة الشراء بالجملة أولاً مثل الكرتون، ثم عدد الوحدات الوسطى داخله. بعد ذلك اكتب الوحدة الوسطى وعدد الوحدات الصغيرة داخلها. رصيد المخزون يُحسب بأصغر وحدة. سعر الشراء المسجل للصنف هو سعر أصغر وحدة، ويُحوّل تلقائياً إلى سعر الكرتون أو العبوة في فاتورة الشراء.</small>
             <div class="ruled-input-row grid-unit-config">
-              <input type="text" id="inv-item-form-carton-name" class="ruled-cell" placeholder="وحدة الشراء الكبرى: كرتون">
+              <select id="inv-item-form-carton-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="وحدة الشراء الكبرى"><option value="">اختر وحدة الشراء الكبرى</option></select>
               <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الوسطى في الكرتون">
             </div>
             <div class="ruled-input-row grid-unit-config">
-              <input type="text" id="inv-item-form-pack-name" class="ruled-cell" placeholder="الوحدة الوسطى: باكت">
+              <select id="inv-item-form-pack-name" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="الوحدة الوسطى"><option value="">اختر الوحدة الوسطى</option></select>
               <input type="number" id="inv-item-form-pack-size" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الصغيرة في الباكت">
             </div>
             <small id="inv-item-form-unit-preview" class="muted-text">مثال: 1 كرتون = 6 باكت = 144 حبة</small>
@@ -1018,7 +1018,7 @@
           <span>الفئة الافتراضية للأصناف</span>
         </div>
         <div class="ruled-input-row grid-cust-name-first">
-          <input type="text" id="set-default-inventory-unit" class="ruled-cell" placeholder="حبة">
+          <select id="set-default-inventory-unit" class="ruled-cell cell-select" data-unit-select onchange="handleUnitSelect(this)" aria-label="الوحدة الافتراضية"><option value="">اختر الوحدة الافتراضية</option></select>
           <input type="text" id="set-default-inventory-category" list="inventory-categories" class="ruled-cell" placeholder="مواد غذائية">
         </div>
       </div>
