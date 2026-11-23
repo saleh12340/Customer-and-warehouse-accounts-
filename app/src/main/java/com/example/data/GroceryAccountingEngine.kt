@@ -459,8 +459,8 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         require(rebaseFactor in 1..1_000_000) { "معامل تحويل الوحدة غير صحيح" }
 
         val adjustedQuantity = Math.multiplyExact(quantity, rebaseFactor)
-        val adjustedPurchasePrice = GroceryViewModel.roundUnitPrice(purchasePrice / rebaseFactor)
-        val adjustedSellingPrice = GroceryViewModel.roundUnitPrice(sellingPrice / rebaseFactor)
+        val adjustedPurchasePrice = purchasePrice / rebaseFactor
+        val adjustedSellingPrice = sellingPrice / rebaseFactor
 
         if (rebaseFactor > 1) {
           // Rebase every historical stock movement to the new smallest unit so
@@ -476,7 +476,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
                 unitLabel = line.unitLabel.ifBlank { oldBaseUnit },
                 unitFactor = Math.multiplyExact(oldFactor, rebaseFactor),
                 costPriceAtSale = line.costPriceAtSale?.let {
-                  GroceryViewModel.roundUnitPrice(it / rebaseFactor)
+                  it / rebaseFactor
                 }
               )
             }
@@ -560,7 +560,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
         require(line.unitPrice.isFinite() && line.unitPrice >= 0.0) { "سعر شراء غير صحيح للصنف: $cleanName" }
 
         val baseQuantity = line.stockQuantity.takeIf { it > 0 } ?: Math.multiplyExact(line.quantity, line.unitFactor.coerceAtLeast(1))
-        val baseUnitPrice = GroceryViewModel.roundUnitPrice(line.unitPrice / line.unitFactor.coerceAtLeast(1))
+        val baseUnitPrice = line.unitPrice / line.unitFactor.coerceAtLeast(1)
         val existing = inventoryDao.getItemByName(cleanName)
         val targetId = if (existing != null) {
           val newQuantity = Math.addExact(existing.quantity, baseQuantity)
@@ -806,7 +806,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
           item.copy(costPriceAtSale = capturedCost)
         } else {
           val factor = item.unitFactor.coerceAtLeast(1)
-          val baseUnitPrice = GroceryViewModel.roundUnitPrice(item.unitPrice / factor)
+          val baseUnitPrice = item.unitPrice / factor
           val resolvedItemId = if (item.itemId > 0L) {
             check(inventoryDao.getItemById(item.itemId) != null) {
               "الصنف غير موجود في المخزن: ${item.itemName}"
@@ -846,7 +846,7 @@ class GroceryAccountingEngine(private val database: AppDatabase) {
             val stockItem = inventoryDao.getItemById(item.itemId)
               ?: error("الصنف غير موجود: ${item.itemName}")
             val factor = item.unitFactor.coerceAtLeast(1)
-            val baseUnitPrice = GroceryViewModel.roundUnitPrice(item.unitPrice / factor)
+            val baseUnitPrice = item.unitPrice / factor
             inventoryDao.updateItem(stockItem.copy(purchasePrice = baseUnitPrice))
           }
         }
