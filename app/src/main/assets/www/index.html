@@ -529,6 +529,14 @@
               <input type="text" id="inv-item-form-carton-name" class="ruled-cell" placeholder="وحدة الشراء في الفاتورة: كرتون" data-suggest="units" aria-label="وحدة الشراء" autocomplete="off">
               <input type="number" id="inv-item-form-carton-packs" class="ruled-cell cell-num" min="1" step="1" placeholder="عدد الوحدات الأصغر داخلها: 24">
             </div>
+            <div class="ruled-grid-labels grid-unit-config" style="margin-top:6px;">
+              <span>سعر تكلفة الوحدة الثانية (كرتون)</span>
+              <span>يُحدّث تكلفة الحبة تلقائياً</span>
+            </div>
+            <div class="ruled-input-row grid-unit-config">
+              <input type="number" lang="en" dir="ltr" inputmode="decimal" id="inv-item-form-carton-cost" class="ruled-cell cell-num" placeholder="أدخل سعر تكلفة الكرتون" min="0" step="0.01" aria-label="سعر تكلفة الكرتون">
+              <div class="muted-text" style="display:flex;align-items:center;padding:0 8px;">تكلفة الحبة = تكلفة الكرتون ÷ معامل التحويل</div>
+            </div>
             <details class="unit-config-extra">
               <summary>إضافة وحدة وسطى اختيارية</summary>
               <div class="ruled-input-row grid-unit-config">
