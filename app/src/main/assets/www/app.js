@@ -1975,8 +1975,63 @@ function openInventoryForm(itemId) {
     document.getElementById('inv-item-form-sell').value = '';
     document.getElementById('inv-item-form-total-buy').value = '';
   }
+  initializeInventoryCartonCostFromBase('inv-item-form');
   updateMarginPreview();
   switchView('inventory-form');
+}
+
+function getInventoryCartonConversionFactor(prefix) {
+  const value = suffix => String(document.getElementById(prefix + suffix)?.value || '').trim();
+  const cartonName = value('-carton-name');
+  const cartonCountRaw = value('-carton-packs');
+  if (!cartonName || cartonCountRaw === '') return 0;
+
+  const cartonCount = Number(cartonCountRaw);
+  if (!Number.isSafeInteger(cartonCount) || cartonCount <= 0) return 0;
+
+  let factor = cartonCount;
+  const packName = value('-pack-name');
+  if (packName) {
+    const packCountRaw = value('-pack-size');
+    if (packCountRaw === '') return 0;
+    const packCount = Number(packCountRaw);
+    if (!Number.isSafeInteger(packCount) || packCount <= 0) return 0;
+    factor *= packCount;
+  }
+  return Number.isSafeInteger(factor) && factor > 0 ? factor : 0;
+}
+
+function roundInventoryCost(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function updateInventoryBaseCostFromCarton(prefix) {
+  const cartonCostEl = document.getElementById(prefix + '-carton-cost');
+  const baseCostEl = document.getElementById(prefix + '-buy');
+  if (!cartonCostEl || !baseCostEl) return;
+
+  const rawCost = String(cartonCostEl.value || '').trim();
+  const factor = getInventoryCartonConversionFactor(prefix);
+  if (rawCost === '' || !factor) return;
+
+  const cartonCost = Number(rawCost);
+  if (!Number.isFinite(cartonCost) || cartonCost < 0) return;
+
+  baseCostEl.value = String(roundInventoryCost(cartonCost / factor));
+  updateMarginPreview();
+}
+
+function initializeInventoryCartonCostFromBase(prefix) {
+  const cartonCostEl = document.getElementById(prefix + '-carton-cost');
+  const baseCostEl = document.getElementById(prefix + '-buy');
+  if (!cartonCostEl || !baseCostEl) return;
+
+  const factor = getInventoryCartonConversionFactor(prefix);
+  const baseCostRaw = String(baseCostEl.value || '').trim();
+  const baseCost = Number(baseCostRaw);
+  cartonCostEl.value = factor && baseCostRaw !== '' && Number.isFinite(baseCost) && baseCost >= 0
+    ? String(roundInventoryCost(baseCost * factor))
+    : '';
 }
 
 function syncInventoryBuyFromTotal() {
@@ -2365,6 +2420,11 @@ function updateInventoryUnitPreview(prefix) {
 }
 document.addEventListener('input', event => {
   const id = event.target && event.target.id ? event.target.id : '';
+  if (id === 'inv-item-form-carton-cost') {
+    updateInventoryBaseCostFromCarton('inv-item-form');
+  } else if (['inv-item-form-pack-name','inv-item-form-pack-size','inv-item-form-carton-name','inv-item-form-carton-packs'].includes(id)) {
+    updateInventoryBaseCostFromCarton('inv-item-form');
+  }
   if (id.startsWith('inv-item-form-') || event.target?.matches?.('#inv-item-form-extra-units [data-unit-extra-name],#inv-item-form-extra-units [data-unit-extra-factor]')) {
     updateInventoryUnitPreview('inv-item-form');
   }
